@@ -2,7 +2,7 @@
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "ms-access",
   "version": "0.1.0",
-  "identifier": "com.tauri.dev",
+  "identifier": "io.github.dilgash.databasebuilder",
   "build": {
     "frontendDist": "../build",
     "devUrl": "http://localhost:5173",
@@ -12,15 +12,16 @@
   "app": {
     "windows": [
       {
-        "title": "ms-access",
-        "width": 800,
-        "height": 600,
+        "title": "Database Builder",
+        "width": 1200,
+        "height": 800,
         "resizable": true,
         "fullscreen": false
       }
     ],
     "security": {
-      "csp": null
+      "csp": "default-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost",
+      "devCsp": null
     }
   },
   "bundle": {

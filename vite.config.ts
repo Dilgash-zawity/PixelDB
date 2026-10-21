@@ -10,7 +10,8 @@ export default defineConfig({
 				runes: ({ filename }) =>
 					filename.split(/[/\\]/).includes('node_modules') ? undefined : true
 			},
-			adapter: adapter()
+			// SPA mode: Tauri serves the static build; SSR is disabled in +layout.ts.
+			adapter: adapter({ fallback: 'index.html' })
 		})
 	]
 });
