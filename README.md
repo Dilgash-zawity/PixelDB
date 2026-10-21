@@ -2,36 +2,35 @@
 
 A free, open-source, offline-first desktop database application inspired by
 Microsoft Access, built with Tauri v2, Rust, SQLite (rusqlite, bundled),
-SvelteKit + Svelte 5 and Bun. The interface is a dark, Access-style shell
-written in plain CSS (no CSS frameworks or component libraries).
+SvelteKit + Svelte 5, Bun, Tailwind CSS and shadcn-svelte.
 
 ## Using it
 
 1. On first launch, choose a folder. Every database is one SQLite file in it,
    and the folder is remembered.
-2. Create a blank database or open one from the list; each database opens on
-   its own page.
-3. Work like in Access: a ribbon (File, Home, Create, Table Design), a
-   navigation pane of tables and views, tabbed objects, Datasheet View with
-   in-place editing and Design View with Field Properties.
+2. Create a database (or open one from the list). Each database has its own
+   page with a sidebar of tables.
+3. Create a table. It opens in **Datasheet view**: type straight into the
+   grid, use the `*` row for new records, and “Click to Add” for new fields.
+   A record is saved when you leave its row (or press Shift+Enter); Esc undoes
+   the field, then the whole record. Right-click rows and headers for more.
+4. Switch to **Design view** to edit fields in a grid (name, data type,
+   description) with Field Properties below; save the design when done.
+   Relations (lookups) to other tables are set on the Lookup tab.
 
-Datasheet keys: Enter moves to the next field, ↑/↓ move between records
-(saving the one you leave), Shift+Enter saves, Esc undoes the field and then
-the whole record, Delete removes the selected records. ⌘/Ctrl+S saves the
-active object, ⌘/Ctrl+W closes it, ⌘/Ctrl+F searches.
+Shortcuts: ⌘/Ctrl+K search and actions, ⌘/Ctrl+S save, Shift+Enter save the
+record, Esc undo. “Open as form” edits one record in a side panel. Light,
+dark and system themes are available (dark by default).
 
 ## Status
 
-Phase 1 (database foundation) is implemented:
-
-- Create (never overwriting), open, close SQLite database files; read metadata.
-- List tables and views; create, rename and delete tables.
-- Table designer with Access-style field types, primary/foreign keys, unique,
-  NOT NULL, defaults, CHECK rules and field descriptions.
-- Add, rename, modify (including type changes) and remove fields, using SQLite's
-  table-rebuild procedure inside a transaction where ALTER TABLE cannot.
-- Records: insert, read, update, delete, atomic batches, pagination, sorting,
-  filtering and search; unsaved-change undo in the editor.
+- Database foundation: create (never overwriting), open, close; tables and
+  views; rename and delete tables.
+- Fields with rules (required, no duplicates, record ID, defaults, validation
+  rules), relations between tables, formulas and safe type changes. Structural
+  changes use SQLite's table-rebuild procedure inside a transaction.
+- Records: add, edit, delete (single or bulk), search, filters, sorting and
+  pagination, with plain-language validation messages.
 
 ## Development
 
@@ -82,8 +81,10 @@ src/lib/
 ├── api/          typed IPC client and TypeScript mirrors of the Rust models
 ├── services/     database / table / record services, native dialogs
 ├── logic/        framework-free business logic (table drafts, record buffers, formatting)
-├── state/        Svelte 5 rune state: workspace, open database session, dialogs/toasts
-└── components/   ribbon, navigation pane, datasheet, design view, dialogs
+├── state/        Svelte 5 rune state: workspace, open database, toasts and confirmations
+└── components/
+    ├── ui/       shadcn-svelte components (generated; update with the CLI)
+    └── app/      the app's screens built only from those components
 ```
 
 ## Safety

@@ -62,9 +62,9 @@ describe('table draft', () => {
 		const problems = validateDraft(d);
 		expect(problems).toContain('Table name is empty');
 		expect(problems).toContain('Duplicate field name "id"');
-		expect(problems).toContain(`Lookup field "${f.field.name}" needs a related table`);
+		expect(problems).toContain(`Relation field "${f.field.name}" needs a table to link to`);
 		setLookupTarget(d, f.id, 'Customers', 'id');
-		expect(validateDraft(d)).not.toContain(`Lookup field "${f.field.name}" needs a related table`);
+		expect(validateDraft(d)).not.toContain(`Relation field "${f.field.name}" needs a table to link to`);
 	});
 
 	test('setting AutoNumber makes it the only primary key', () => {

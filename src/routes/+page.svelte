@@ -1,389 +1,187 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
+	import type { DatabaseFile } from '#lib/api/types.js';
 	import { resolve } from '$app/paths';
-	import Icon from '../lib/components/Icon.svelte';
-	import { databaseHref } from '../lib/logic/routes';
-	import { databaseNameProblem, formatBytes } from '../lib/logic/values';
-	import { databaseService } from '../lib/services/database';
-	import { ui } from '../lib/state/ui.svelte';
-	import { workspace } from '../lib/state/workspace.svelte';
+	import DatabaseIcon from '@lucide/svelte/icons/database';
+	import FolderOpenIcon from '@lucide/svelte/icons/folder-open';
+	import PlusIcon from '@lucide/svelte/icons/plus';
+	import SearchIcon from '@lucide/svelte/icons/search';
+	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
+	import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
+	import NameDialog from '#lib/components/app/NameDialog.svelte';
+	import ThemeToggle from '#lib/components/app/ThemeToggle.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import * as Empty from '#lib/components/ui/empty/index.js';
+	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
+	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
+	import { databaseHref } from '#lib/logic/routes.js';
+	import { databaseNameProblem, formatBytes } from '#lib/logic/values.js';
+	import { databaseService } from '#lib/services/database.js';
+	import { attempt } from '#lib/state/feedback.svelte.js';
+	import { workspace } from '#lib/state/workspace.svelte.js';
 
 	let filter = $state('');
+	let creating = $state(false);
 	const visible = $derived(
 		workspace.databases.filter((d) => d.name.toLowerCase().includes(filter.trim().toLowerCase()))
 	);
 
-	// Returning to this screen closes whichever database was open.
-	ui.attempt(() => databaseService.close());
+	// Returning here closes whichever database was open.
+	attempt(() => databaseService.close());
 	workspace.load();
 
 	function open(name: string) {
 		goto(databaseHref(resolve('/db'), name));
 	}
 
-	async function createBlank() {
-		const name = await ui.prompt({
-			title: 'Blank database',
-			label: 'File name',
-			value: nextName(),
-			confirmLabel: 'Create',
-			validate: (v) =>
-				databaseNameProblem(v) ??
-				(workspace.databases.some((d) => d.name.toLowerCase() === v.toLowerCase())
-					? 'A database with this name already exists'
-					: null)
-		});
-		if (!name) return;
-		if (await workspace.create(name)) open(name);
-	}
-
-	function nextName(): string {
+	function suggestedName(): string {
 		let n = 1;
-		while (workspace.databases.some((d) => d.name.toLowerCase() === `database${n}`)) n++;
-		return `Database${n}`;
+		while (workspace.nameTaken(`Database ${n}`)) n++;
+		return n === 1 && !workspace.nameTaken('My database') ? 'My database' : `Database ${n}`;
 	}
 
-	function formatDate(ms: number | null): string {
-		return ms === null ? '' : new Date(ms).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
+	const relative = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+	function modified(ms: number | null): string {
+		if (ms === null) return '';
+		const minutes = Math.round((ms - Date.now()) / 60000);
+		if (Math.abs(minutes) < 60) return relative.format(minutes, 'minute');
+		const hours = Math.round(minutes / 60);
+		if (Math.abs(hours) < 24) return relative.format(hours, 'hour');
+		const days = Math.round(hours / 24);
+		if (Math.abs(days) < 7) return relative.format(days, 'day');
+		return new Date(ms).toLocaleDateString(undefined, { dateStyle: 'medium' });
 	}
 </script>
 
-<div class="backstage">
-	<aside class="rail">
-		<div class="brand">
-			<span class="logo"><Icon name="database" size={22} /></span>
-			<span>Database Builder</span>
-		</div>
-		<nav>
-			<button class="rail-item active"><Icon name="home" /> Home</button>
-			<button class="rail-item" disabled={!workspace.info} onclick={createBlank}><Icon name="plus" /> New</button>
-			<button class="rail-item" onclick={() => workspace.chooseFolder()}><Icon name="folder" /> Change folder</button>
-		</nav>
-		<p class="rail-foot">Offline · SQLite</p>
-	</aside>
+{#snippet dbCard(db: DatabaseFile)}
+	<Card.Root class="h-full transition-colors hover:bg-accent/40">
+		<Card.Header>
+			<Card.Title class="flex items-center gap-2">
+				<DatabaseIcon />
+				<span class="truncate">{db.name}</span>
+			</Card.Title>
+			<Card.Description>{db.file_name}</Card.Description>
+		</Card.Header>
+		<Card.Footer class="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+			{#if db.valid}
+				<span>Edited {modified(db.modified)}</span>
+				<Badge variant="secondary">{formatBytes(db.size)}</Badge>
+			{:else}
+				<Badge variant="destructive"><TriangleAlertIcon /> Not a database file</Badge>
+			{/if}
+		</Card.Footer>
+	</Card.Root>
+{/snippet}
 
-	<main>
+<div class="flex min-h-svh flex-col">
+	<header class="flex h-14 items-center gap-3 border-b px-6">
+		<DatabaseIcon />
+		<span class="font-semibold">Tables</span>
+		<span class="flex-1"></span>
+		<ThemeToggle />
+	</header>
+
+	<main class="mx-auto flex w-full max-w-5xl flex-1 flex-col gap-8 px-6 py-10">
 		{#if !workspace.loaded}
-			<p class="muted">Loading…</p>
+			<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+				{#each [1, 2, 3] as i (i)}<Skeleton class="h-32" />{/each}
+			</div>
 		{:else if !workspace.info}
-			<section class="welcome">
-				<span class="hero-icon"><Icon name="folder" size={40} stroke={1.5} /></span>
-				<h1>Welcome to Database Builder</h1>
-				<p class="muted">
-					Choose a folder where your databases will be stored. Each database is a single SQLite file in that
-					folder, and everything stays on this computer.
-				</p>
-				<button class="primary big" onclick={() => workspace.chooseFolder()}>
-					<Icon name="folder" /> Choose folder…
-				</button>
-			</section>
+			<Empty.Root class="my-auto">
+				<Empty.Header>
+					<Empty.Media variant="icon"><FolderOpenIcon /></Empty.Media>
+					<Empty.Title>Where should your databases live?</Empty.Title>
+					<Empty.Description>
+						Pick a folder on this computer. Each database is saved there as a single file, and nothing ever leaves
+						your machine.
+					</Empty.Description>
+				</Empty.Header>
+				<Empty.Content>
+					<Button onclick={() => workspace.chooseFolder()}>
+						<FolderOpenIcon data-icon="inline-start" />
+						Choose a folder
+					</Button>
+				</Empty.Content>
+			</Empty.Root>
 		{:else}
-			<header class="top">
-				<h1>Databases</h1>
-				<div class="folder">
-					<Icon name="folder" />
-					<span class="path mono" title={workspace.info.path}>{workspace.info.path}</span>
-					<button class="ghost" onclick={() => workspace.chooseFolder()}>Change…</button>
-					<button class="icon" title="Refresh" aria-label="Refresh" onclick={() => workspace.refresh()}><Icon name="refresh" /></button>
+			<div class="flex flex-wrap items-end justify-between gap-4">
+				<div class="flex flex-col gap-1">
+					<h1 class="text-2xl font-semibold tracking-tight">Your databases</h1>
+					<div class="flex items-center gap-1 text-muted-foreground">
+						<span class="max-w-md truncate text-sm" title={workspace.info.path}>{workspace.info.path}</span>
+						<Button variant="link" size="sm" onclick={() => workspace.chooseFolder()}>Change</Button>
+					</div>
 				</div>
-			</header>
-
-			<section>
-				<h2>New</h2>
-				<div class="tiles">
-					<button class="tile" onclick={createBlank}>
-						<span class="tile-art"><Icon name="plus" size={30} stroke={1.5} /></span>
-						<span>Blank database</span>
-					</button>
-				</div>
-			</section>
-
-			<section class="list-section">
-				<div class="list-head">
-					<h2>Your databases <span class="count">{workspace.databases.length}</span></h2>
+				<div class="flex items-center gap-2">
 					{#if workspace.databases.length > 0}
-						<label class="search">
-							<Icon name="search" size={14} />
-							<input placeholder="Search" bind:value={filter} />
-						</label>
+						<InputGroup.Root class="w-56">
+							<InputGroup.Input placeholder="Search databases" bind:value={filter} />
+							<InputGroup.Addon><SearchIcon /></InputGroup.Addon>
+						</InputGroup.Root>
 					{/if}
+					<Tooltip.Root>
+						<Tooltip.Trigger>
+							{#snippet child({ props })}
+								<Button {...props} variant="outline" size="icon" aria-label="Refresh" onclick={() => workspace.refresh()}>
+									<RefreshCwIcon />
+								</Button>
+							{/snippet}
+						</Tooltip.Trigger>
+						<Tooltip.Content>Refresh</Tooltip.Content>
+					</Tooltip.Root>
+					<Button onclick={() => (creating = true)}>
+						<PlusIcon data-icon="inline-start" />
+						New database
+					</Button>
 				</div>
-				{#if workspace.databases.length === 0}
-					<div class="empty">
-						<Icon name="database" size={28} stroke={1.5} />
-						<p>No databases in this folder yet. Create a blank database to get started.</p>
-					</div>
-				{:else}
-					<div class="list">
-						<div class="row head">
-							<span>Name</span><span>Modified</span><span>Size</span>
-						</div>
-						{#each visible as db (db.file_name)}
-							<button class="row" disabled={!db.valid} onclick={() => open(db.name)} title={db.valid ? `Open ${db.file_name}` : 'This file is not a SQLite database'}>
-								<span class="name">
-									<span class="db-icon"><Icon name="database" /></span>
-									<span>
-										<strong>{db.name}</strong>
-										<small class="muted">{db.valid ? db.file_name : 'Not a SQLite database'}</small>
-									</span>
-								</span>
-								<span class="muted">{formatDate(db.modified)}</span>
-								<span class="muted">{formatBytes(db.size)}</span>
-							</button>
+			</div>
+
+			{#if workspace.databases.length === 0}
+				<Empty.Root class="border border-dashed">
+					<Empty.Header>
+						<Empty.Media variant="icon"><DatabaseIcon /></Empty.Media>
+						<Empty.Title>No databases yet</Empty.Title>
+						<Empty.Description>Create your first database to start organising your data into tables.</Empty.Description>
+					</Empty.Header>
+					<Empty.Content>
+						<Button onclick={() => (creating = true)}>
+							<PlusIcon data-icon="inline-start" />
+							New database
+						</Button>
+					</Empty.Content>
+				</Empty.Root>
+			{:else if visible.length === 0}
+				<p class="text-muted-foreground">No databases match “{filter}”.</p>
+			{:else}
+				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+					{#each visible as db (db.file_name)}
+						{#if db.valid}
+							<a href={databaseHref(resolve('/db'), db.name)} class="rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
+								{@render dbCard(db)}
+							</a>
 						{:else}
-							<p class="muted pad">No databases match “{filter}”.</p>
-						{/each}
-					</div>
-				{/if}
-			</section>
+							<div class="opacity-60" title="This file is not a SQLite database">{@render dbCard(db)}</div>
+						{/if}
+					{/each}
+				</div>
+			{/if}
 		{/if}
 	</main>
 </div>
 
-<style>
-	.backstage {
-		display: grid;
-		grid-template-columns: 220px 1fr;
-		height: 100vh;
-	}
-	.rail {
-		display: flex;
-		flex-direction: column;
-		background: linear-gradient(180deg, var(--accent-strong), #7c2a2d);
-		color: #fff;
-		padding: 18px 10px;
-	}
-	.brand {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-		font-weight: 600;
-		font-size: 15px;
-		padding: 0 8px 22px;
-	}
-	.logo {
-		display: grid;
-		place-items: center;
-		width: 34px;
-		height: 34px;
-		border-radius: 8px;
-		background: rgba(255, 255, 255, 0.16);
-	}
-	nav {
-		display: grid;
-		gap: 2px;
-	}
-	.rail-item {
-		justify-content: flex-start;
-		gap: 10px;
-		padding: 9px 10px;
-		border: none;
-		background: transparent;
-		color: rgba(255, 255, 255, 0.9);
-	}
-	.rail-item:hover:not(:disabled),
-	.rail-item.active {
-		background: rgba(255, 255, 255, 0.14);
-	}
-	.rail-foot {
-		margin-top: auto;
-		padding: 0 10px;
-		font-size: 11px;
-		color: rgba(255, 255, 255, 0.6);
-	}
-	main {
-		overflow: auto;
-		padding: 36px 44px;
-	}
-	.welcome {
-		max-width: 520px;
-		margin: 12vh auto 0;
-		text-align: center;
-		display: grid;
-		justify-items: center;
-		gap: 14px;
-	}
-	.welcome h1 {
-		font-size: 24px;
-	}
-	.welcome p {
-		margin: 0;
-		line-height: 1.6;
-	}
-	.hero-icon {
-		display: grid;
-		place-items: center;
-		width: 76px;
-		height: 76px;
-		border-radius: 20px;
-		background: var(--accent-soft);
-		color: var(--accent-text);
-	}
-	.big {
-		padding: 9px 18px;
-		margin-top: 6px;
-	}
-	.top {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 16px;
-		margin-bottom: 28px;
-		flex-wrap: wrap;
-	}
-	.top h1 {
-		font-size: 22px;
-	}
-	.folder {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		min-width: 0;
-		padding: 4px 4px 4px 12px;
-		border: 1px solid var(--border);
-		border-radius: 999px;
-		background: var(--surface);
-		color: var(--text-muted);
-	}
-	.path {
-		max-width: 420px;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		white-space: nowrap;
-		font-size: 12px;
-	}
-	section h2 {
-		font-size: 13px;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: var(--text-muted);
-		margin-bottom: 12px;
-	}
-	.tiles {
-		display: flex;
-		gap: 14px;
-		margin-bottom: 34px;
-	}
-	.tile {
-		flex-direction: column;
-		gap: 10px;
-		width: 150px;
-		padding: 12px;
-		background: var(--surface);
-		border-color: var(--border);
-		border-radius: 10px;
-	}
-	.tile:hover:not(:disabled) {
-		border-color: var(--accent);
-		background: var(--surface-2);
-	}
-	.tile-art {
-		display: grid;
-		place-items: center;
-		width: 100%;
-		height: 90px;
-		border-radius: 6px;
-		background: var(--surface-3);
-		color: var(--accent-text);
-	}
-	.list-head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		margin-bottom: 12px;
-	}
-	.list-head h2 {
-		margin: 0;
-	}
-	.count {
-		margin-left: 6px;
-		padding: 1px 7px;
-		border-radius: 999px;
-		background: var(--surface-3);
-		font-size: 11px;
-	}
-	.search {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-		padding-left: 8px;
-		border: 1px solid var(--border-strong);
-		border-radius: var(--radius-sm);
-		background: var(--surface);
-		color: var(--text-muted);
-	}
-	.search input {
-		border: none;
-		background: transparent;
-		box-shadow: none;
-		width: 200px;
-	}
-	.list {
-		border: 1px solid var(--border);
-		border-radius: 10px;
-		overflow: hidden;
-		background: var(--surface);
-	}
-	.row {
-		display: grid;
-		grid-template-columns: 1fr 200px 90px;
-		align-items: center;
-		width: 100%;
-		padding: 10px 16px;
-		border: none;
-		border-top: 1px solid var(--border);
-		border-radius: 0;
-		background: transparent;
-		text-align: left;
-	}
-	.row.head {
-		border-top: none;
-		background: var(--surface-2);
-		color: var(--text-muted);
-		font-size: 12px;
-		padding: 7px 16px;
-	}
-	.row:not(.head):hover:not(:disabled) {
-		background: var(--accent-softer);
-	}
-	.name {
-		display: flex;
-		align-items: center;
-		gap: 12px;
-		min-width: 0;
-	}
-	.name > span:last-child {
-		display: grid;
-		min-width: 0;
-	}
-	.name strong,
-	.name small {
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	.db-icon {
-		display: grid;
-		place-items: center;
-		width: 32px;
-		height: 32px;
-		border-radius: 8px;
-		background: var(--accent-soft);
-		color: var(--accent-text);
-	}
-	.empty {
-		display: grid;
-		justify-items: center;
-		gap: 8px;
-		padding: 40px;
-		border: 1px dashed var(--border-strong);
-		border-radius: 10px;
-		color: var(--text-muted);
-	}
-	.empty p {
-		margin: 0;
-	}
-	.pad {
-		padding: 14px 16px;
-		margin: 0;
-	}
-</style>
+<NameDialog
+	bind:open={creating}
+	title="New database"
+	description="Give it a name you'll recognise. You can add tables right after."
+	initial={suggestedName()}
+	submitLabel="Create database"
+	validate={(v) => databaseNameProblem(v) ?? (workspace.nameTaken(v) ? 'A database with this name already exists' : null)}
+	onSubmit={async (name) => {
+		if (!(await workspace.create(name))) return false;
+		open(name);
+		return true;
+	}}
+/>

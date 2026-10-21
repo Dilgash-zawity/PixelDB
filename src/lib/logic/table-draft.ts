@@ -207,17 +207,17 @@ export function validateDraft(d: TableDraft): string[] {
 		seen.add(lower(field.name));
 		const t = field.field_type;
 		if (t.type === 'calculated' && !t.expression.trim()) {
-			problems.push(`Calculated field ${JSON.stringify(field.name)} needs an expression`);
+			problems.push(`Formula field ${JSON.stringify(field.name)} needs a formula`);
 		}
 		if (t.type === 'lookup' && !lookupTarget(d, field.name)) {
-			problems.push(`Lookup field ${JSON.stringify(field.name)} needs a related table`);
+			problems.push(`Relation field ${JSON.stringify(field.name)} needs a table to link to`);
 		}
 	}
 	const autos = d.fields.filter((f) => f.field.field_type.type === 'auto_number');
 	const pks = d.fields.filter((f) => f.field.primary_key);
-	if (autos.length > 1) problems.push('Only one AutoNumber field is allowed');
+	if (autos.length > 1) problems.push('Only one Auto ID field is allowed');
 	if (autos.length === 1 && (pks.length !== 1 || !autos[0].field.primary_key)) {
-		problems.push('An AutoNumber field must be the only primary key');
+		problems.push('An Auto ID field must be the record ID');
 	}
 	return problems;
 }

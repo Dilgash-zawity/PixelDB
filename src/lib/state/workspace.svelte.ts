@@ -1,7 +1,7 @@
 import type { DatabaseFile, WorkspaceInfo } from '../api/types';
 import { pickFolder } from '../services/dialogs';
 import { workspaceService } from '../services/workspace';
-import { ui } from './ui.svelte';
+import { attempt } from './feedback.svelte';
 
 /** The folder of databases shown on the home screen. */
 class WorkspaceState {
@@ -10,7 +10,7 @@ class WorkspaceState {
 	loaded = $state(false);
 
 	async load() {
-		await ui.attempt(async () => {
+		await attempt(async () => {
 			this.info = await workspaceService.get();
 			this.databases = this.info ? await workspaceService.listDatabases() : [];
 		});
@@ -18,7 +18,7 @@ class WorkspaceState {
 	}
 
 	async chooseFolder() {
-		await ui.attempt(async () => {
+		await attempt(async () => {
 			const folder = await pickFolder();
 			if (!folder) return;
 			this.info = await workspaceService.set(folder);
@@ -27,13 +27,16 @@ class WorkspaceState {
 	}
 
 	async refresh() {
-		if (this.info) await ui.attempt(async () => (this.databases = await workspaceService.listDatabases()));
+		if (this.info) await attempt(async () => (this.databases = await workspaceService.listDatabases()));
 	}
 
-	/** Creates a database; returns its name, or null on failure. */
-	async create(name: string): Promise<string | null> {
-		const created = await ui.attempt(() => workspaceService.createDatabase(name));
-		return created ? name : null;
+	/** Creates a database; returns true on success. */
+	async create(name: string): Promise<boolean> {
+		return !!(await attempt(() => workspaceService.createDatabase(name)));
+	}
+
+	nameTaken(name: string): boolean {
+		return this.databases.some((d) => d.name.toLowerCase() === name.toLowerCase());
 	}
 }
 

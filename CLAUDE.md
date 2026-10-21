@@ -1,0 +1,53 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+Offline desktop database app in the spirit of MS Access: Tauri v2 + Rust (rusqlite, bundled SQLite) backend, SvelteKit 3 + Svelte 5 (runes) frontend, Tailwind v4 + shadcn-svelte UI, Bun as package manager.
+
+## Commands
+
+```sh
+bun run tauri dev          # run the desktop app (also: bun run ddev)
+bun run check              # svelte-check / TypeScript — keep at 0 errors, 0 warnings
+bun run test               # all tests: bun test src && cargo test
+bun test src/lib/logic/table-draft.test.ts            # one TS test file
+bun test src -t "renames propagate"                   # TS tests by name
+cargo test --manifest-path src-tauri/Cargo.toml --test phase1 add_modify   # one Rust integration test
+cargo test --manifest-path src-tauri/Cargo.toml --lib validation::values   # Rust unit tests by path
+cd src-tauri && cargo clippy --all-targets            # keep warning-free
+bunx tauri build --debug --no-bundle                  # build the app binary without installers
+bunx --bun shadcn-svelte@latest add <component>       # add a UI component
+```
+
+The shadcn-svelte CLI prompts interactively (e.g. "overwrite existing files?") and has no TTY in agent shells; drive it with `expect` sending Enter on idle, which accepts the safe defaults.
+
+## Architecture
+
+**IPC boundary.** All database work is in Rust. `src-tauri/src/commands/*` are thin `#[tauri::command]` wrappers that run `database::*` functions on a blocking thread via `DbManager::run`. The `database/` functions take a plain `&rusqlite::Connection` and know nothing about Tauri, which is why `src-tauri/tests/phase1.rs` can test them against real temp-file databases. Errors are `errors::AppError`, serialized as `{ kind, message }`; the frontend turns them into `ApiError` (`src/lib/api/client.ts`) and toasts (`state/feedback.svelte.ts`, with `logic/messages.ts` rewriting raw SQLite constraint text into plain language).
+
+**Wire types are hand-mirrored.** `src/lib/api/types.ts` mirrors `src-tauri/src/models/*`. Serde shapes (tagged enums like `FieldType`, `DefaultValue`, `RecordKey`) are pinned by `wire_format_tests` in `models/mod.rs`; update both sides together. Tauri converts command argument names to camelCase on the JS side (`newName`, `confirmDataLoss`), while nested struct fields stay snake_case.
+
+**Workspace model.** The user picks a folder once (remembered in the app config dir by `workspace::WorkspaceStore`). Databases are created/opened **by name** inside that folder — the frontend never passes database file paths, and names are resolved from a directory listing, not by joining user input. Only one database is open at a time (`DbManager` holds `Option<OpenDatabase>`).
+
+**Access-style types on SQLite.** SQLite has no Currency/Yes-No/etc., so each table's `TableDef` (field types, descriptions, relations) is stored as JSON in the hidden `__app_tables` table alongside the exact `CREATE TABLE` text it produced. `schema::load_table` trusts that metadata only while the stored SQL matches `sqlite_schema`; otherwise it infers a definition from pragmas and reports `unsupported_features` (CHECKs, collations, WITHOUT ROWID…), and structural redesigns of such tables are refused so constraints are never silently dropped. Names starting `sqlite_` or `__app_` are reserved and hidden.
+
+**Schema changes** (`database/migrations.rs`). Column renames use `ALTER TABLE RENAME COLUMN` and propagate into stored metadata (including other tables' FKs and lookup display columns). Anything else goes through `save_table_design`, which follows SQLite's 12-step rebuild: foreign keys off (`ForeignKeysOff` guard, set *outside* the transaction), create temp table, copy with type conversions (`convert_expr`, e.g. currency minor-unit scaling), drop, rename under `legacy_alter_table`, recreate indexes/triggers, restore the AUTOINCREMENT sequence, then fail the whole transaction if new `foreign_key_check` violations appear or a previously working view breaks.
+
+**Safety rules baked into the API.** User values are always bound parameters; identifiers go through `validate_identifier` + `quote_ident`; SQL fragments accepted in DDL (CHECK, DEFAULT, formulas) pass `validation::expressions::validate_expression` (no `;`, comments, subqueries, or unbalanced parens). Destructive operations (drop table/field, delete records, design saves that remove fields) require an explicit `confirm` flag in the backend, not just a UI prompt; new database files use `create_new` so nothing is overwritten. Currency crosses the API as integer minor units or decimal strings parsed exactly.
+
+**Frontend layers** (`src/lib/`):
+- `services/` — typed wrappers around `invoke`.
+- `logic/` — framework-free, unit-tested business logic: `table-draft.ts` (design edits → `TableDesign` with rename tracking), `record-buffer.ts` (per-record edit buffer with field/record undo and submission rules), `filters.ts`, `lookups.ts`, `values.ts`. Put new non-UI logic here with a `*.test.ts`. Use `jsonClone`, not `structuredClone` — the latter throws on Svelte `$state` proxies.
+- `state/` — rune-based singletons: `workspace`, `session` (open DB, current table, `view: 'records' | 'fields'`), `feedback` (toasts + a promise-based `confirm()`).
+- `components/ui/` — generated shadcn-svelte components; change via the CLI rather than hand edits. `components/app/` — app screens composed only from those.
+
+**Screens.** `routes/+page.svelte` is the folder/database list; `routes/db/+page.svelte?name=…` is a database (query param keeps the route prerenderable). `RecordsView.svelte` is the Access-style Datasheet (in-place editing; a row commits when you leave it; Esc undoes field then record; `*` new-record row; "Click to Add"); `DesignView.svelte` is the Design grid + Field Properties with explicit Save. Each registers `session.leaveGuard` so switching tables/views/databases first commits the row or asks about unsaved design changes; navigation is serialized so a guard can't run twice. The command palette talks to the open view through `session.request(...)` / `session.intent`.
+
+## Conventions and gotchas
+
+- SvelteKit 3 removed `$lib`; use the `#lib/...` package import (shadcn components import `#lib/utils.js`). Within `src/lib`, relative imports are also used so `bun test` resolves them.
+- `adapter-static` with `fallback: 'index.html'`, `ssr = false`, `prerender = true` in `+layout.ts`.
+- Follow the project shadcn-svelte skill (`.claude/skills/shadcn-svelte`): `class` only for layout, semantic color tokens, `gap-*` not `space-*`, `data-icon` on icons inside buttons, items inside their `*.Group`, no manual z-index on overlays. A confirm opened from inside a Sheet must use a scoped `<ConfirmHost scope=…>` rendered inside the Sheet content, or it stacks behind it.
+- Don't `bind:checked` to a possibly-undefined property (Svelte throws `props_invalid_value`); use `checked={!!x}` + `onCheckedChange`.
+- Dark mode is the first-run default via a tiny script in `src/app.html` that seeds mode-watcher's localStorage key; `defaultMode` alone doesn't work in this client-only app.
+- Tauri capabilities expose only `core:default` and `dialog:allow-open` (folder picker); there is no filesystem plugin. Production CSP is set in `tauri.conf.json` (`devCsp` is null for Vite HMR).
