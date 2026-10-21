@@ -4,3 +4,4 @@
 pub mod database;
 pub mod records;
 pub mod tables;
+pub mod workspace;

@@ -3,8 +3,11 @@ pub mod database;
 pub mod errors;
 pub mod models;
 pub mod validation;
+pub mod workspace;
 
 use database::DbManager;
+use tauri::Manager;
+use workspace::WorkspaceStore;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -12,6 +15,8 @@ pub fn run() {
     .plugin(tauri_plugin_dialog::init())
     .manage(DbManager::default())
     .setup(|app| {
+      let config_dir = app.path().app_config_dir()?;
+      app.manage(WorkspaceStore::load(config_dir.join("settings.json")));
       if cfg!(debug_assertions) {
         app.handle().plugin(
           tauri_plugin_log::Builder::default()
@@ -22,8 +27,11 @@ pub fn run() {
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
-      commands::database::create_database,
-      commands::database::open_database,
+      commands::workspace::get_workspace,
+      commands::workspace::set_workspace,
+      commands::workspace::list_databases,
+      commands::workspace::create_workspace_database,
+      commands::workspace::open_workspace_database,
       commands::database::close_database,
       commands::database::get_database_info,
       commands::database::list_objects,

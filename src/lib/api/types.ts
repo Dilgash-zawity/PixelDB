@@ -189,3 +189,15 @@ export type ErrorKind =
 	| 'sqlite'
 	| 'io'
 	| 'internal';
+
+export interface WorkspaceInfo {
+	path: string;
+}
+
+export interface DatabaseFile {
+	name: string;
+	file_name: string;
+	size: number;
+	modified: number | null;
+	valid: boolean;
+}

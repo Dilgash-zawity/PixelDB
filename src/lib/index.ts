@@ -2,5 +2,6 @@
 export * from './api/types';
 export { ApiError, call, setInvoke } from './api/client';
 export { databaseService } from './services/database';
+export { workspaceService } from './services/workspace';
 export { tableService } from './services/tables';
 export { recordService } from './services/records';

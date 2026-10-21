@@ -221,3 +221,40 @@ export function validateDraft(d: TableDraft): string[] {
 	}
 	return problems;
 }
+
+/** Inserts a new field before position `index` (Design View "Insert Rows"). */
+export function insertField(d: TableDraft, index: number, typeName: FieldTypeName = 'short_text'): DraftField {
+	const f = addField(d, typeName);
+	d.fields.pop();
+	d.fields.splice(Math.max(0, Math.min(index, d.fields.length)), 0, f);
+	return f;
+}
+
+/**
+ * Design View "Primary Key" button: makes the field the only primary key, or
+ * removes the key when it already is the key. An AutoNumber key can only be
+ * moved, not removed, because AutoNumber requires it.
+ */
+export function togglePrimaryKey(d: TableDraft, id: number): void {
+	const f = find(d, id);
+	const isSoleKey = f.field.primary_key && d.fields.filter((x) => x.field.primary_key).length === 1;
+	if (isSoleKey) {
+		if (f.field.field_type.type !== 'auto_number') f.field.primary_key = false;
+		return;
+	}
+	for (const other of d.fields) {
+		other.field.primary_key = other.id === id;
+		if (other.id !== id && other.field.field_type.type === 'auto_number') {
+			other.field.field_type = { type: 'large_number' };
+		}
+	}
+	if (f.field.field_type.type === 'calculated') f.field.field_type = makeFieldType('short_text');
+}
+
+/** A name like "Table1" not used by any of `taken`. */
+export function nextFreeName(prefix: string, taken: string[]): string {
+	const lowerTaken = new Set(taken.map(lower));
+	let n = 1;
+	while (lowerTaken.has(lower(`${prefix}${n}`))) n++;
+	return `${prefix}${n}`;
+}

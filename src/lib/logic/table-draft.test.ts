@@ -76,3 +76,30 @@ describe('table draft', () => {
 		expect(d.fields[0].id).toBe(f.id);
 	});
 });
+
+import { insertField, nextFreeName, togglePrimaryKey } from './table-draft';
+
+describe('design view helpers', () => {
+	test('insert rows above the selection', () => {
+		const d = newDraft('T');
+		const f = insertField(d, 0);
+		expect(d.fields[0].id).toBe(f.id);
+	});
+
+	test('primary key toggling', () => {
+		const d = newDraft('T');
+		const code = addField(d, 'short_text', 'Code');
+		togglePrimaryKey(d, d.fields[0].id); // AutoNumber key cannot simply be removed
+		expect(d.fields[0].field.primary_key).toBe(true);
+		togglePrimaryKey(d, code.id);
+		expect(d.fields.filter((f) => f.field.primary_key).map((f) => f.field.name)).toEqual(['Code']);
+		expect(d.fields[0].field.field_type).toEqual({ type: 'large_number' });
+		expect(validateDraft(d)).toEqual([]);
+		togglePrimaryKey(d, code.id);
+		expect(d.fields.some((f) => f.field.primary_key)).toBe(false);
+	});
+
+	test('free names', () => {
+		expect(nextFreeName('Table', ['table1', 'Table2'])).toBe('Table3');
+	});
+});

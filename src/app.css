@@ -1,0 +1,200 @@
+/* Global theme: dark, Access-inspired (crimson accent). Component-specific
+   styles live in each component's <style> block. */
+
+:root {
+	color-scheme: dark;
+	--bg: #18181b;
+	--surface: #1f1f23;
+	--surface-2: #26262b;
+	--surface-3: #2f2f35;
+	--surface-4: #3a3a41;
+	--border: #34343b;
+	--border-strong: #4a4a52;
+	--text: #e7e7ea;
+	--text-muted: #a1a1aa;
+	--text-faint: #71717a;
+	--accent: #c2474b;
+	--accent-strong: #a4373a;
+	--accent-text: #f08a8d;
+	--accent-soft: rgba(194, 71, 75, 0.16);
+	--accent-softer: rgba(194, 71, 75, 0.08);
+	--focus: #e0676b;
+	--danger: #ef5350;
+	--success: #5fb878;
+	--warning: #e5a83b;
+	--grid-alt: #1c1c20;
+	--radius: 6px;
+	--radius-sm: 4px;
+	--shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 2px 6px rgba(0, 0, 0, 0.3);
+	--font: system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+	--mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+
+*,
+*::before,
+*::after {
+	box-sizing: border-box;
+}
+
+html,
+body {
+	margin: 0;
+	height: 100%;
+	background: var(--bg);
+	color: var(--text);
+	font: 13px/1.4 var(--font);
+	-webkit-font-smoothing: antialiased;
+	overflow: hidden;
+}
+
+[hidden] {
+	display: none !important;
+}
+
+h1,
+h2,
+h3,
+h4 {
+	margin: 0;
+	font-weight: 600;
+}
+
+a {
+	color: var(--accent-text);
+}
+
+button,
+input,
+select,
+textarea {
+	font: inherit;
+	color: inherit;
+}
+
+button {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	padding: 5px 12px;
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-sm);
+	background: var(--surface-3);
+	cursor: pointer;
+	white-space: nowrap;
+}
+
+button:hover:not(:disabled) {
+	background: var(--surface-4);
+}
+
+button:disabled {
+	opacity: 0.45;
+	cursor: default;
+}
+
+button.primary {
+	background: var(--accent-strong);
+	border-color: var(--accent);
+	color: #fff;
+}
+
+button.primary:hover:not(:disabled) {
+	background: var(--accent);
+}
+
+button.danger {
+	background: transparent;
+	border-color: var(--danger);
+	color: var(--danger);
+}
+
+button.danger:hover:not(:disabled) {
+	background: rgba(239, 83, 80, 0.12);
+}
+
+button.ghost {
+	background: transparent;
+	border-color: transparent;
+}
+
+button.ghost:hover:not(:disabled) {
+	background: var(--surface-3);
+}
+
+button.icon {
+	padding: 4px;
+	border-color: transparent;
+	background: transparent;
+}
+
+button.icon:hover:not(:disabled) {
+	background: var(--surface-3);
+}
+
+input,
+select,
+textarea {
+	padding: 5px 8px;
+	border: 1px solid var(--border-strong);
+	border-radius: var(--radius-sm);
+	background: var(--surface);
+	outline: none;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+	border-color: var(--focus);
+	box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+input[type='checkbox'] {
+	accent-color: var(--accent);
+	width: 14px;
+	height: 14px;
+	margin: 0;
+	padding: 0;
+	box-shadow: none;
+}
+
+:focus-visible {
+	outline: 2px solid var(--focus);
+	outline-offset: 1px;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+	outline: none;
+}
+
+::selection {
+	background: var(--accent-soft);
+}
+
+::-webkit-scrollbar {
+	width: 12px;
+	height: 12px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background: var(--surface-4);
+	border: 3px solid var(--bg);
+	border-radius: 8px;
+}
+
+::-webkit-scrollbar-corner {
+	background: transparent;
+}
+
+.muted {
+	color: var(--text-muted);
+}
+
+.mono {
+	font-family: var(--mono);
+}

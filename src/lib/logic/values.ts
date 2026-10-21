@@ -91,3 +91,37 @@ export async function fileToAttachment(file: File): Promise<{ base64: string }> 
 export function jsonClone<T>(value: T): T {
 	return value === undefined ? value : JSON.parse(JSON.stringify(value));
 }
+
+export function formatBytes(bytes: number): string {
+	if (bytes < 1024) return `${bytes} B`;
+	const units = ['KB', 'MB', 'GB'];
+	let n = bytes / 1024;
+	let i = 0;
+	while (n >= 1024 && i < units.length - 1) {
+		n /= 1024;
+		i++;
+	}
+	return `${n.toFixed(n < 10 ? 1 : 0)} ${units[i]}`;
+}
+
+/** Client-side mirror of the backend's database name rules. */
+export function databaseNameProblem(name: string): string | null {
+	if (!name.trim()) return 'Enter a name';
+	if (name.trim() !== name) return 'Remove leading or trailing spaces';
+	if (name.length > 100) return 'Use at most 100 characters';
+	if (name.startsWith('.') || name.endsWith('.')) return 'Do not start or end with a dot';
+	const bad = [...name].find((c) => c.charCodeAt(0) < 32 || '<>:"/\\|?*'.includes(c));
+	if (bad) return `Do not use ${JSON.stringify(bad)}`;
+	if (/^(con|prn|aux|nul|com\d|lpt\d)(\.|$)/i.test(name)) return 'This name is reserved by the operating system';
+	return null;
+}
+
+/** Client-side mirror of the backend's table/field name rules. */
+export function identifierProblem(name: string, kind = 'Name'): string | null {
+	if (!name.trim()) return `${kind} is required`;
+	if (name.trim() !== name) return 'Remove leading or trailing spaces';
+	if (name.length > 128) return 'Use at most 128 characters';
+	if (/^(sqlite_|__app_)/i.test(name)) return 'Names starting with sqlite_ or __app_ are reserved';
+	if ([...name].some((c) => c.charCodeAt(0) < 32)) return 'Control characters are not allowed';
+	return null;
+}

@@ -1,14 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Core IPC plus native file pickers and confirmation dialogs. No filesystem plugin is exposed: database files are only touched by the app's own validated commands.",
+  "description": "Core IPC plus the native folder picker. No filesystem plugin is exposed: databases are created and opened by name inside the chosen folder through the app's validated commands.",
   "windows": [
     "main"
   ],
   "permissions": [
     "core:default",
-    "dialog:allow-open",
-    "dialog:allow-save",
-    "dialog:allow-ask"
+    "dialog:allow-open"
   ]
 }

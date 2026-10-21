@@ -13,14 +13,16 @@
     "windows": [
       {
         "title": "Database Builder",
-        "width": 1200,
-        "height": 800,
+        "width": 1360,
+        "height": 860,
         "resizable": true,
-        "fullscreen": false
+        "fullscreen": false,
+        "minWidth": 900,
+        "minHeight": 560
       }
     ],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data:; connect-src ipc: http://ipc.localhost",
+      "csp": "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; connect-src ipc: http://ipc.localhost",
       "devCsp": null
     }
   },

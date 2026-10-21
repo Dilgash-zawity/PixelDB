@@ -1,31 +1,8 @@
 use tauri::State;
 
-use crate::database::{DbManager, OpenDatabase, schema};
+use crate::database::{DbManager, schema};
 use crate::errors::AppResult;
 use crate::models::{DatabaseInfo, ObjectSummary};
-
-async fn activate(state: &DbManager, db: OpenDatabase) -> AppResult<DatabaseInfo> {
-    let mgr = state.clone();
-    DbManager::run_detached(move || {
-        mgr.set(db)?;
-        mgr.with_db(|db| db.info())
-    })
-    .await
-}
-
-/// Creates a new database file (never overwriting) and makes it current.
-#[tauri::command]
-pub async fn create_database(state: State<'_, DbManager>, path: String) -> AppResult<DatabaseInfo> {
-    let db = DbManager::run_detached(move || OpenDatabase::create(&path)).await?;
-    activate(&state, db).await
-}
-
-/// Opens an existing database file and makes it current.
-#[tauri::command]
-pub async fn open_database(state: State<'_, DbManager>, path: String) -> AppResult<DatabaseInfo> {
-    let db = DbManager::run_detached(move || OpenDatabase::open(&path)).await?;
-    activate(&state, db).await
-}
 
 /// Closes the current database. Returns false when none was open.
 #[tauri::command]
