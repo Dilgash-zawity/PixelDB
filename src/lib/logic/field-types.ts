@@ -35,6 +35,33 @@ export function fieldTypeLabel(t: FieldType): string {
 	return fieldTypeInfo(t)?.label ?? t.type;
 }
 
+/** Color families used to tell field types apart at a glance in the colorful look. */
+export type Tone = 'blue' | 'green' | 'amber' | 'pink' | 'violet' | 'cyan' | 'none';
+
+export function fieldTypeTone(t: FieldType): Tone {
+	switch (t.type) {
+		case 'short_text':
+		case 'long_text':
+			return 'blue';
+		case 'number':
+		case 'large_number':
+			return 'green';
+		case 'currency':
+			return 'amber';
+		case 'date_time':
+			return 'pink';
+		case 'yes_no':
+		case 'calculated':
+			return 'violet';
+		case 'hyperlink':
+		case 'attachment':
+		case 'lookup':
+			return 'cyan';
+		default:
+			return 'none';
+	}
+}
+
 /** A field type with default parameters. */
 export function makeFieldType(name: FieldTypeName): FieldType {
 	switch (name) {

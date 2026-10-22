@@ -4,7 +4,8 @@ import { jsonClone } from './values';
 
 /**
  * Apps: pages of widgets (tables, forms, charts, number cards, filters,
- * buttons, text) over one or more workspace databases. The definition is
+ * buttons, text, queries) over one or more workspace databases, listed in a
+ * sidebar together with the app's commands. The definition is
  * plain JSON stored by the backend in `<workspace>/Apps/<name>.baseapp`.
  *
  * It is declarative only. Widgets name a source, a table or saved query and
@@ -148,13 +149,40 @@ export interface TextWidget extends WidgetBase {
 	markdown: string;
 }
 
-export type Widget = TableWidget | FormWidget | ChartWidget | StatWidget | FilterWidget | ButtonWidget | TextWidget;
+/**
+ * Results of a read-only SQL query. `:name` in the SQL reads the app variable
+ * `name`; the backend binds it as a parameter.
+ */
+export interface QueryWidget extends WidgetBase {
+	type: 'query';
+	/** Alias of the source the query runs on; empty until chosen. */
+	source: string;
+	sql: string;
+	search: boolean;
+	rowAction: Action;
+}
+
+export type Widget = TableWidget | FormWidget | ChartWidget | StatWidget | FilterWidget | ButtonWidget | TextWidget | QueryWidget;
 export type WidgetType = Widget['type'];
 
 export interface Page {
 	id: string;
 	title: string;
+	/** One of `ICONS`. */
+	icon: string;
+	/** Heading the page is listed under in the sidebar; empty for none. */
+	group: string;
+	/** Left out of the sidebar; still reachable from buttons and links. */
+	hidden: boolean;
 	widgets: Widget[];
+}
+
+/** An action listed in the sidebar, like "New order" or "Print". */
+export interface AppCommand {
+	id: string;
+	label: string;
+	icon: string;
+	action: Action;
 }
 
 export type AppAccent = 'neutral' | 'blue' | 'green' | 'amber' | 'red' | 'violet';
@@ -168,6 +196,7 @@ export interface AppDef {
 	variables: AppVariable[];
 	pages: Page[];
 	startPage: string;
+	commands: AppCommand[];
 }
 
 export const WIDGET_TYPES: { type: WidgetType; label: string; description: string }[] = [
@@ -177,7 +206,28 @@ export const WIDGET_TYPES: { type: WidgetType; label: string; description: strin
 	{ type: 'stat', label: 'Number', description: 'One total, like revenue this month' },
 	{ type: 'filter', label: 'Filter', description: 'A control that sets a variable' },
 	{ type: 'button', label: 'Button', description: 'Go to a page, add a record…' },
-	{ type: 'text', label: 'Text', description: 'Headings, notes and instructions' }
+	{ type: 'text', label: 'Text', description: 'Headings, notes and instructions' },
+	{ type: 'query', label: 'Query', description: 'Results of a SQL query' }
+];
+
+/** Icons for pages and commands (lucide names; see `AppIcon.svelte`). */
+export const ICONS = [
+	'file', 'house', 'layout-dashboard', 'table', 'file-text', 'list', 'search', 'chart-column', 'chart-pie',
+	'users', 'user', 'building', 'shopping-cart', 'package', 'truck', 'receipt', 'wallet', 'credit-card',
+	'calendar', 'clock', 'inbox', 'mail', 'phone', 'clipboard-list', 'square-check', 'briefcase', 'book-open',
+	'folder', 'tag', 'star', 'heart', 'flag', 'map-pin', 'settings', 'plus', 'printer', 'refresh-cw', 'zap'
+] as const;
+
+/** Kinds of page offered by "New page"; each starts with ready-made widgets. */
+export type PageKind = 'blank' | 'list' | 'form' | 'list-form' | 'query' | 'dashboard';
+
+export const PAGE_KINDS: { kind: PageKind; label: string; description: string; icon: string; needsData: boolean }[] = [
+	{ kind: 'list', label: 'List', description: 'Records of a table with search; click one to edit it', icon: 'table', needsData: true },
+	{ kind: 'form', label: 'Form', description: 'Enter and edit records one at a time', icon: 'file-text', needsData: true },
+	{ kind: 'list-form', label: 'List and form', description: 'Pick a record on the left, edit it on the right', icon: 'list', needsData: true },
+	{ kind: 'query', label: 'Query', description: 'Results of a SQL query', icon: 'search', needsData: true },
+	{ kind: 'dashboard', label: 'Dashboard', description: 'A count, a chart and recent records', icon: 'layout-dashboard', needsData: true },
+	{ kind: 'blank', label: 'Blank', description: 'An empty page to build yourself', icon: 'file', needsData: false }
 ];
 
 export const ACCENTS: AppAccent[] = ['neutral', 'blue', 'green', 'amber', 'red', 'violet'];
@@ -211,7 +261,7 @@ export function newApp(databases: string[]): AppDef {
 	for (const database of databases) {
 		sources.push({ alias: aliasFor(database, sources.map((s) => s.alias)), database });
 	}
-	const home: Page = { id: newId('page'), title: 'Home', widgets: [] };
+	const home: Page = { id: newId('page'), title: 'Home', icon: 'house', group: '', hidden: false, widgets: [] };
 	return {
 		version: APP_FORMAT_VERSION,
 		description: '',
@@ -220,7 +270,8 @@ export function newApp(databases: string[]): AppDef {
 		sources,
 		variables: [],
 		pages: [home],
-		startPage: home.id
+		startPage: home.id,
+		commands: []
 	};
 }
 
@@ -378,6 +429,15 @@ function readWidget(v: unknown): Widget | null {
 			};
 		case 'text':
 			return { ...base, type: 'text', markdown: str(v.markdown) };
+		case 'query':
+			return {
+				...base,
+				type: 'query',
+				source: str(v.source),
+				sql: str(v.sql),
+				search: bool(v.search, true),
+				rowAction: readAction(v.rowAction)
+			};
 		default:
 			// Unknown widget types (from a newer version) are dropped.
 			return null;
@@ -401,9 +461,12 @@ export function readApp(raw: unknown): AppDef {
 		.map((p) => ({
 			id: str(p.id) || newId('page'),
 			title: str(p.title, 'Page'),
+			icon: oneOf(p.icon, ICONS, 'file'),
+			group: str(p.group).trim(),
+			hidden: bool(p.hidden, false),
 			widgets: arr(p.widgets).map(readWidget).filter((w): w is Widget => w !== null)
 		}));
-	if (!pages.length) pages.push({ id: newId('page'), title: 'Home', widgets: [] });
+	if (!pages.length) pages.push({ id: newId('page'), title: 'Home', icon: 'house', group: '', hidden: false, widgets: [] });
 	const startPage = pages.some((p) => p.id === raw.startPage) ? (raw.startPage as string) : pages[0].id;
 	return {
 		version: APP_FORMAT_VERSION,
@@ -419,7 +482,15 @@ export function readApp(raw: unknown): AppDef {
 			.map((v) => ({ name: str(v.name), default: (v.default ?? null) as JsonValue }))
 			.filter((v) => v.name),
 		pages,
-		startPage
+		startPage,
+		commands: arr(raw.commands)
+			.filter(isObj)
+			.map((c) => ({
+				id: str(c.id) || newId('cmd'),
+				label: str(c.label, 'Action'),
+				icon: oneOf(c.icon, ICONS, 'zap'),
+				action: readAction(c.action)
+			}))
 	};
 }
 
@@ -442,6 +513,8 @@ export function defaultSize(type: WidgetType): { w: number; h: number } {
 			return { w: 2, h: 1 };
 		case 'text':
 			return { w: 12, h: 2 };
+		case 'query':
+			return { w: 12, h: 8 };
 	}
 }
 
@@ -504,6 +577,16 @@ export function newWidget(type: WidgetType, layout: Layout, data: Binding | null
 			return { ...base, type, label: 'Button', variant: 'default', action: { do: 'none' } };
 		case 'text':
 			return { ...base, type, markdown: '## Heading\n\nWrite a note here.' };
+		case 'query':
+			return {
+				...base,
+				type,
+				title: 'Query',
+				source: data?.source ?? '',
+				sql: data ? `SELECT *\nFROM "${data.table.replaceAll('"', '""')}"` : '',
+				search: true,
+				rowAction: { do: 'none' }
+			};
 	}
 }
 
@@ -537,7 +620,7 @@ export function bindingOf(w: Widget): Binding | null {
 /** Every action a widget can run. */
 function actionsOf(w: Widget): Action[] {
 	if (w.type === 'button') return [w.action];
-	if (w.type === 'table') return [w.rowAction];
+	if (w.type === 'table' || w.type === 'query') return [w.rowAction];
 	return [];
 }
 
@@ -559,17 +642,118 @@ function forEachAction(app: AppDef, change: (a: Action) => Action): void {
 	for (const page of app.pages) {
 		for (const w of page.widgets) {
 			if (w.type === 'button') w.action = change(w.action);
-			if (w.type === 'table') w.rowAction = change(w.rowAction);
+			if (w.type === 'table' || w.type === 'query') w.rowAction = change(w.rowAction);
 		}
 	}
+	for (const c of app.commands) c.action = change(c.action);
 }
 
 // ----- Pages -----
 
-export function addPage(app: AppDef, title: string): Page {
-	const page: Page = { id: newId('page'), title, widgets: [] };
+export function addPage(app: AppDef, title: string, icon = 'file', group = ''): Page {
+	const page: Page = { id: newId('page'), title, icon, group, hidden: false, widgets: [] };
 	app.pages.push(page);
 	return page;
+}
+
+/**
+ * Adds a page of `kind` whose starting widgets read `data` (for a query page,
+ * the table or saved query the SQL starts from). A list-and-form page links
+ * its table to its form through the table's `key` column.
+ */
+export function addPageOfKind(
+	app: AppDef,
+	kind: PageKind,
+	title: string,
+	data: Binding | null,
+	options: { group?: string; key?: string } = {}
+): Page {
+	const icon = PAGE_KINDS.find((k) => k.kind === kind)?.icon ?? 'file';
+	const page = addPage(app, title, icon, options.group ?? '');
+	if (!data) return page;
+	const put = <T extends Widget>(type: T['type'], layout: Layout, set?: (w: T) => void) => {
+		const w = newWidget(type, layout, data) as T;
+		set?.(w);
+		page.widgets.push(w);
+	};
+	switch (kind) {
+		case 'list':
+			put<TableWidget>('table', { x: 0, y: 0, w: 12, h: 12 }, (w) => (w.pageSize = 50));
+			break;
+		case 'form':
+			put<FormWidget>('form', { x: 0, y: 0, w: 8, h: 12 });
+			break;
+		case 'list-form': {
+			const key = options.key ?? 'id';
+			const base = data.table.replace(/[^A-Za-z0-9_]+/g, '_').replace(/^[^A-Za-z_]+/, '').toLowerCase() || 'record';
+			const variable = uniqueName(`selected_${base}`, app.variables.map((v) => v.name));
+			addVariable(app, variable, null);
+			put<TableWidget>('table', { x: 0, y: 0, w: 7, h: 12 }, (w) => {
+				w.allowNew = false;
+				w.rowAction = { do: 'set-variable', name: variable, value: { kind: 'column', column: key } };
+			});
+			put<FormWidget>('form', { x: 7, y: 0, w: 5, h: 12 }, (w) => {
+				w.filters = [{ column: key, op: 'eq', value: { kind: 'variable', name: variable } }];
+			});
+			break;
+		}
+		case 'query':
+			put<QueryWidget>('query', { x: 0, y: 0, w: 12, h: 12 });
+			break;
+		case 'dashboard':
+			put<StatWidget>('stat', { x: 0, y: 0, w: 3, h: 3 }, (w) => (w.title = w.caption = data.table));
+			put<ChartWidget>('chart', { x: 3, y: 0, w: 9, h: 7 });
+			put<TableWidget>('table', { x: 0, y: 7, w: 12, h: 8 }, (w) => {
+				w.title = `Latest ${data.table}`;
+				w.pageSize = 10;
+			});
+			break;
+	}
+	return page;
+}
+
+/** A copy of a page with new ids, placed after it. Widget links inside the copy point at the copy's widgets. */
+export function duplicatePage(app: AppDef, pageId: string, title: string): Page | undefined {
+	const index = app.pages.findIndex((p) => p.id === pageId);
+	if (index < 0) return undefined;
+	const copy: Page = { ...jsonClone(app.pages[index]), id: newId('page'), title };
+	const ids = new Map<string, string>();
+	for (const w of copy.widgets) {
+		const id = newId('w');
+		ids.set(w.id, id);
+		w.id = id;
+	}
+	for (const w of copy.widgets) {
+		for (const key of ['action', 'rowAction'] as const) {
+			const a = (w as unknown as Record<string, Action | undefined>)[key];
+			if (a?.do === 'new-record' && ids.has(a.widget)) (w as unknown as Record<string, Action>)[key] = { ...a, widget: ids.get(a.widget)! };
+		}
+	}
+	app.pages.splice(index + 1, 0, copy);
+	return copy;
+}
+
+/** Sidebar groups in order of first appearance, each with its pages; ungrouped pages come first under "". */
+export function pageGroups(pages: Page[], includeHidden: boolean): { group: string; pages: Page[] }[] {
+	const groups: { group: string; pages: Page[] }[] = [{ group: '', pages: [] }];
+	for (const p of pages) {
+		if (p.hidden && !includeHidden) continue;
+		let g = groups.find((x) => x.group.toLowerCase() === p.group.toLowerCase());
+		if (!g) groups.push((g = { group: p.group, pages: [] }));
+		g.pages.push(p);
+	}
+	return groups.filter((g) => g.pages.length || g.group === '');
+}
+
+/** Moves page `pageId` before `beforeId` (or to the end) and into that spot's group. */
+export function dropPage(app: AppDef, pageId: string, beforeId: string | null, group: string): void {
+	const from = app.pages.findIndex((p) => p.id === pageId);
+	if (from < 0) return;
+	app.pages[from].group = group;
+	if (pageId === beforeId) return;
+	const [page] = app.pages.splice(from, 1);
+	const to = beforeId ? app.pages.findIndex((p) => p.id === beforeId) : -1;
+	app.pages.splice(to < 0 ? app.pages.length : to, 0, page);
 }
 
 /** Removes a page (never the last one); buttons that went there do nothing instead. */
@@ -587,6 +771,81 @@ export function movePage(app: AppDef, pageId: string, toIndex: number): void {
 	app.pages.splice(Math.max(0, Math.min(app.pages.length, toIndex)), 0, page);
 }
 
+// ----- Commands -----
+
+export function addCommand(app: AppDef, label: string): AppCommand {
+	const command: AppCommand = { id: newId('cmd'), label, icon: 'zap', action: { do: 'none' } };
+	app.commands.push(command);
+	return command;
+}
+
+export function findCommand(app: AppDef, id: string): AppCommand | undefined {
+	return app.commands.find((c) => c.id === id);
+}
+
+export function removeCommand(app: AppDef, id: string): void {
+	app.commands = app.commands.filter((c) => c.id !== id);
+}
+
+export function moveCommand(app: AppDef, id: string, toIndex: number): void {
+	const from = app.commands.findIndex((c) => c.id === id);
+	if (from < 0) return;
+	const [c] = app.commands.splice(from, 1);
+	app.commands.splice(Math.max(0, Math.min(app.commands.length, toIndex)), 0, c);
+}
+
+// ----- Query parameters -----
+
+/**
+ * Rewrites the `:name` / `@name` / `$name` parameters of `sql`, skipping
+ * quoted text and comments. `change` returns the new name, or the same one.
+ */
+export function mapSqlParameters(sql: string, change: (name: string) => string): string {
+	let out = '';
+	let i = 0;
+	while (i < sql.length) {
+		const c = sql[i];
+		if (c === "'" || c === '"' || c === '`' || c === '[') {
+			const close = c === '[' ? ']' : c;
+			let j = i + 1;
+			while (j < sql.length) {
+				if (sql[j] === close) {
+					if (close !== ']' && sql[j + 1] === close) j += 2;
+					else break;
+				} else j++;
+			}
+			out += sql.slice(i, j + 1);
+			i = j + 1;
+		} else if (sql.startsWith('--', i)) {
+			const end = sql.indexOf('\n', i);
+			const j = end < 0 ? sql.length : end;
+			out += sql.slice(i, j);
+			i = j;
+		} else if (sql.startsWith('/*', i)) {
+			const end = sql.indexOf('*/', i + 2);
+			const j = end < 0 ? sql.length : end + 2;
+			out += sql.slice(i, j);
+			i = j;
+		} else if ((c === ':' || c === '@' || c === '$') && /[A-Za-z_]/.test(sql[i + 1] ?? '')) {
+			let j = i + 1;
+			while (j < sql.length && /[A-Za-z0-9_]/.test(sql[j])) j++;
+			out += c + change(sql.slice(i + 1, j));
+			i = j;
+		} else {
+			out += c;
+			i++;
+		}
+	}
+	return out;
+}
+
+/** Names of the parameters a query reads. */
+export function sqlParameters(sql: string): string[] {
+	const names = new Set<string>();
+	mapSqlParameters(sql, (n) => (names.add(n), n));
+	return [...names];
+}
+
 // ----- Sources -----
 
 export function addSource(app: AppDef, database: string): AppSource {
@@ -599,7 +858,7 @@ export function addSource(app: AppDef, database: string): AppSource {
 
 /** Widgets reading from `alias`. */
 export function widgetsUsingSource(app: AppDef, alias: string): Widget[] {
-	return app.pages.flatMap((p) => p.widgets).filter((w) => bindingOf(w)?.source === alias);
+	return app.pages.flatMap((p) => p.widgets).filter((w) => (w.type === 'query' ? w.source : bindingOf(w)?.source) === alias);
 }
 
 /** Removes a source; widgets that read from it lose their data binding. */
@@ -608,6 +867,7 @@ export function removeSource(app: AppDef, alias: string): void {
 	for (const page of app.pages) {
 		for (const w of page.widgets) {
 			if (w.type === 'filter' && w.options.data?.source === alias) w.options.data = null;
+			else if (w.type === 'query' && w.source === alias) w.source = '';
 			else if ('data' in w && w.data?.source === alias) w.data = null;
 		}
 	}
@@ -662,7 +922,10 @@ function mapRefs(app: AppDef, change: (r: ValueRef) => ValueRef): void {
 export function renameVariable(app: AppDef, from: string, to: string): void {
 	for (const v of app.variables) if (v.name === from) v.name = to;
 	for (const page of app.pages) {
-		for (const w of page.widgets) if (w.type === 'filter' && w.variable === from) w.variable = to;
+		for (const w of page.widgets) {
+			if (w.type === 'filter' && w.variable === from) w.variable = to;
+			if (w.type === 'query') w.sql = mapSqlParameters(w.sql, (n) => (n === from ? to : n));
+		}
 	}
 	forEachAction(app, (a) => {
 		if (a.do === 'set-variable' && a.name === from) return { ...a, name: to };
@@ -828,6 +1091,7 @@ export function prefillFromFilters(filters: WidgetFilter[], vars: Variables): Re
 
 /** Variables a widget reads; it reloads when one of them changes. */
 export function variablesRead(w: Widget): string[] {
+	if (w.type === 'query') return sqlParameters(w.sql);
 	const names = 'filters' in w ? w.filters.flatMap((f) => (f.value.kind === 'variable' ? [f.value.name] : [])) : [];
 	return [...new Set(names)];
 }
@@ -863,6 +1127,13 @@ export interface SchemaLookup {
  */
 export function widgetProblems(app: AppDef, w: Widget, schema: SchemaLookup): string[] {
 	const problems: string[] = [];
+	if (w.type === 'query') {
+		const source = w.source ? sourceOf(app, w.source) : undefined;
+		if (!w.source) problems.push('Choose the database the query runs on.');
+		else if (!source) problems.push('Its database was removed from the app.');
+		else if (!schema.databases.includes(source.database)) problems.push(`The database “${source.database}” is missing from the folder.`);
+		if (!w.sql.trim()) problems.push('Write the query.');
+	}
 	const binding = bindingOf(w);
 	const needsData = w.type === 'table' || w.type === 'form' || w.type === 'chart' || w.type === 'stat';
 	if (needsData && !binding) problems.push('Choose where the data comes from.');
@@ -901,11 +1172,25 @@ export function widgetProblems(app: AppDef, w: Widget, schema: SchemaLookup): st
 	].filter((v) => v && !vars.has(v));
 	if (unknownVars.length) problems.push(`Variable ${[...new Set(unknownVars)].map((v) => `“${v}”`).join(', ')} doesn't exist.`);
 	if (w.type === 'filter' && !w.variable) problems.push('Choose the variable this filter sets.');
-	for (const a of actionsOf(w)) {
-		if (a.do === 'navigate' && !findPage(app, a.page)) problems.push('The page this goes to was removed.');
-		if (a.do === 'new-record' && !findWidget(app, a.widget)) problems.push('The widget this adds records to was removed.');
-	}
+	for (const a of actionsOf(w)) problems.push(...actionProblems(app, a));
 	return problems;
+}
+
+function actionProblems(app: AppDef, a: Action): string[] {
+	const problems: string[] = [];
+	if (a.do === 'navigate' && !findPage(app, a.page)) problems.push('The page this goes to was removed.');
+	if (a.do === 'new-record' && !findWidget(app, a.widget)) problems.push('The widget this adds records to was removed.');
+	return problems;
+}
+
+/** Problems with a sidebar command, as sentences. */
+export function commandProblems(app: AppDef, c: AppCommand): string[] {
+	const vars = new Set(app.variables.map((v) => v.name));
+	const unknown = variablesSet(c.action).filter((v) => v && !vars.has(v));
+	return [
+		...actionProblems(app, c.action),
+		...(unknown.length ? [`Variable ${unknown.map((v) => `“${v}”`).join(', ')} doesn't exist.`] : [])
+	];
 }
 
 /** Columns of its bound table a widget refers to. */
