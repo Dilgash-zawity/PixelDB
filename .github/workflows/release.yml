@@ -1,0 +1,70 @@
+name: release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  publish-tauri:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: 'macos-latest'
+            args: '--target aarch64-apple-darwin --bundles dmg'
+          - platform: 'macos-latest'
+            args: '--target x86_64-apple-darwin --bundles dmg'
+          - platform: 'ubuntu-22.04'
+            args: '--bundles appimage'
+          - platform: 'windows-latest'
+            args: '--bundles nsis'
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install dependencies (ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: setup bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: './src-tauri -> target'
+
+      - name: install frontend dependencies
+        run: bun install
+
+      # The release tag comes from "version" in src-tauri/tauri.conf.json, so a
+      # manual run (workflow_dispatch) from a branch still gets a proper v-tag.
+      - name: build and release
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: 'v__VERSION__'
+          releaseName: 'SlateDB v__VERSION__'
+          releaseBody: |
+            | Platform | File |
+            | -------- | ---- |
+            | Windows | [Download](https://github.com/Dilgash-zawity/Base/releases/download/v__VERSION__/SlateDB___VERSION___x64-setup.exe) |
+            | Mac (Apple Silicon) | [Download](https://github.com/Dilgash-zawity/Base/releases/download/v__VERSION__/SlateDB___VERSION___aarch64.dmg) |
+            | Mac (Intel) | [Download](https://github.com/Dilgash-zawity/Base/releases/download/v__VERSION__/SlateDB___VERSION___x64.dmg) |
+            | Linux | [Download](https://github.com/Dilgash-zawity/Base/releases/download/v__VERSION__/SlateDB___VERSION___amd64.AppImage) |
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.args }}
