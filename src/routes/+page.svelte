@@ -127,7 +127,7 @@
 <div class="flex min-h-svh flex-col">
 	<header class="flex h-14 items-center gap-3 border-b bg-sidebar px-6">
 		<Logo class="size-7" />
-		<span class="font-semibold">Base</span>
+		<span class="font-semibold">SlateDB</span>
 		<span class="flex-1"></span>
 		<ThemeToggle />
 	</header>
@@ -141,7 +141,7 @@
 			<Empty.Root class="my-auto">
 				<Empty.Header>
 					<Empty.Media><Logo class="size-24" /></Empty.Media>
-					<Empty.Title class="text-2xl">Welcome to Base</Empty.Title>
+					<Empty.Title class="text-2xl">Welcome to SlateDB</Empty.Title>
 					<Empty.Description>Choose a folder for your databases. Everything stays on this computer.</Empty.Description>
 				</Empty.Header>
 				<Empty.Content>

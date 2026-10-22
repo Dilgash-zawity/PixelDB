@@ -66,7 +66,7 @@
 </script>
 
 <svelte:window onkeydown={onKey} />
-<svelte:head><title>{name} · Base</title></svelte:head>
+<svelte:head><title>{name} · SlateDB</title></svelte:head>
 
 {#if session.loadError}
 	<Empty.Root class="min-h-svh">

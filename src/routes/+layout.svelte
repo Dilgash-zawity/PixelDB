@@ -1,7 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import { ModeWatcher } from 'mode-watcher';
-	import favicon from '#lib/assets/favicon.svg';
+	import logo from '#lib/assets/logo.svg';
 	import ConfirmHost from '#lib/components/app/ConfirmHost.svelte';
 	import { Toaster } from '#lib/components/ui/sonner/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
@@ -11,8 +11,8 @@
 </script>
 
 <svelte:head>
-	<link rel="icon" href={favicon} />
-	<title>Base</title>
+	<link rel="icon" type="image/svg+xml" href={logo} />
+	<title>SlateDB</title>
 </svelte:head>
 
 <ModeWatcher defaultMode="dark" />

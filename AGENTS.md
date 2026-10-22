@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-Database Builder is an offline desktop app using Tauri 2, Rust, bundled SQLite, SvelteKit 3, Svelte 5, and Bun.
+SlateDB is an offline desktop app using Tauri 2, Rust, bundled SQLite, SvelteKit 3, Svelte 5, and Bun.
 
 - `src/routes/`: workspace and database pages.
 - `src/lib/`: typed IPC in `api/`, orchestration in `services/`, framework-free business logic in `logic/`, and rune-based state in `state/`.

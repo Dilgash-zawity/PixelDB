@@ -1,4 +1,4 @@
-# Database Builder
+# SlateDB
 
 A free, open-source, offline-first desktop database application inspired by
 Microsoft Access, built with Tauri v2, Rust, SQLite (rusqlite, bundled),
