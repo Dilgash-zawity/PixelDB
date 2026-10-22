@@ -2,11 +2,13 @@
 
 pub mod database;
 pub mod field;
+pub mod query;
 pub mod record;
 pub mod table;
 
 pub use database::*;
 pub use field::*;
+pub use query::*;
 pub use record::*;
 pub use table::*;
 

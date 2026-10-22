@@ -4,6 +4,7 @@
 pub mod connection;
 pub mod metadata;
 pub mod migrations;
+pub mod queries;
 pub mod records;
 pub mod schema;
 pub mod transactions;

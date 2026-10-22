@@ -2,6 +2,7 @@
 //! `database::*` function on a blocking thread.
 
 pub mod database;
+pub mod queries;
 pub mod records;
 pub mod tables;
 pub mod workspace;

@@ -6,14 +6,17 @@
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import DatabaseIcon from '@lucide/svelte/icons/database';
+	import InfoIcon from '@lucide/svelte/icons/info';
 	import NetworkIcon from '@lucide/svelte/icons/network';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import SearchIcon from '@lucide/svelte/icons/search';
+	import SearchCodeIcon from '@lucide/svelte/icons/search-code';
 	import TableIcon from '@lucide/svelte/icons/table-2';
 	import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
 	import CommandPalette from '#lib/components/app/CommandPalette.svelte';
 	import Logo from '#lib/components/app/Logo.svelte';
 	import NameDialog from '#lib/components/app/NameDialog.svelte';
+	import QueryView from '#lib/components/app/QueryView.svelte';
 	import RecordsView from '#lib/components/app/RecordsView.svelte';
 	import RelationshipsView from '#lib/components/app/RelationshipsView.svelte';
 	import ThemeToggle from '#lib/components/app/ThemeToggle.svelte';
@@ -49,6 +52,10 @@
 
 	async function switchTo(db: string) {
 		if (!session.leaveGuard || (await session.leaveGuard())) goto(databaseHref(resolve('/db'), db));
+	}
+
+	async function about() {
+		if (!session.leaveGuard || (await session.leaveGuard())) goto(resolve('/about'));
 	}
 
 	function suggestedTableName(): string {
@@ -107,6 +114,7 @@
 					<DropdownMenu.Group>
 						<DropdownMenu.Item onclick={() => (creatingDatabase = true)}><PlusIcon /> New database…</DropdownMenu.Item>
 						<DropdownMenu.Item onclick={back}><ArrowLeftIcon /> All databases</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={about}><InfoIcon /> About SlateDB</DropdownMenu.Item>
 					</DropdownMenu.Group>
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
@@ -117,6 +125,7 @@
 				<Tabs.List>
 					<Tabs.Trigger value="diagram"><NetworkIcon /> Diagram</Tabs.Trigger>
 					<Tabs.Trigger value="datasheet"><TableIcon /> Datasheet</Tabs.Trigger>
+					<Tabs.Trigger value="query"><SearchCodeIcon /> Query</Tabs.Trigger>
 				</Tabs.List>
 			</Tabs.Root>
 
@@ -147,12 +156,15 @@
 		</header>
 
 		<main class="min-h-0 flex-1">
-			{#if session.loading}
+			<!-- Views load data as soon as they mount, so wait until this database is the one open. -->
+			{#if session.loading || session.name !== name || !session.info}
 				<div class="flex flex-col gap-2 p-6">
 					{#each Array(5) as _, i (i)}<Skeleton class="h-9" />{/each}
 				</div>
 			{:else if session.tab === 'diagram'}
 				<RelationshipsView />
+			{:else if session.tab === 'query'}
+				<QueryView />
 			{:else if !session.table}
 				<Empty.Root class="h-full">
 					<Empty.Header>
@@ -173,7 +185,7 @@
 	</div>
 {/if}
 
-<CommandPalette bind:open={paletteOpen} onNewTable={() => (creatingTable = true)} onBack={back} />
+<CommandPalette bind:open={paletteOpen} onNewTable={() => (creatingTable = true)} onBack={back} onAbout={about} />
 
 <NameDialog
 	bind:open={creatingDatabase}

@@ -164,6 +164,14 @@ export interface RecordPage {
 
 export type RecordValues = Record<string, JsonValue>;
 
+export interface QueryResult {
+	columns: string[];
+	rows: JsonValue[][];
+	/** True when more rows existed than were returned. */
+	truncated: boolean;
+	elapsed_ms: number;
+}
+
 export type BatchOp =
 	| { op: 'insert'; values: RecordValues }
 	| { op: 'update'; key: RecordKey; values: RecordValues }

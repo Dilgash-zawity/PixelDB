@@ -1,13 +1,14 @@
 import { toast } from 'svelte-sonner';
 import type { DatabaseInfo, ObjectSummary } from '../api/types';
+import { newQueryDraft, type QueryDraft } from '../logic/query-builder';
 import { identifierProblem } from '../logic/values';
 import { databaseService } from '../services/database';
 import { tableService } from '../services/tables';
 import { workspaceService } from '../services/workspace';
 import { attempt, confirm } from './feedback.svelte';
 
-/** The two tabs of the database page. */
-export type Tab = 'diagram' | 'datasheet';
+/** The tabs of the database page. */
+export type Tab = 'diagram' | 'datasheet' | 'query';
 
 /** The database open on the database page and the table being viewed. */
 class Session {
@@ -18,6 +19,8 @@ class Session {
 	loadError = $state<string | null>(null);
 	table = $state<string | null>(null);
 	tab = $state<Tab>('diagram');
+	/** The Query tab's work in progress, kept while switching tabs. */
+	query = $state<QueryDraft>(newQueryDraft());
 	/** Bumped whenever the open table's structure changes elsewhere. */
 	revision = $state(0);
 	/** One-shot requests from the command palette, read by the open view. */
@@ -37,6 +40,7 @@ class Session {
 		this.objects = [];
 		this.table = null;
 		this.tab = 'diagram';
+		this.query = newQueryDraft();
 		this.loadError = null;
 		this.loading = true;
 		try {

@@ -13,6 +13,7 @@ use workspace::WorkspaceStore;
 pub fn run() {
   tauri::Builder::default()
     .plugin(tauri_plugin_dialog::init())
+    .plugin(tauri_plugin_opener::init())
     .manage(DbManager::default())
     .setup(|app| {
       let config_dir = app.path().app_config_dir()?;
@@ -56,6 +57,10 @@ pub fn run() {
       commands::records::update_record,
       commands::records::delete_records,
       commands::records::batch_records,
+      commands::queries::run_query,
+      commands::queries::save_query,
+      commands::queries::get_query_sql,
+      commands::queries::drop_query,
     ])
     .run(tauri::generate_context!())
     .expect("error while building tauri application");

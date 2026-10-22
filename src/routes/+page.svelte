@@ -8,6 +8,7 @@
 	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import TrashIcon from '@lucide/svelte/icons/trash-2';
 	import FolderOpenIcon from '@lucide/svelte/icons/folder-open';
+	import InfoIcon from '@lucide/svelte/icons/info';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import SearchIcon from '@lucide/svelte/icons/search';
 	import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
@@ -129,6 +130,7 @@
 		<Logo class="size-7" />
 		<span class="font-semibold">SlateDB</span>
 		<span class="flex-1"></span>
+		<Button variant="ghost" size="icon-sm" href={resolve('/about')} aria-label="About SlateDB" title="About SlateDB"><InfoIcon /></Button>
 		<ThemeToggle />
 	</header>
 
