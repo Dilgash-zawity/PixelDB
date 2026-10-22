@@ -21,9 +21,8 @@
 	import ConfirmHost from './ConfirmHost.svelte';
 	import FieldProperties from './FieldProperties.svelte';
 	import FieldTypeSelect from './FieldTypeSelect.svelte';
-	import NewFieldDrawer from './NewFieldDrawer.svelte';
 
-	/** Edits one field of `table`, saving straight away; with `field` null, adds one step by step (NewFieldDrawer). */
+	/** Adds (`field` null) or edits one field of `table`, saving straight away. */
 	let {
 		open = $bindable(false),
 		table,
@@ -45,7 +44,7 @@
 	let busy = $state(false);
 
 	$effect(() => {
-		if (open && field !== null) {
+		if (open) {
 			const [t, f] = [table, field];
 			untrack(() => load(t, f));
 		}
@@ -128,9 +127,6 @@
 	}
 </script>
 
-{#if field === null}
-	<NewFieldDrawer bind:open {table} {onSaved} />
-{:else}
 <Drawer.Root bind:open direction="right">
 	<Drawer.Content>
 		<form class="flex min-h-0 flex-1 flex-col" onsubmit={save}>
@@ -190,4 +186,3 @@
 		<ConfirmHost scope={SCOPE} />
 	</Drawer.Content>
 </Drawer.Root>
-{/if}

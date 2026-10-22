@@ -44,7 +44,7 @@
 <div
 	class={cn(
 		'group/widget relative flex h-full min-h-0 flex-col',
-		!bare && 'rounded-lg border bg-card text-card-foreground vivid:shadow-xs',
+		!bare && 'border bg-card text-card-foreground',
 		editing && 'border-dashed',
 		editing && selected && 'border-solid border-ring ring-2 ring-ring/40'
 	)}

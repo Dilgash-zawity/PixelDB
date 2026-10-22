@@ -2,12 +2,12 @@
 	import { resolve } from '$app/paths';
 	import FolderOpenIcon from '@lucide/svelte/icons/folder-open';
 	import SettingsIcon from '@lucide/svelte/icons/settings';
-	import FocusModeSwitch from '#lib/components/app/FocusModeSwitch.svelte';
 	import Logo from '#lib/components/app/Logo.svelte';
 	import ThemeToggle from '#lib/components/app/ThemeToggle.svelte';
 	import WorkspaceMap from '#lib/components/app/WorkspaceMap.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
+	import { Separator } from '#lib/components/ui/separator/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { databaseService } from '#lib/services/database.js';
 	import { attempt } from '#lib/state/feedback.svelte.js';
@@ -27,9 +27,16 @@
 <svelte:window onfocus={refreshOnFocus} />
 
 <div class="flex h-svh flex-col">
-	<header class="app-header flex h-12 shrink-0 items-center gap-2 border-b bg-sidebar px-3">
+	<header class="flex h-12 shrink-0 items-center gap-2 border-b bg-sidebar px-3">
 		<Logo class="size-6" />
 		<span class="font-semibold">SlateDB</span>
+		{#if workspace.info}
+			<Separator orientation="vertical" class="data-vertical:h-5 data-vertical:self-center" />
+			<Button variant="ghost" size="sm" class="min-w-0 text-muted-foreground" title="Change folder" onclick={() => workspace.chooseFolder()}>
+				<FolderOpenIcon data-icon="inline-start" />
+				<span class="max-w-md truncate">{workspace.info.path}</span>
+			</Button>
+		{/if}
 		<span class="flex-1"></span>
 		<Button variant="ghost" size="icon-sm" href={resolve('/settings')} aria-label="Settings" title="Settings"><SettingsIcon /></Button>
 		<ThemeToggle />
@@ -52,7 +59,6 @@
 					<FolderOpenIcon data-icon="inline-start" />
 					Choose a folder
 				</Button>
-				<FocusModeSwitch class="mt-6" />
 			</Empty.Content>
 		</Empty.Root>
 	{:else}

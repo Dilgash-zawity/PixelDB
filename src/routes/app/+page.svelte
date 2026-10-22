@@ -7,22 +7,20 @@
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import CloudAlertIcon from '@lucide/svelte/icons/cloud-alert';
+	import SettingsIcon from '@lucide/svelte/icons/settings';
 	import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
-	import PanelLeftIcon from '@lucide/svelte/icons/panel-left';
 	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import PlayIcon from '@lucide/svelte/icons/play';
+	import PlusIcon from '@lucide/svelte/icons/plus';
 	import Redo2Icon from '@lucide/svelte/icons/redo-2';
 	import SearchIcon from '@lucide/svelte/icons/search';
 	import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
 	import Undo2Icon from '@lucide/svelte/icons/undo-2';
 	import AppCanvas from '#lib/components/app/builder/AppCanvas.svelte';
 	import AppCommandPalette from '#lib/components/app/builder/AppCommandPalette.svelte';
-	import AppIcon from '#lib/components/app/builder/AppIcon.svelte';
-	import AppSidebar from '#lib/components/app/builder/AppSidebar.svelte';
 	import BuilderSidebar from '#lib/components/app/builder/BuilderSidebar.svelte';
-	import CommandProperties from '#lib/components/app/builder/CommandProperties.svelte';
-	import NewPageDialog from '#lib/components/app/builder/NewPageDialog.svelte';
 	import WidgetProperties from '#lib/components/app/builder/WidgetProperties.svelte';
+	import NameDialog from '#lib/components/app/NameDialog.svelte';
 	import ThemeToggle from '#lib/components/app/ThemeToggle.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
@@ -31,9 +29,10 @@
 	import { Separator } from '#lib/components/ui/separator/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
-	import { removeCommand } from '#lib/logic/app-def.js';
+	import { addPage } from '#lib/logic/app-def.js';
 	import { appHref } from '#lib/logic/routes.js';
 	import { appSession, type AppMode } from '#lib/state/app.svelte.js';
 	import { workspace } from '#lib/state/workspace.svelte.js';
@@ -77,11 +76,6 @@
 			paletteOpen = !paletteOpen;
 			return;
 		}
-		if (mod && e.key.toLowerCase() === 'b' && !inTextBox(e)) {
-			e.preventDefault();
-			appSession.toggleSidebar();
-			return;
-		}
 		if (!editing || inTextBox(e)) return;
 		if (mod && e.key.toLowerCase() === 'z') {
 			e.preventDefault();
@@ -95,15 +89,12 @@
 		} else if ((e.key === 'Delete' || e.key === 'Backspace') && appSession.selected) {
 			// Undo brings it back.
 			e.preventDefault();
-			const id = appSession.selected;
-			if (appSession.selectedCommand) {
-				appSession.change((d) => removeCommand(d, id));
-				appSession.selected = null;
-			} else {
-				appSession.deleteWidget(id);
-			}
+			appSession.deleteWidget(appSession.selected);
 		}
 	}
+
+	const pageTitleProblem = (v: string) =>
+		!v.trim() ? 'Enter a name' : def?.pages.some((p) => p.title.toLowerCase() === v.trim().toLowerCase()) ? 'A page with this name already exists' : null;
 </script>
 
 <svelte:window onkeydown={onKey} onbeforeunload={() => appSession.flush()} />
@@ -122,24 +113,7 @@
 	</Empty.Root>
 {:else}
 	<div class="flex h-svh flex-col" data-accent={def?.accent ?? 'neutral'}>
-		<header class="app-header flex h-12 shrink-0 items-center gap-2 border-b px-3 print:hidden">
-			<Tooltip.Root>
-				<Tooltip.Trigger>
-					{#snippet child({ props })}
-						<Button
-							{...props}
-							variant="ghost"
-							size="icon-sm"
-							aria-label={appSession.sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-							aria-pressed={!appSession.sidebarCollapsed}
-							onclick={() => appSession.toggleSidebar()}
-						>
-							<PanelLeftIcon />
-						</Button>
-					{/snippet}
-				</Tooltip.Trigger>
-				<Tooltip.Content>{appSession.sidebarCollapsed ? 'Expand' : 'Collapse'} sidebar <Kbd>⌘B</Kbd></Tooltip.Content>
-			</Tooltip.Root>
+		<header class="flex h-12 shrink-0 items-center gap-2 border-b px-3 print:hidden">
 			<DropdownMenu.Root onOpenChange={(open) => open && workspace.refresh()}>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
@@ -164,16 +138,26 @@
 					<DropdownMenu.Separator />
 					<DropdownMenu.Group>
 						<DropdownMenu.Item onclick={back}><ArrowLeftIcon /> Home</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={openSettings}><SettingsIcon /> Settings</DropdownMenu.Item>
 					</DropdownMenu.Group>
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
 
-			{#if ready && appSession.page}
-				<Separator orientation="vertical" class="data-vertical:h-5 data-vertical:self-center" />
-				<span class="flex min-w-0 items-center gap-2 px-1 text-sm">
-					<AppIcon name={appSession.page.icon} class="size-4 shrink-0 text-muted-foreground vivid:text-(--app-accent)" />
-					<span class="truncate">{appSession.page.title}</span>
-				</span>
+			<Separator orientation="vertical" class="data-vertical:h-5 data-vertical:self-center" />
+
+			{#if ready && def}
+				<div class="flex min-w-0 items-center gap-1 overflow-x-auto [scrollbar-width:none]">
+					<Tabs.Root value={appSession.page?.id ?? ''} onValueChange={(v) => v && appSession.showPage(v)}>
+						<Tabs.List>
+							{#each def.pages as p (p.id)}
+								<Tabs.Trigger value={p.id}>{p.title}</Tabs.Trigger>
+							{/each}
+						</Tabs.List>
+					</Tabs.Root>
+					{#if editing}
+						<Button variant="ghost" size="icon-sm" aria-label="New page" title="New page" onclick={() => (addingPage = true)}><PlusIcon /></Button>
+					{/if}
+				</div>
 			{/if}
 
 			<span class="flex-1"></span>
@@ -230,36 +214,34 @@
 					<div class="grid grid-cols-3 gap-3">{#each Array(3) as _, i (i)}<Skeleton class="h-40" />{/each}</div>
 				</div>
 			{:else}
-				<AppSidebar {editing} onNewPage={() => (addingPage = true)} />
+				{#if editing}<BuilderSidebar />{/if}
 				<div class="min-h-0 min-w-0 flex-1 overflow-auto bg-background">
 					{#key appSession.page.id}
 						<AppCanvas page={appSession.page} {editing} />
 					{/key}
 				</div>
-				{#if editing}
-					{#if appSession.selectedWidget}
-						{#key appSession.selectedWidget.id}
-							<WidgetProperties widget={appSession.selectedWidget} />
-						{/key}
-					{:else if appSession.selectedCommand}
-						{#key appSession.selectedCommand.id}
-							<CommandProperties command={appSession.selectedCommand} />
-						{/key}
-					{:else}
-						<BuilderSidebar />
-					{/if}
+				{#if editing && appSession.selectedWidget}
+					{#key appSession.selectedWidget.id}
+						<WidgetProperties widget={appSession.selectedWidget} />
+					{/key}
 				{/if}
 			{/if}
 		</main>
 	</div>
 {/if}
 
-<AppCommandPalette
-	bind:open={paletteOpen}
-	onAdd={(t) => appSession.addWidget(t)}
-	onNewPage={() => (addingPage = true)}
-	onBack={back}
-	onSettings={openSettings}
-/>
+<AppCommandPalette bind:open={paletteOpen} onAdd={(t) => appSession.addWidget(t)} onBack={back} onSettings={openSettings} />
 
-<NewPageDialog bind:open={addingPage} />
+<NameDialog
+	bind:open={addingPage}
+	title="New page"
+	initial={`Page ${(def?.pages.length ?? 0) + 1}`}
+	submitLabel="Add page"
+	validate={pageTitleProblem}
+	onSubmit={async (title) => {
+		let id = '';
+		appSession.change((d) => (id = addPage(d, title.trim()).id));
+		await appSession.showPage(id);
+		return true;
+	}}
+/>

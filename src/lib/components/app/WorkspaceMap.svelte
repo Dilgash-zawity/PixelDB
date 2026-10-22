@@ -47,7 +47,6 @@
 	import { workspace } from '#lib/state/workspace.svelte.js';
 	import { settings } from '#lib/state/settings.svelte.js';
 	import { cn } from '#lib/utils.js';
-	import FocusModeSwitch from './FocusModeSwitch.svelte';
 	import NameDialog from './NameDialog.svelte';
 	import NewAppDialog from './NewAppDialog.svelte';
 
@@ -485,7 +484,7 @@
 			role="group"
 			aria-label={`${kind === 'app' ? 'App' : 'Database'} ${name}`}
 			class={cn(
-				'group/node absolute flex flex-col rounded-lg border bg-card text-card-foreground shadow-md shadow-black/5 transition-[box-shadow,border-color,opacity,translate] select-none',
+				'group/node absolute flex flex-col rounded-lg border bg-card text-card-foreground shadow-md shadow-black/5 transition-[box-shadow,border-color,opacity] select-none',
 				!valid && 'opacity-60',
 				related.has(key) && 'border-primary/50',
 				selection?.kind === 'node' && selection.key === key && 'border-primary ring-2 ring-primary/30',
@@ -559,7 +558,7 @@
 {#snippet dbNode(db: DatabaseFile)}
 	{@const usedBy = users.get(db.name) ?? []}
 	{#snippet icon()}
-		<span class="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground vivid:bg-tone-cyan/15 vivid:text-tone-cyan">
+		<span class="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground">
 			<DatabaseIcon class="size-4" />
 		</span>
 	{/snippet}
@@ -570,7 +569,7 @@
 			<span class="truncate" title={usedBy.join(', ')}>
 				{usedBy.length === 0 ? 'Not used by an app' : usedBy.length === 1 ? `Used by ${usedBy[0]}` : `Used by ${usedBy.length} apps`}
 			</span>
-			<Badge variant="secondary" class="vivid:bg-tone-cyan/12 vivid:text-tone-cyan">{formatBytes(db.size)}</Badge>
+			<Badge variant="secondary">{formatBytes(db.size)}</Badge>
 		{/if}
 	{/snippet}
 	{@render card('db', db.name, db.valid, body, icon)}
@@ -598,19 +597,16 @@
 							<Empty.Title>Nothing here yet</Empty.Title>
 							<Empty.Description>Create a database to hold your tables, then an app with screens over it — or start an app from a template.</Empty.Description>
 						</Empty.Header>
-						<Empty.Content>
-							<div class="flex justify-center gap-2">
-								<Button onclick={() => newDatabase()}><PlusIcon data-icon="inline-start" /> New database</Button>
-								<Button variant="outline" onclick={() => newApp()}><PlusIcon data-icon="inline-start" /> New app</Button>
-							</div>
-							<FocusModeSwitch class="mt-6" />
+						<Empty.Content class="flex-row justify-center">
+							<Button onclick={() => newDatabase()}><PlusIcon data-icon="inline-start" /> New database</Button>
+							<Button variant="outline" onclick={() => newApp()}><PlusIcon data-icon="inline-start" /> New app</Button>
 						</Empty.Content>
 					</Empty.Root>
 				{:else}
 					<div class="absolute top-0 left-0 origin-top-left" style:transform="translate({pan.x}px, {pan.y}px) scale({zoom})">
 						<svg class="pointer-events-none absolute top-0 left-0 overflow-visible" width="1" height="1" aria-hidden="true">
 							{#each edges as { link, key, i, active, path, start, end } (key)}
-								{@const color = link.missing ? 'var(--warning)' : active || !settings.current.focusMode ? accentOf(link.app) : null}
+								{@const color = link.missing ? 'var(--warning)' : active ? accentOf(link.app) : null}
 								<g data-edge class={cn(!color && 'text-muted-foreground')} style:color style:--i={i}>
 									<path
 										d={path}
@@ -618,7 +614,7 @@
 										fill="none"
 										stroke="currentColor"
 										stroke-width={active ? 2.25 : 1.5}
-										stroke-opacity={active ? 1 : settings.current.focusMode ? 0.7 : 0.45}
+										stroke-opacity={active ? 1 : 0.7}
 										class="link-draw"
 									/>
 									{#if link.missing}

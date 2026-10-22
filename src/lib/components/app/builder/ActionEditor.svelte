@@ -15,8 +15,8 @@
 		onchange
 	}: {
 		action: Action;
-		/** A button's click, or a table's or query's row click (which can pass on the row's fields). */
-		context: 'button' | 'row' | 'query';
+		/** A button's click or a table row's click (which can pass on the row's fields). */
+		context: 'button' | 'row';
 		columns?: string[];
 		onchange: (next: Action, group?: string) => void;
 	} = $props();
@@ -43,9 +43,9 @@
 				.map((w) => ({ value: w.id, label: w.title || widgetLabel(w.type), group: p.title }))
 		)
 	);
-	const rowColumns = $derived(context === 'button' ? undefined : columns);
+	const rowColumns = $derived(context === 'row' ? columns : undefined);
 	const firstColumn = (): ValueRef =>
-		context !== 'button' && columns[0] ? { kind: 'column', column: columns[0] } : { kind: 'literal', value: null };
+		context === 'row' && columns[0] ? { kind: 'column', column: columns[0] } : { kind: 'literal', value: null };
 
 	function setKind(kind: string) {
 		switch (kind as ActionKind) {
