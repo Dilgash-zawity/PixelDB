@@ -1,12 +1,19 @@
 use tauri::State;
 
+use super::target;
 use crate::database::{DbManager, migrations, schema};
 use crate::errors::AppResult;
 use crate::models::{FieldDef, SchemaChangeResult, TableDef, TableDesign, TableInfo};
+use crate::workspace::WorkspaceStore;
 
 #[tauri::command]
-pub async fn get_table(state: State<'_, DbManager>, name: String) -> AppResult<TableInfo> {
-    state.run(move |db| schema::table_info(&db.conn, &name)).await
+pub async fn get_table(
+    state: State<'_, DbManager>,
+    store: State<'_, WorkspaceStore>,
+    database: Option<String>,
+    name: String,
+) -> AppResult<TableInfo> {
+    state.run_on(target(&store, database)?, move |db| schema::table_info(&db.conn, &name)).await
 }
 
 #[tauri::command]

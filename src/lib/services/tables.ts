@@ -1,8 +1,8 @@
-import { call } from '../api/client';
+import { call, on } from '../api/client';
 import type { FieldDef, SchemaChangeResult, TableDef, TableDesign, TableInfo } from '../api/types';
 
 export const tableService = {
-	get: (name: string) => call<TableInfo>('get_table', { name }),
+	get: (name: string, database?: string) => call<TableInfo>('get_table', { name, ...on(database) }),
 	create: (definition: TableDef) => call<TableInfo>('create_table', { definition }),
 	rename: (name: string, newName: string) => call<void>('rename_table', { name, newName }),
 	drop: (name: string, confirm: boolean) => call<SchemaChangeResult>('drop_table', { name, confirm }),

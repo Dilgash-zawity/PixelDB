@@ -7,6 +7,7 @@ use serde_json::Value as JsonValue;
 
 use crate::errors::{AppError, AppResult};
 use crate::models::{
+    Aggregate, AggregateOrder, AggregateQuery, AggregateResult, DateBucket,
     BatchOp, BatchResult, FieldDef, FieldType, FilterOp, RecordKey, RecordPage, RecordQuery,
     RecordRow, RecordValues, TableDef,
 };
@@ -281,6 +282,114 @@ pub fn list_records(conn: &Connection, table: &str, q: &RecordQuery) -> AppResul
         .query_map(params_from_iter(page_params.iter()), |row| read_row(&src, row))?
         .collect::<Result<Vec<_>, _>>()?;
     Ok(RecordPage { columns: src.columns.clone(), types: src.types.clone(), rows, total, offset: q.offset, limit })
+}
+
+pub const MAX_SERIES: usize = 20;
+
+/// Grouped totals over a table or view. Filters and search work as in
+/// `list_records`; identifiers come from the source's columns.
+pub fn aggregate(conn: &Connection, table: &str, q: &AggregateQuery) -> AppResult<AggregateResult> {
+    let src = Source::load(conn, table)?;
+    if q.series.is_empty() && q.group_by.is_none() {
+        return Err(AppError::Validation("choose at least one value to total".into()));
+    }
+    if q.series.len() > MAX_SERIES {
+        return Err(AppError::Validation(format!("at most {MAX_SERIES} values per chart")));
+    }
+    let records = RecordQuery { filters: q.filters.clone(), search: q.search.clone(), ..Default::default() };
+    let (where_sql, params) = build_where(&src, &records)?;
+
+    let mut select = Vec::new();
+    let mut columns = Vec::new();
+    let mut types = Vec::new();
+    let group = match &q.group_by {
+        Some(g) => {
+            let col = src.column(&g.column)?;
+            let qc = quote_ident(&col);
+            let expr = match g.bucket {
+                None => qc,
+                Some(DateBucket::Day) => format!("date({qc})"),
+                Some(DateBucket::Month) => format!("strftime('%Y-%m', {qc})"),
+                Some(DateBucket::Year) => format!("strftime('%Y', {qc})"),
+            };
+            select.push(expr.clone());
+            types.push(if g.bucket.is_some() { None } else { src.column_type(&col).cloned() });
+            columns.push(col);
+            Some(expr)
+        }
+        None => None,
+    };
+    for s in &q.series {
+        let (expr, label, t) = match (&s.column, s.agg) {
+            (None, Aggregate::Count) => ("count(*)".to_string(), "Count".to_string(), None),
+            (None, _) => return Err(AppError::Validation("choose a field to total".into())),
+            (Some(c), agg) => {
+                let col = src.column(c)?;
+                let t = src.column_type(&col).cloned();
+                if t.as_ref().is_some_and(FieldType::is_blob) && agg != Aggregate::Count {
+                    return Err(AppError::Validation(format!("{col:?} holds files and can only be counted")));
+                }
+                let qc = quote_ident(&col);
+                let (f, keeps_type) = match agg {
+                    Aggregate::Count => (format!("count({qc})"), false),
+                    Aggregate::CountDistinct => (format!("count(DISTINCT {qc})"), false),
+                    Aggregate::Sum => (format!("sum({qc})"), true),
+                    // Money stays whole minor units so it formats exactly.
+                    Aggregate::Avg if matches!(t, Some(FieldType::Currency { .. })) => {
+                        (format!("CAST(round(avg({qc})) AS INTEGER)"), true)
+                    }
+                    Aggregate::Avg => (format!("avg({qc})"), true),
+                    Aggregate::Min => (format!("min({qc})"), true),
+                    Aggregate::Max => (format!("max({qc})"), true),
+                };
+                let name = match agg {
+                    Aggregate::Count => "Count of",
+                    Aggregate::CountDistinct => "Distinct",
+                    Aggregate::Sum => "Sum of",
+                    Aggregate::Avg => "Average",
+                    Aggregate::Min => "Min",
+                    Aggregate::Max => "Max",
+                };
+                // Min/max keep any type (dates, text); sums and averages only
+                // keep currency so money still displays as money.
+                let kept = match agg {
+                    Aggregate::Min | Aggregate::Max => t,
+                    _ if keeps_type && matches!(t, Some(FieldType::Currency { .. })) => t,
+                    _ => None,
+                };
+                (f, format!("{name} {col}"), kept)
+            }
+        };
+        select.push(expr);
+        columns.push(label);
+        types.push(t);
+    }
+    let from = quote_ident(&src.name);
+    let mut sql = format!("SELECT {} FROM {from}{where_sql}", select.join(", "));
+    if let Some(g) = &group {
+        sql.push_str(&format!(" GROUP BY {g}"));
+        let value = if q.series.is_empty() { None } else { Some(2) };
+        let order = match (q.order, value) {
+            (AggregateOrder::ValueAsc, Some(i)) => format!("{i} ASC"),
+            (AggregateOrder::ValueDesc, Some(i)) => format!("{i} DESC"),
+            _ => "1 ASC".into(),
+        };
+        sql.push_str(&format!(" ORDER BY {order}"));
+    }
+    let limit = match q.limit {
+        0 => MAX_PAGE_SIZE,
+        n => n.min(MAX_PAGE_SIZE),
+    } as usize;
+    sql.push_str(&format!(" LIMIT {}", limit + 1));
+    let mut stmt = conn.prepare(&sql)?;
+    let mut rows = stmt
+        .query_map(params_from_iter(params.iter()), |row| {
+            (0..select.len()).map(|i| row.get_ref(i).map(sql_to_json)).collect::<Result<Vec<_>, _>>()
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+    let truncated = rows.len() > limit;
+    rows.truncate(limit);
+    Ok(AggregateResult { columns, rows, types, truncated })
 }
 
 pub fn get_record(conn: &Connection, table: &str, key: &RecordKey) -> AppResult<RecordRow> {

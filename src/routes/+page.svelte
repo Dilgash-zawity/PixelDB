@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import type { DatabaseFile } from '#lib/api/types.js';
+	import type { AppFile, DatabaseFile } from '#lib/api/types.js';
 	import { resolve } from '$app/paths';
 	import CopyIcon from '@lucide/svelte/icons/copy';
 	import DatabaseIcon from '@lucide/svelte/icons/database';
@@ -9,11 +9,13 @@
 	import TrashIcon from '@lucide/svelte/icons/trash-2';
 	import FolderOpenIcon from '@lucide/svelte/icons/folder-open';
 	import InfoIcon from '@lucide/svelte/icons/info';
+	import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import SearchIcon from '@lucide/svelte/icons/search';
 	import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
 	import Logo from '#lib/components/app/Logo.svelte';
 	import NameDialog from '#lib/components/app/NameDialog.svelte';
+	import NewAppDialog from '#lib/components/app/NewAppDialog.svelte';
 	import ThemeToggle from '#lib/components/app/ThemeToggle.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -22,7 +24,7 @@
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
-	import { databaseHref } from '#lib/logic/routes.js';
+	import { appHref, databaseHref } from '#lib/logic/routes.js';
 	import { databaseNameProblem, formatBytes } from '#lib/logic/values.js';
 	import { databaseService } from '#lib/services/database.js';
 	import { attempt } from '#lib/state/feedback.svelte.js';
@@ -38,8 +40,24 @@
 		workspace.databases.filter((d) => d.name.toLowerCase().includes(filter.trim().toLowerCase()))
 	);
 
-	// Returning here closes whichever database was open.
-	attempt(() => databaseService.close());
+	// Returning here closes whichever databases were open.
+	attempt(async () => {
+		await databaseService.close();
+		await databaseService.release();
+	});
+
+	let creatingApp = $state(false);
+	let renamingApp = $state<string | null>(null);
+	let duplicatingApp = $state<{ name: string; suggested: string } | null>(null);
+	const appNameProblem = (v: string, except?: string) =>
+		databaseNameProblem(v) ?? (workspace.appNameTaken(v, except) ? 'An app with this name already exists' : null);
+	const ACCENT_TEXT: Record<string, string> = {
+		blue: 'text-[oklch(0.55_0.2_255)] bg-[oklch(0.55_0.2_255)]/10',
+		green: 'text-[oklch(0.6_0.15_150)] bg-[oklch(0.6_0.15_150)]/10',
+		amber: 'text-[oklch(0.75_0.16_75)] bg-[oklch(0.75_0.16_75)]/10',
+		red: 'text-[oklch(0.6_0.22_25)] bg-[oklch(0.6_0.22_25)]/10',
+		violet: 'text-[oklch(0.55_0.22_295)] bg-[oklch(0.55_0.22_295)]/10'
+	};
 	workspace.load();
 	// Files can change outside the app; pick that up when the window regains focus.
 	const refreshOnFocus = () => workspace.info && workspace.refresh();
@@ -66,6 +84,60 @@
 		return new Date(ms).toLocaleDateString(undefined, { dateStyle: 'medium' });
 	}
 </script>
+
+{#snippet appCard(app: AppFile)}
+	<Card.Root class="relative h-full transition-colors hover:bg-accent/40 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring">
+		<Card.Header>
+			<Card.Title class="flex min-w-0 items-center gap-3">
+				<span class="flex size-9 shrink-0 items-center justify-center {ACCENT_TEXT[app.accent] ?? 'bg-primary/10 text-primary'}">
+					<LayoutDashboardIcon class="size-4.5" />
+				</span>
+				{#if app.valid}
+					<a href={appHref(resolve('/app'), app.name)} class="truncate outline-none after:absolute after:inset-0">{app.name}</a>
+				{:else}
+					<span class="truncate">{app.name}</span>
+				{/if}
+			</Card.Title>
+			<Card.Description class="line-clamp-2">
+				{app.description || (app.databases.length ? `Uses ${app.databases.join(', ')}` : 'Not connected to a database yet')}
+			</Card.Description>
+			<Card.Action class="relative">
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						{#snippet child({ props })}
+							<Button {...props} variant="ghost" size="icon-sm" aria-label="App options"><EllipsisIcon /></Button>
+						{/snippet}
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content align="end">
+						<DropdownMenu.Group>
+							<DropdownMenu.Item onclick={() => (renamingApp = app.name)}><PencilIcon /> Rename</DropdownMenu.Item>
+							<DropdownMenu.Item
+								disabled={!app.valid}
+								onclick={() => (duplicatingApp = { name: app.name, suggested: workspace.copyName(app.name, (n) => workspace.appNameTaken(n)) })}
+							>
+								<CopyIcon /> Duplicate
+							</DropdownMenu.Item>
+						</DropdownMenu.Group>
+						<DropdownMenu.Separator />
+						<DropdownMenu.Group>
+							<DropdownMenu.Item variant="destructive" onclick={() => workspace.removeApp(app.name)}><TrashIcon /> Delete</DropdownMenu.Item>
+						</DropdownMenu.Group>
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
+			</Card.Action>
+		</Card.Header>
+		<Card.Footer class="flex items-center justify-between gap-2 text-sm text-muted-foreground">
+			{#if app.valid}
+				<span>Edited {modified(app.modified)}</span>
+				{#if app.databases.some((d) => !workspace.databases.some((x) => x.name === d))}
+					<Badge variant="outline" class="border-warning/40 bg-warning/10 text-warning"><TriangleAlertIcon /> Missing database</Badge>
+				{/if}
+			{:else}
+				<Badge variant="destructive"><TriangleAlertIcon /> Can't be read</Badge>
+			{/if}
+		</Card.Footer>
+	</Card.Root>
+{/snippet}
 
 {#snippet dbCard(db: DatabaseFile)}
 	<Card.Root class="relative h-full transition-colors hover:bg-accent/40 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring">
@@ -154,9 +226,44 @@
 				</Empty.Content>
 			</Empty.Root>
 		{:else}
+			<section class="flex flex-col gap-4">
+				<div class="flex flex-wrap items-end justify-between gap-4">
+					<div class="flex flex-col gap-1">
+						<h1 class="text-2xl font-semibold tracking-tight">Your apps</h1>
+						<p class="text-sm text-muted-foreground">Forms, tables and charts over one or more databases.</p>
+					</div>
+					<Button variant="outline" onclick={() => (creatingApp = true)}>
+						<PlusIcon data-icon="inline-start" />
+						New app
+					</Button>
+				</div>
+				{#if workspace.apps.length}
+					<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+						{#each workspace.apps as app (app.name)}
+							{#if app.valid}
+								{@render appCard(app)}
+							{:else}
+								<div class="opacity-60" title="This file is not a readable app">{@render appCard(app)}</div>
+							{/if}
+						{/each}
+					</div>
+				{:else}
+					<Empty.Root class="border border-dashed p-6">
+						<Empty.Header>
+							<Empty.Media variant="icon"><LayoutDashboardIcon /></Empty.Media>
+							<Empty.Title>No apps yet</Empty.Title>
+							<Empty.Description>Build screens for entering and exploring data, or start from a template.</Empty.Description>
+						</Empty.Header>
+						<Empty.Content>
+							<Button variant="outline" onclick={() => (creatingApp = true)}><PlusIcon data-icon="inline-start" /> New app</Button>
+						</Empty.Content>
+					</Empty.Root>
+				{/if}
+			</section>
+
 			<div class="flex flex-wrap items-end justify-between gap-4">
 				<div class="flex flex-col gap-1">
-					<h1 class="text-2xl font-semibold tracking-tight">Your databases</h1>
+					<h2 class="text-2xl font-semibold tracking-tight">Your databases</h2>
 					<div class="flex items-center gap-1 text-muted-foreground">
 						<span class="max-w-md truncate text-sm" title={workspace.info.path}>{workspace.info.path}</span>
 						<Button variant="link" size="sm" onclick={() => workspace.chooseFolder()}>Change</Button>
@@ -240,4 +347,25 @@
 	submitLabel="Duplicate"
 	validate={(v) => databaseNameProblem(v) ?? (workspace.nameTaken(v) ? 'A database with this name already exists' : null)}
 	onSubmit={async (name) => (duplicating ? workspace.duplicate(duplicating.name, name) : true)}
+/>
+
+<NewAppDialog bind:open={creatingApp} onCreated={(name) => goto(appHref(resolve('/app'), name))} />
+
+<NameDialog
+	bind:open={() => renamingApp !== null, (o) => !o && (renamingApp = null)}
+	title="Rename app"
+	initial={renamingApp ?? ''}
+	submitLabel="Rename"
+	validate={(v) => appNameProblem(v, renamingApp ?? undefined)}
+	onSubmit={async (name) => (renamingApp ? workspace.renameApp(renamingApp, name) : true)}
+/>
+
+<NameDialog
+	bind:open={() => duplicatingApp !== null, (o) => !o && (duplicatingApp = null)}
+	title="Duplicate app"
+	description={`Copies the pages and widgets of “${duplicatingApp?.name ?? ''}”. Its databases are shared, not copied.`}
+	initial={duplicatingApp?.suggested ?? ''}
+	submitLabel="Duplicate"
+	validate={(v) => appNameProblem(v)}
+	onSubmit={async (name) => (duplicatingApp ? workspace.duplicateApp(duplicatingApp.name, name) : true)}
 />

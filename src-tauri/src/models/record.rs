@@ -93,3 +93,77 @@ pub struct BatchResult {
     pub updated: usize,
     pub deleted: usize,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Aggregate {
+    /// Counts rows (or non-empty values when a column is given).
+    Count,
+    CountDistinct,
+    Sum,
+    Avg,
+    Min,
+    Max,
+}
+
+/// Groups dates by calendar period instead of exact value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DateBucket {
+    Day,
+    Month,
+    Year,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GroupBy {
+    pub column: String,
+    #[serde(default)]
+    pub bucket: Option<DateBucket>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SeriesSpec {
+    /// None only for `count` (count of rows).
+    #[serde(default)]
+    pub column: Option<String>,
+    pub agg: Aggregate,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AggregateOrder {
+    #[default]
+    Group,
+    ValueAsc,
+    ValueDesc,
+}
+
+/// Totals over a table or view, optionally grouped: the data behind charts
+/// and number cards. Built from names, never from SQL text.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AggregateQuery {
+    #[serde(default)]
+    pub group_by: Option<GroupBy>,
+    pub series: Vec<SeriesSpec>,
+    #[serde(default)]
+    pub filters: Vec<FilterSpec>,
+    #[serde(default)]
+    pub search: Option<String>,
+    #[serde(default)]
+    pub order: AggregateOrder,
+    /// Clamped to `records::MAX_PAGE_SIZE`; 0 means the maximum.
+    #[serde(default)]
+    pub limit: u64,
+}
+
+/// One row per group (a single row without grouping): the group value
+/// first when grouped, then one value per series.
+#[derive(Debug, Clone, Serialize)]
+pub struct AggregateResult {
+    pub columns: Vec<String>,
+    pub rows: Vec<Vec<JsonValue>>,
+    /// Currency sums/min/max keep the currency type (minor units).
+    pub types: Vec<Option<FieldType>>,
+    pub truncated: bool,
+}

@@ -47,8 +47,8 @@ pub async fn create_workspace_database(
     .await
 }
 
-/// Opens a workspace database by name and makes it current. Reopening the
-/// database that is already open keeps the existing connection.
+/// Opens a workspace database by name and makes it current. A database that
+/// is already open (on the database page or by an app) keeps its connection.
 #[tauri::command]
 pub async fn open_workspace_database(
     store: State<'_, WorkspaceStore>,
@@ -58,25 +58,15 @@ pub async fn open_workspace_database(
     let dir = store.require()?;
     let mgr = db.inner().clone();
     DbManager::run_detached(move || {
-        let path = workspace::resolve_database(&dir, &name)?;
-        let canonical = std::fs::canonicalize(&path)?;
-        let already_open = mgr.with_db(|db| Ok(db.path == canonical)).unwrap_or(false);
-        if !already_open {
-            mgr.set(OpenDatabase::open(&path.display().to_string())?)?;
-        }
+        mgr.open_as_current(&workspace::resolve_database(&dir, &name)?)?;
         mgr.with_db(|db| db.info())
     })
     .await
 }
 
-/// Closes the open database if it is the file at `path`, so the file can be
-/// moved or removed.
+/// Closes the file at `path` if it is open, so it can be moved or removed.
 fn close_if_open(mgr: &DbManager, path: &Path) -> AppResult<()> {
-    let canonical = std::fs::canonicalize(path)?;
-    if mgr.with_db(|db| Ok(db.path == canonical)).unwrap_or(false) {
-        mgr.close()?;
-    }
-    Ok(())
+    mgr.close_path(&std::fs::canonicalize(path)?)
 }
 
 #[tauri::command]
@@ -90,7 +80,9 @@ pub async fn rename_workspace_database(
     let mgr = db.inner().clone();
     DbManager::run_detached(move || {
         close_if_open(&mgr, &workspace::resolve_database(&dir, &name)?)?;
-        workspace::rename_database(&dir, &name, &new_name).map(|_| ())
+        workspace::rename_database(&dir, &name, &new_name)?;
+        // Apps address databases by name; keep them pointing at this one.
+        crate::apps::rename_database_in_apps(&dir, &name, &new_name)
     })
     .await
 }

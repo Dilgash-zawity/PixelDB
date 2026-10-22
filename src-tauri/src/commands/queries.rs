@@ -1,13 +1,20 @@
 use serde_json::Value as JsonValue;
 use tauri::State;
 
+use super::target;
 use crate::database::{DbManager, queries};
 use crate::errors::AppResult;
 use crate::models::{QueryResult, SavedQuery};
+use crate::workspace::WorkspaceStore;
 
 #[tauri::command]
-pub async fn run_query(state: State<'_, DbManager>, sql: String) -> AppResult<QueryResult> {
-    state.run(move |db| queries::run_query(&db.conn, &sql)).await
+pub async fn run_query(
+    state: State<'_, DbManager>,
+    store: State<'_, WorkspaceStore>,
+    database: Option<String>,
+    sql: String,
+) -> AppResult<QueryResult> {
+    state.run_on(target(&store, database)?, move |db| queries::run_query(&db.conn, &sql)).await
 }
 
 #[tauri::command]
@@ -22,8 +29,13 @@ pub async fn save_query(
 }
 
 #[tauri::command]
-pub async fn get_query(state: State<'_, DbManager>, name: String) -> AppResult<SavedQuery> {
-    state.run(move |db| queries::saved_query(&db.conn, &name)).await
+pub async fn get_query(
+    state: State<'_, DbManager>,
+    store: State<'_, WorkspaceStore>,
+    database: Option<String>,
+    name: String,
+) -> AppResult<SavedQuery> {
+    state.run_on(target(&store, database)?, move |db| queries::saved_query(&db.conn, &name)).await
 }
 
 #[tauri::command]

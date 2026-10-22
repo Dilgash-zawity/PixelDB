@@ -11,7 +11,7 @@ export interface LookupOption {
 export const MAX_LOOKUP_OPTIONS = 1000;
 
 /** Choices for each relation field of `table`, keyed by field name. */
-export async function loadLookups(table: TableDef): Promise<Record<string, LookupOption[]>> {
+export async function loadLookups(table: TableDef, database?: string): Promise<Record<string, LookupOption[]>> {
 	const result: Record<string, LookupOption[]> = {};
 	for (const f of table.fields) {
 		if (f.field_type.type !== 'lookup') continue;
@@ -20,7 +20,7 @@ export async function loadLookups(table: TableDef): Promise<Record<string, Looku
 		if (!fk || !refCol) continue;
 		const shown = f.field_type.display_column || refCol;
 		try {
-			const page = await recordService.list(fk.ref_table, { limit: MAX_LOOKUP_OPTIONS });
+			const page = await recordService.list(fk.ref_table, { limit: MAX_LOOKUP_OPTIONS }, database);
 			const vi = page.columns.indexOf(refCol);
 			const li = page.columns.indexOf(shown);
 			if (vi < 0) continue;

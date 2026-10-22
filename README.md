@@ -18,6 +18,16 @@ SvelteKit + Svelte 5, Bun, Tailwind CSS and shadcn-svelte.
    description) with Field Properties below; save the design when done.
    Relations (lookups) to other tables are set on the Lookup tab.
 
+5. Create an **app** from the home screen to build screens for your data:
+   pages of tables, forms, charts, number cards, filters, buttons and text,
+   over one or more databases. Start blank or from a template (Contacts,
+   Shop), which also creates a database with sample records. In **Edit**
+   mode you add widgets, drag them on a 12-column grid and set them up in the
+   panel on the right; **Run** mode is for using the app. Variables connect
+   widgets: a filter control or a row click sets one, and other widgets
+   filter by it (e.g. pick a company, see its people). Apps are saved as
+   files in the folder's `Apps` subfolder.
+
 Shortcuts: ⌘/Ctrl+K search and actions, ⌘/Ctrl+S save, Shift+Enter save the
 record, Esc undo. “Open as form” edits one record in a side panel. Light,
 dark and system themes are available (dark by default).
@@ -31,6 +41,10 @@ dark and system themes are available (dark by default).
   changes use SQLite's table-rebuild procedure inside a transaction.
 - Records: add, edit, delete (single or bulk), search, filters, sorting and
   pagination, with plain-language validation messages.
+- Apps: pages of widgets over several databases at once, with undo/redo,
+  autosave, master-detail through variables, charts and totals, and
+  templates. Renaming a table or field (or a database) updates the apps that
+  use it; a widget whose table or field is gone says so instead of failing.
 
 ## Development
 

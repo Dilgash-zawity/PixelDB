@@ -1,6 +1,8 @@
 use std::fs::OpenOptions;
-use std::path::PathBuf;
-use std::sync::{Arc, Mutex};
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
 use rusqlite::{Connection, OpenFlags};
@@ -104,56 +106,177 @@ fn open_connection(path: &PathBuf) -> AppResult<Connection> {
     Ok(conn)
 }
 
-/// Holds the single open database. Cloning shares the same state.
+type Shared = Arc<Mutex<OpenDatabase>>;
+
+#[derive(Default)]
+struct Registry {
+    /// The database open on the database page.
+    current: Option<PathBuf>,
+    /// Every open connection, keyed by canonical path. Apps open their
+    /// databases here too, so the database page and an app share one
+    /// connection per file.
+    open: HashMap<PathBuf, Shared>,
+}
+
+/// Holds the open databases. Cloning shares the same state.
 #[derive(Clone, Default)]
 pub struct DbManager {
-    inner: Arc<Mutex<Option<OpenDatabase>>>,
+    inner: Arc<Mutex<Registry>>,
+}
+
+fn lock_db(db: &Shared) -> AppResult<MutexGuard<'_, OpenDatabase>> {
+    db.lock().map_err(|_| AppError::Internal("database lock poisoned".into()))
+}
+
+/// Closes a connection once no one else is using it.
+fn close_shared(db: Shared) -> AppResult<()> {
+    // Waits for work in flight on another thread, then closes.
+    drop(lock_db(&db)?);
+    match Arc::try_unwrap(db) {
+        Ok(m) => m.into_inner().map_err(|_| AppError::Internal("database lock poisoned".into()))?.close(),
+        // Still referenced by a task that is just finishing; it closes on drop.
+        Err(_) => Ok(()),
+    }
 }
 
 impl DbManager {
-    fn lock(&self) -> AppResult<std::sync::MutexGuard<'_, Option<OpenDatabase>>> {
+    fn lock(&self) -> AppResult<MutexGuard<'_, Registry>> {
         self.inner
             .lock()
             .map_err(|_| AppError::Internal("database state lock poisoned".into()))
     }
 
-    /// Makes `db` the open database, closing the previous one.
+    /// Makes `db` the current database, closing the previous current one.
+    /// If the file is already open (by an app), that connection is kept.
     pub fn set(&self, db: OpenDatabase) -> AppResult<()> {
-        let previous = self.lock()?.replace(db);
+        let path = db.path.clone();
+        let (previous, duplicate) = {
+            let mut reg = self.lock()?;
+            let previous = reg.current.replace(path.clone()).filter(|p| *p != path).and_then(|p| reg.open.remove(&p));
+            let duplicate = match reg.open.entry(path) {
+                Entry::Occupied(_) => Some(db),
+                Entry::Vacant(slot) => {
+                    slot.insert(Arc::new(Mutex::new(db)));
+                    None
+                }
+            };
+            (previous, duplicate)
+        };
+        if let Some(db) = duplicate {
+            db.close()?;
+        }
         if let Some(prev) = previous {
-            prev.close()?;
+            close_shared(prev)?;
         }
         Ok(())
     }
 
-    /// Closes the open database. Returns false when none was open.
+    /// Opens the existing file at `path` (or reuses its open connection) and
+    /// makes it the current database.
+    pub fn open_as_current(&self, path: &Path) -> AppResult<()> {
+        let canonical = std::fs::canonicalize(path)?;
+        self.with_path(&canonical, |_| Ok(()))?;
+        let previous = {
+            let mut reg = self.lock()?;
+            reg.current.replace(canonical.clone()).filter(|p| *p != canonical).and_then(|p| reg.open.remove(&p))
+        };
+        previous.map_or(Ok(()), close_shared)
+    }
+
+    /// Closes the current database. Returns false when none was open.
     pub fn close(&self) -> AppResult<bool> {
-        let previous = self.lock()?.take();
+        let previous = {
+            let mut reg = self.lock()?;
+            reg.current.take().and_then(|p| reg.open.remove(&p))
+        };
         match previous {
-            Some(db) => db.close().map(|_| true),
+            Some(db) => close_shared(db).map(|_| true),
             None => Ok(false),
         }
     }
 
-    pub fn with_db<T>(&self, f: impl FnOnce(&mut OpenDatabase) -> AppResult<T>) -> AppResult<T> {
-        let mut guard = self.lock()?;
-        let db = guard.as_mut().ok_or(AppError::NoDatabase)?;
-        f(db)
+    /// Closes the file at `path` if it is open, current or not.
+    pub fn close_path(&self, path: &Path) -> AppResult<()> {
+        let removed = {
+            let mut reg = self.lock()?;
+            if reg.current.as_deref() == Some(path) {
+                reg.current = None;
+            }
+            reg.open.remove(path)
+        };
+        removed.map_or(Ok(()), close_shared)
     }
 
-    /// Runs blocking database work off the async runtime's worker threads.
+    /// Closes every open database except the current one.
+    pub fn close_others(&self) -> AppResult<()> {
+        let others: Vec<Shared> = {
+            let mut reg = self.lock()?;
+            let current = reg.current.clone();
+            let keys: Vec<PathBuf> = reg.open.keys().filter(|k| Some(*k) != current.as_ref()).cloned().collect();
+            keys.iter().filter_map(|k| reg.open.remove(k)).collect()
+        };
+        others.into_iter().try_for_each(close_shared)
+    }
+
+    pub fn current_path(&self) -> AppResult<Option<PathBuf>> {
+        Ok(self.lock()?.current.clone())
+    }
+
+    pub fn with_db<T>(&self, f: impl FnOnce(&mut OpenDatabase) -> AppResult<T>) -> AppResult<T> {
+        let db = {
+            let reg = self.lock()?;
+            let path = reg.current.as_ref().ok_or(AppError::NoDatabase)?;
+            reg.open.get(path).cloned().ok_or(AppError::NoDatabase)?
+        };
+        let mut guard = lock_db(&db)?;
+        f(&mut guard)
+    }
+
+    /// Runs `f` on the database file at `path`, opening it if needed. The
+    /// connection stays open for later calls until it is closed.
+    pub fn with_path<T>(&self, path: &Path, f: impl FnOnce(&mut OpenDatabase) -> AppResult<T>) -> AppResult<T> {
+        let canonical = std::fs::canonicalize(path)?;
+        let existing = self.lock()?.open.get(&canonical).cloned();
+        let db = match existing {
+            Some(db) => db,
+            None => {
+                let opened = OpenDatabase::open(&canonical.display().to_string())?;
+                let mut reg = self.lock()?;
+                // Another thread may have opened it meanwhile; keep theirs.
+                reg.open.entry(canonical).or_insert_with(|| Arc::new(Mutex::new(opened))).clone()
+            }
+        };
+        let mut guard = lock_db(&db)?;
+        f(&mut guard)
+    }
+
+    /// Runs blocking work on the current database off the async runtime's
+    /// worker threads.
     pub async fn run<T, F>(&self, f: F) -> AppResult<T>
     where
         T: Send + 'static,
         F: FnOnce(&mut OpenDatabase) -> AppResult<T> + Send + 'static,
     {
         let this = self.clone();
-        tauri::async_runtime::spawn_blocking(move || this.with_db(f))
-            .await
-            .map_err(|e| AppError::Internal(format!("background task failed: {e}")))?
+        Self::run_detached(move || this.with_db(f)).await
     }
 
-    /// Runs blocking work that does not need the open database.
+    /// Like `run`, on the database named `name` in the workspace folder `dir`
+    /// when one is given, else on the current database.
+    pub async fn run_on<T, F>(&self, target: Option<(PathBuf, String)>, f: F) -> AppResult<T>
+    where
+        T: Send + 'static,
+        F: FnOnce(&mut OpenDatabase) -> AppResult<T> + Send + 'static,
+    {
+        let this = self.clone();
+        Self::run_detached(move || match target {
+            Some((dir, name)) => this.with_path(&crate::workspace::resolve_database(&dir, &name)?, f),
+            None => this.with_db(f),
+        })
+        .await
+    }
+
+    /// Runs blocking work that does not need a database.
     pub async fn run_detached<T, F>(f: F) -> AppResult<T>
     where
         T: Send + 'static,
@@ -162,5 +285,49 @@ impl DbManager {
         tauri::async_runtime::spawn_blocking(f)
             .await
             .map_err(|e| AppError::Internal(format!("background task failed: {e}")))?
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make(dir: &Path, name: &str) -> PathBuf {
+        let p = dir.join(format!("{name}.db"));
+        let db = OpenDatabase::create(p.to_str().unwrap()).unwrap();
+        db.conn.execute_batch(&format!("CREATE TABLE t(x); INSERT INTO t VALUES ('{name}');")).unwrap();
+        db.close().unwrap();
+        std::fs::canonicalize(p).unwrap()
+    }
+
+    fn read(db: &mut OpenDatabase) -> AppResult<String> {
+        Ok(db.conn.query_row("SELECT x FROM t", [], |r| r.get(0))?)
+    }
+
+    #[test]
+    fn several_databases_share_connections() {
+        let dir = tempfile::tempdir().unwrap();
+        let (a, b) = (make(dir.path(), "a"), make(dir.path(), "b"));
+        let mgr = DbManager::default();
+        assert!(matches!(mgr.with_db(read), Err(AppError::NoDatabase)));
+
+        mgr.set(OpenDatabase::open(a.to_str().unwrap()).unwrap()).unwrap();
+        assert_eq!(mgr.with_path(&b, read).unwrap(), "b");
+        assert_eq!(mgr.with_db(read).unwrap(), "a");
+        assert_eq!(mgr.lock().unwrap().open.len(), 2);
+
+        // Making the app's database current reuses its connection.
+        mgr.set(OpenDatabase::open(b.to_str().unwrap()).unwrap()).unwrap();
+        assert_eq!(mgr.lock().unwrap().open.len(), 1);
+        assert_eq!(mgr.with_db(read).unwrap(), "b");
+
+        mgr.with_path(&a, read).unwrap();
+        mgr.close_others().unwrap();
+        assert_eq!(mgr.lock().unwrap().open.len(), 1);
+        mgr.with_path(&a, read).unwrap();
+        mgr.close_path(&a).unwrap();
+        mgr.close_path(&b).unwrap();
+        assert!(mgr.current_path().unwrap().is_none());
+        assert!(!mgr.close().unwrap());
     }
 }

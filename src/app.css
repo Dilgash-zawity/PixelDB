@@ -78,6 +78,26 @@
 	--sidebar-ring: oklch(0.556 0 0);
 }
 
+/* App accent colors: the first chart series and highlights inside an app. */
+:root {
+	--app-accent: var(--primary);
+}
+[data-accent='blue'] {
+	--app-accent: oklch(0.55 0.2 255);
+}
+[data-accent='green'] {
+	--app-accent: oklch(0.6 0.15 150);
+}
+[data-accent='amber'] {
+	--app-accent: oklch(0.75 0.16 75);
+}
+[data-accent='red'] {
+	--app-accent: oklch(0.6 0.22 25);
+}
+[data-accent='violet'] {
+	--app-accent: oklch(0.55 0.22 295);
+}
+
 @theme inline {
 	--font-sans: 'Geist Variable', sans-serif;
 	--color-sidebar-ring: var(--sidebar-ring);

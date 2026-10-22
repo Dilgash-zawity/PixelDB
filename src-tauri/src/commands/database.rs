@@ -1,8 +1,10 @@
 use tauri::State;
 
+use super::target;
 use crate::database::{DbManager, metadata, schema};
 use crate::errors::AppResult;
 use crate::models::{DatabaseInfo, DiagramLayout, ObjectSummary};
+use crate::workspace::WorkspaceStore;
 
 /// Closes the current database. Returns false when none was open.
 #[tauri::command]
@@ -23,8 +25,12 @@ pub async fn get_database_info(state: State<'_, DbManager>) -> AppResult<Option<
 }
 
 #[tauri::command]
-pub async fn list_objects(state: State<'_, DbManager>) -> AppResult<Vec<ObjectSummary>> {
-    state.run(|db| schema::list_objects(&db.conn)).await
+pub async fn list_objects(
+    state: State<'_, DbManager>,
+    store: State<'_, WorkspaceStore>,
+    database: Option<String>,
+) -> AppResult<Vec<ObjectSummary>> {
+    state.run_on(target(&store, database)?, |db| schema::list_objects(&db.conn)).await
 }
 
 #[tauri::command]
@@ -35,4 +41,11 @@ pub async fn get_diagram_layout(state: State<'_, DbManager>) -> AppResult<Diagra
 #[tauri::command]
 pub async fn save_diagram_layout(state: State<'_, DbManager>, layout: DiagramLayout) -> AppResult<()> {
     state.run(move |db| metadata::save_layout(&db.conn, &layout)).await
+}
+
+/// Closes databases opened by an app, keeping the database page's one.
+#[tauri::command]
+pub async fn release_databases(state: State<'_, DbManager>) -> AppResult<()> {
+    let mgr = state.inner().clone();
+    DbManager::run_detached(move || mgr.close_others()).await
 }

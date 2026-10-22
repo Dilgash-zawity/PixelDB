@@ -1,3 +1,4 @@
+pub mod apps;
 pub mod commands;
 pub mod database;
 pub mod errors;
@@ -36,7 +37,15 @@ pub fn run() {
       commands::workspace::rename_workspace_database,
       commands::workspace::delete_workspace_database,
       commands::workspace::duplicate_workspace_database,
+      commands::apps::list_apps,
+      commands::apps::create_app,
+      commands::apps::load_app,
+      commands::apps::save_app,
+      commands::apps::rename_app,
+      commands::apps::delete_app,
+      commands::apps::duplicate_app,
       commands::database::close_database,
+      commands::database::release_databases,
       commands::database::get_database_info,
       commands::database::list_objects,
       commands::database::get_diagram_layout,
@@ -51,6 +60,7 @@ pub fn run() {
       commands::tables::rename_field,
       commands::tables::drop_field,
       commands::records::list_records,
+      commands::records::aggregate_records,
       commands::records::get_record,
       commands::records::get_attachment,
       commands::records::insert_record,
