@@ -1,27 +1,39 @@
 <script lang="ts">
+	// Services
+	import { recordService } from '#lib/services/records.js';
+
+	// Types
+	import type { RecordPage } from '#lib/api/types.js';
+
+	// Utils
 	import { untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
-	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
-	import PlusIcon from '@lucide/svelte/icons/plus';
-	import TrashIcon from '@lucide/svelte/icons/trash-2';
-	import Undo2Icon from '@lucide/svelte/icons/undo-2';
-	import FileTextIcon from '@lucide/svelte/icons/file-text';
-	import type { RecordPage } from '#lib/api/types.js';
+	import { prefillFromFilters, resolveFilters, type FormWidget } from '#lib/logic/app-def.js';
+	import { loadLookups, lookupLabel, type LookupOption } from '#lib/logic/lookups.js';
+	import * as rb from '#lib/logic/record-buffer.js';
+	import { displayValue, toEditorValue } from '#lib/logic/values.js';
+	import { appSession } from '#lib/state/app.svelte.js';
+	import { attempt, cleanMessage, confirm } from '#lib/state/feedback.svelte.js';
+
+	// Components
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import { prefillFromFilters, resolveFilters, type FormWidget } from '#lib/logic/app-def.js';
-	import { loadLookups, lookupLabel, type LookupOption } from '#lib/logic/lookups.js';
-	import * as rb from '#lib/logic/record-buffer.js';
-	import { displayValue, toEditorValue } from '#lib/logic/values.js';
-	import { recordService } from '#lib/services/records.js';
-	import { appSession } from '#lib/state/app.svelte.js';
-	import { attempt, cleanMessage, confirm } from '#lib/state/feedback.svelte.js';
 	import FieldInput from '../FieldInput.svelte';
 
+	// Icons
+	import {
+		ChevronLeft as ChevronLeftIcon,
+		ChevronRight as ChevronRightIcon,
+		Plus as PlusIcon,
+		Trash2 as TrashIcon,
+		Undo2 as Undo2Icon,
+		FileText as FileTextIcon,
+	} from '@lucide/svelte';
+
+	// Script
 	let { widget, editing }: { widget: FormWidget; editing: boolean } = $props();
 
 	const uid = $props.id();

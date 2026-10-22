@@ -1,20 +1,17 @@
 <script lang="ts">
+	// Utils
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
-	import CheckIcon from '@lucide/svelte/icons/check';
-	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
-	import DatabaseIcon from '@lucide/svelte/icons/database';
-	import SettingsIcon from '@lucide/svelte/icons/settings';
-	import NetworkIcon from '@lucide/svelte/icons/network';
-	import PlusIcon from '@lucide/svelte/icons/plus';
-	import SearchIcon from '@lucide/svelte/icons/search';
-	import SearchCodeIcon from '@lucide/svelte/icons/search-code';
-	import TableIcon from '@lucide/svelte/icons/table-2';
-	import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
+	import { databaseHref } from '#lib/logic/routes.js';
+	import { databaseNameProblem } from '#lib/logic/values.js';
+	import { session, type Tab } from '#lib/state/session.svelte.js';
+	import { workspace } from '#lib/state/workspace.svelte.js';
+
+	// Components
 	import CommandPalette from '#lib/components/app/CommandPalette.svelte';
 	import Logo from '#lib/components/app/Logo.svelte';
+	import NewTableDrawer from '#lib/components/app/NewTableDrawer.svelte';
 	import NameDialog from '#lib/components/app/NameDialog.svelte';
 	import QueryView from '#lib/components/app/QueryView.svelte';
 	import RecordsView from '#lib/components/app/RecordsView.svelte';
@@ -29,11 +26,23 @@
 	import { Separator } from '#lib/components/ui/separator/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
-	import { databaseHref } from '#lib/logic/routes.js';
-	import { databaseNameProblem } from '#lib/logic/values.js';
-	import { session, type Tab } from '#lib/state/session.svelte.js';
-	import { workspace } from '#lib/state/workspace.svelte.js';
 
+	// Icons
+	import {
+		ArrowLeft as ArrowLeftIcon,
+		Check as CheckIcon,
+		ChevronDown as ChevronDownIcon,
+		Database as DatabaseIcon,
+		Settings as SettingsIcon,
+		Network as NetworkIcon,
+		Plus as PlusIcon,
+		Search as SearchIcon,
+		SearchCode as SearchCodeIcon,
+		Table2 as TableIcon,
+		TriangleAlert as TriangleAlertIcon,
+	} from '@lucide/svelte';
+
+	// Script
 	const name = $derived(page.url.searchParams.get('name') ?? '');
 	let paletteOpen = $state(false);
 	let creatingDatabase = $state(false);
@@ -90,7 +99,7 @@
 	</Empty.Root>
 {:else}
 	<div class="flex h-svh flex-col">
-		<header class="flex h-12 shrink-0 items-center gap-2 border-b px-3">
+		<header class="app-header flex h-12 shrink-0 items-center gap-2 border-b px-3">
 			<DropdownMenu.Root onOpenChange={(open) => open && workspace.refresh()}>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
@@ -125,14 +134,14 @@
 
 			<Tabs.Root bind:value={() => session.tab, (v) => session.showTab(v as Tab)}>
 				<Tabs.List>
-					<Tabs.Trigger value="diagram"><NetworkIcon /> Diagram</Tabs.Trigger>
-					<Tabs.Trigger value="datasheet"><TableIcon /> Datasheet</Tabs.Trigger>
-					<Tabs.Trigger value="query"><SearchCodeIcon /> Query</Tabs.Trigger>
+					<Tabs.Trigger value="diagram"><NetworkIcon class="vivid:text-tone-violet" /> Diagram</Tabs.Trigger>
+					<Tabs.Trigger value="datasheet"><TableIcon class="vivid:text-tone-blue" /> Datasheet</Tabs.Trigger>
+					<Tabs.Trigger value="query"><SearchCodeIcon class="vivid:text-tone-amber" /> Query</Tabs.Trigger>
 				</Tabs.List>
 			</Tabs.Root>
 
 			{#if session.tab === 'datasheet' && tableItems.length}
-				<Select.Root type="single" items={tableItems} value={session.table ?? ''} onValueChange={(v) => v && session.select(v)}>
+				<Select.Root type="single" items={tableItems} bind:value={() => session.table ?? '', (v) => v && session.select(v)}>
 					<Select.Trigger size="sm" class="w-48" aria-label="Table"><Select.Value placeholder="Choose a table" /></Select.Trigger>
 					<Select.Content>
 						<Select.Group>
@@ -187,6 +196,7 @@
 	</div>
 {/if}
 
+<CommandPalette bind:open={paletteOpen} onNewTable={() => (creatingTable = true)} onBack={back} onSettings={openSettings} />
 
 <NameDialog
 	bind:open={creatingDatabase}
@@ -203,13 +213,4 @@
 	}}
 />
 
-<NameDialog
-	bind:open={creatingTable}
-	title="New table"
-	description="It starts with an automatic ID field."
-	initial={suggestedTableName()}
-	placeholder="e.g. Customers"
-	submitLabel="Create table"
-	validate={(v) => session.tableNameProblem(v)}
-	onSubmit={(t) => session.createTable(t)}
-/>
+<NewTableDrawer bind:open={creatingTable} initial={suggestedTableName()} onCreate={(t, fields) => session.createTable(t, true, fields)} />

@@ -1,11 +1,15 @@
 <script lang="ts">
+	// Utils
 	import { resetMode, setMode } from 'mode-watcher';
-	import SunIcon from '@lucide/svelte/icons/sun';
-	import MoonIcon from '@lucide/svelte/icons/moon';
-	import MonitorIcon from '@lucide/svelte/icons/monitor';
+
+	// Components
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 
+	// Icons
+	import { Sun as SunIcon, Moon as MoonIcon, Monitor as MonitorIcon } from '@lucide/svelte';
+
+	// Script
 	let { align = 'end' }: { align?: 'start' | 'end' } = $props();
 </script>
 

@@ -89,3 +89,10 @@ export function missingRequired(buf: RecordBuffer, def: TableDef): string[] {
 		})
 		.map((f) => f.name);
 }
+
+/** The record form's steps: the fields in groups of `size`, in table order. */
+export function fieldPages<T>(fields: T[], size = 5): T[][] {
+	const pages: T[][] = [];
+	for (let i = 0; i < fields.length; i += size) pages.push(fields.slice(i, i + size));
+	return pages.length ? pages : [[]];
+}

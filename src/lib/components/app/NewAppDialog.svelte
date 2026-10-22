@@ -1,7 +1,12 @@
 <script lang="ts">
+	// Utils
 	import { untrack } from 'svelte';
-	import LayoutTemplateIcon from '@lucide/svelte/icons/layout-template';
-	import SquareDashedIcon from '@lucide/svelte/icons/square-dashed';
+	import { TEMPLATES } from '#lib/logic/templates.js';
+	import { databaseNameProblem } from '#lib/logic/values.js';
+	import { workspace } from '#lib/state/workspace.svelte.js';
+	import { cn } from '#lib/utils.js';
+
+	// Components
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
@@ -9,11 +14,14 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Item from '#lib/components/ui/item/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import { TEMPLATES } from '#lib/logic/templates.js';
-	import { databaseNameProblem } from '#lib/logic/values.js';
-	import { workspace } from '#lib/state/workspace.svelte.js';
-	import { cn } from '#lib/utils.js';
 
+	// Icons
+	import {
+		LayoutTemplate as LayoutTemplateIcon,
+		SquareDashed as SquareDashedIcon,
+	} from '@lucide/svelte';
+
+	// Script
 	let {
 		open = $bindable(false),
 		onCreated

@@ -1,8 +1,14 @@
 <script lang="ts">
+	// Types
 	import type { Binding } from '#lib/logic/app-def.js';
+
+	// Utils
 	import { appSession } from '#lib/state/app.svelte.js';
+
+	// Components
 	import PropSelect from './PropSelect.svelte';
 
+	// Script
 	let {
 		id,
 		binding,

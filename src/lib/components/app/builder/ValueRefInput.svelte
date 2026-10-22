@@ -1,9 +1,15 @@
 <script lang="ts">
-	import { Input } from '#lib/components/ui/input/index.js';
+	// Types
 	import type { ValueRef } from '#lib/logic/app-def.js';
+
+	// Utils
 	import { appSession } from '#lib/state/app.svelte.js';
+
+	// Components
+	import { Input } from '#lib/components/ui/input/index.js';
 	import PropSelect from './PropSelect.svelte';
 
+	// Script
 	let {
 		value,
 		columns,

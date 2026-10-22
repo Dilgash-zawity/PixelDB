@@ -1,17 +1,25 @@
 <script lang="ts">
+	// Utils
 	import { toggleMode } from 'mode-watcher';
-	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
-	import EyeIcon from '@lucide/svelte/icons/eye';
-	import SettingsIcon from '@lucide/svelte/icons/settings';
-	import NetworkIcon from '@lucide/svelte/icons/network';
-	import PlusIcon from '@lucide/svelte/icons/plus';
-	import SearchCodeIcon from '@lucide/svelte/icons/search-code';
-	import Settings2Icon from '@lucide/svelte/icons/settings-2';
-	import SunMoonIcon from '@lucide/svelte/icons/sun-moon';
-	import TableIcon from '@lucide/svelte/icons/table-2';
-	import * as Command from '#lib/components/ui/command/index.js';
 	import { session } from '#lib/state/session.svelte.js';
 
+	// Components
+	import * as Command from '#lib/components/ui/command/index.js';
+
+	// Icons
+	import {
+		ArrowLeft as ArrowLeftIcon,
+		Eye as EyeIcon,
+		Settings as SettingsIcon,
+		Network as NetworkIcon,
+		Plus as PlusIcon,
+		SearchCode as SearchCodeIcon,
+		Settings2 as Settings2Icon,
+		SunMoon as SunMoonIcon,
+		Table2 as TableIcon,
+	} from '@lucide/svelte';
+
+	// Script
 	let {
 		open = $bindable(false),
 		onNewTable,

@@ -64,9 +64,12 @@ class WorkspaceState {
 	}
 
 	async remove(name: string) {
+		const users = this.apps.filter((a) => a.databases.includes(name)).map((a) => `“${a.name}”`);
 		const ok = await confirm({
 			title: `Delete “${name}”?`,
-			description: 'The database file and every table and record in it will be permanently deleted. This cannot be undone.',
+			description:
+				'The database file and every table and record in it will be permanently deleted. This cannot be undone.' +
+				(users.length ? ` ${users.join(', ')} ${users.length === 1 ? 'uses' : 'use'} it and will show no data.` : ''),
 			action: 'Delete database',
 			destructive: true
 		});

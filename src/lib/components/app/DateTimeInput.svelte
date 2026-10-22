@@ -1,12 +1,17 @@
 <script lang="ts">
+	// Utils
 	import { DateFormatter, getLocalTimeZone, parseDate, type DateValue } from '@internationalized/date';
-	import CalendarIcon from '@lucide/svelte/icons/calendar';
-	import XIcon from '@lucide/svelte/icons/x';
+
+	// Components
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Calendar } from '#lib/components/ui/calendar/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Popover from '#lib/components/ui/popover/index.js';
 
+	// Icons
+	import { Calendar as CalendarIcon, X as XIcon } from '@lucide/svelte';
+
+	// Script
 	/** Stored as ISO 8601: `YYYY-MM-DD` or `YYYY-MM-DDTHH:MM`. */
 	let {
 		id,

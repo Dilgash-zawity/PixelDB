@@ -1,31 +1,10 @@
 <script lang="ts">
-	import ArrowDownIcon from '@lucide/svelte/icons/arrow-down';
-	import ArrowUpIcon from '@lucide/svelte/icons/arrow-up';
-	import DatabaseIcon from '@lucide/svelte/icons/database';
-	import EllipsisIcon from '@lucide/svelte/icons/ellipsis';
-	import FileIcon from '@lucide/svelte/icons/file';
-	import HouseIcon from '@lucide/svelte/icons/house';
-	import PencilIcon from '@lucide/svelte/icons/pencil';
-	import PlusIcon from '@lucide/svelte/icons/plus';
-	import TrashIcon from '@lucide/svelte/icons/trash-2';
-	import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
-	import VariableIcon from '@lucide/svelte/icons/variable';
-	import XIcon from '@lucide/svelte/icons/x';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import * as Field from '#lib/components/ui/field/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import * as Item from '#lib/components/ui/item/index.js';
-	import { ScrollArea } from '#lib/components/ui/scroll-area/index.js';
-	import * as Tabs from '#lib/components/ui/tabs/index.js';
-	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	// Utils
 	import {
 		ACCENTS,
-		addPage,
 		addSource,
 		addVariable,
 		findPage,
-		movePage,
 		removePage,
 		removeSource,
 		removeVariable,
@@ -35,16 +14,38 @@
 		widgetsUsingSource,
 		WIDGET_TYPES,
 		type AppAccent,
-		type WidgetType
+		type Page
 	} from '#lib/logic/app-def.js';
 	import { appSession } from '#lib/state/app.svelte.js';
 	import { confirm } from '#lib/state/feedback.svelte.js';
 	import { cn } from '#lib/utils.js';
+
+	// Components
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Field from '#lib/components/ui/field/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import * as Item from '#lib/components/ui/item/index.js';
+	import { ScrollArea } from '#lib/components/ui/scroll-area/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import NameDialog from '../NameDialog.svelte';
+	import IconPicker from './IconPicker.svelte';
 	import PropSelect from './PropSelect.svelte';
 	import WidgetTypeIcon from './WidgetTypeIcon.svelte';
 
-	let tab = $state('add');
+	// Icons
+	import {
+		Database as DatabaseIcon,
+		Pencil as PencilIcon,
+		Plus as PlusIcon,
+		Trash2 as TrashIcon,
+		TriangleAlert as TriangleAlertIcon,
+		Variable as VariableIcon,
+		X as XIcon,
+	} from '@lucide/svelte';
+
+	// Script
 	let naming = $state<{
 		title: string;
 		description?: string;
@@ -57,38 +58,33 @@
 	const def = $derived(appSession.def!);
 	const uid = $props.id();
 
-	const pageTitleProblem = (v: string, except?: string) =>
-		!v.trim() ? 'Enter a name' : def.pages.some((p) => p.id !== except && p.title.toLowerCase() === v.trim().toLowerCase()) ? 'A page with this name already exists' : null;
+	// ----- The current page -----
 
-	function newPage() {
-		naming = {
-			title: 'New page',
-			initial: `Page ${def.pages.length + 1}`,
-			submit: 'Add page',
-			validate: (v) => pageTitleProblem(v),
-			apply: (v) => {
-				let id = '';
-				appSession.change((d) => (id = addPage(d, v.trim()).id));
-				appSession.showPage(id);
-			}
-		};
+	const page = $derived(appSession.page!);
+	const groups = $derived([...new Set(def.pages.map((p) => p.group).filter(Boolean))]);
+	let titleDraft = $state('');
+	$effect(() => {
+		titleDraft = page.title;
+	});
+	const titleProblem = $derived(
+		!titleDraft.trim()
+			? 'Enter a name'
+			: def.pages.some((p) => p.id !== page.id && p.title.toLowerCase() === titleDraft.trim().toLowerCase())
+				? 'A page with this name already exists'
+				: null
+	);
+
+	function editPage(change: (p: Page) => void, group?: string) {
+		const id = page.id;
+		appSession.change((d) => {
+			const p = findPage(d, id);
+			if (p) change(p);
+		}, group ? `${id}:${group}` : undefined);
 	}
 
-	function renamePage(id: string, title: string) {
-		naming = {
-			title: 'Rename page',
-			initial: title,
-			submit: 'Rename',
-			validate: (v) => pageTitleProblem(v, id),
-			apply: (v) => appSession.change((d) => {
-				const p = findPage(d, id);
-				if (p) p.title = v.trim();
-			})
-		};
-	}
-
-	async function deletePage(id: string, title: string) {
-		const count = findPage(def, id)?.widgets.length ?? 0;
+	async function deletePage() {
+		const { id, title } = page;
+		const count = page.widgets.length;
 		const ok = await confirm({
 			title: `Delete page “${title}”?`,
 			description: count
@@ -99,7 +95,7 @@
 		});
 		if (!ok) return;
 		appSession.change((d) => removePage(d, id));
-		if (appSession.pageId === id) appSession.showPage(def.pages[0].id);
+		appSession.showPage(def.startPage);
 	}
 
 	// ----- Databases -----
@@ -185,12 +181,12 @@
 	};
 </script>
 
-<aside class="flex h-full w-64 shrink-0 flex-col border-e bg-sidebar print:hidden">
-	<Tabs.Root bind:value={tab} class="flex min-h-0 flex-1 flex-col gap-0">
+<aside class="flex h-full w-80 shrink-0 flex-col border-s bg-sidebar print:hidden">
+	<Tabs.Root bind:value={appSession.builderTab} class="flex min-h-0 flex-1 flex-col gap-0">
 		<div class="border-b p-2">
 			<Tabs.List class="w-full">
 				<Tabs.Trigger value="add">Add</Tabs.Trigger>
-				<Tabs.Trigger value="pages">Pages</Tabs.Trigger>
+				<Tabs.Trigger value="page">Page</Tabs.Trigger>
 				<Tabs.Trigger value="data">Data</Tabs.Trigger>
 				<Tabs.Trigger value="style">Style</Tabs.Trigger>
 			</Tabs.List>
@@ -215,46 +211,63 @@
 				{/if}
 			</Tabs.Content>
 
-			<Tabs.Content value="pages" class="flex flex-col gap-1 p-2">
-				{#each def.pages as p, i (p.id)}
-					<div
-						class={cn(
-							'group/page flex items-center gap-1 px-1 py-0.5 text-sm hover:bg-accent',
-							p.id === appSession.page?.id && 'bg-accent font-medium'
-						)}
-					>
-						<button type="button" class="flex min-w-0 flex-1 items-center gap-2 py-1 text-start" onclick={() => appSession.showPage(p.id)}>
-							{#if p.id === def.startPage}<HouseIcon class="size-4 shrink-0" />{:else}<FileIcon class="size-4 shrink-0 text-muted-foreground" />{/if}
-							<span class="truncate">{p.title}</span>
-						</button>
-						<DropdownMenu.Root>
-							<DropdownMenu.Trigger>
-								{#snippet child({ props })}
-									<Button {...props} size="icon-xs" variant="ghost" aria-label="Page options"><EllipsisIcon /></Button>
-								{/snippet}
-							</DropdownMenu.Trigger>
-							<DropdownMenu.Content align="end">
-								<DropdownMenu.Group>
-									<DropdownMenu.Item onclick={() => renamePage(p.id, p.title)}><PencilIcon /> Rename</DropdownMenu.Item>
-									<DropdownMenu.Item disabled={p.id === def.startPage} onclick={() => appSession.change((d) => (d.startPage = p.id))}>
-										<HouseIcon /> Open first
-									</DropdownMenu.Item>
-									<DropdownMenu.Item disabled={i === 0} onclick={() => appSession.change((d) => movePage(d, p.id, i - 1))}><ArrowUpIcon /> Move up</DropdownMenu.Item>
-									<DropdownMenu.Item disabled={i === def.pages.length - 1} onclick={() => appSession.change((d) => movePage(d, p.id, i + 1))}>
-										<ArrowDownIcon /> Move down
-									</DropdownMenu.Item>
-								</DropdownMenu.Group>
-								<DropdownMenu.Separator />
-								<DropdownMenu.Group>
-									<DropdownMenu.Item variant="destructive" disabled={def.pages.length === 1} onclick={() => deletePage(p.id, p.title)}>
-										<TrashIcon /> Delete
-									</DropdownMenu.Item>
-								</DropdownMenu.Group>
-							</DropdownMenu.Content>
-						</DropdownMenu.Root>
-					</div>
-				{/each}
-				<Button size="sm" variant="outline" class="mt-1" onclick={newPage}><PlusIcon data-icon="inline-start" /> New page</Button>
+			<Tabs.Content value="page" class="flex flex-col gap-5 p-3">
+				<Field.Group class="gap-4">
+					<Field.Field data-invalid={titleProblem ? true : undefined}>
+						<Field.Label for="{uid}-ptitle">Name</Field.Label>
+						<div class="flex gap-1.5">
+							<IconPicker value={page.icon} label="Page icon" onchange={(icon) => editPage((p) => (p.icon = icon))} />
+							<Input
+								id="{uid}-ptitle"
+								class="h-8"
+								bind:value={titleDraft}
+								aria-invalid={titleProblem ? true : undefined}
+								oninput={() => {
+									const v = titleDraft.trim();
+									if (!titleProblem) editPage((p) => (p.title = v), 'title');
+								}}
+								onblur={() => {
+									appSession.seal();
+									titleDraft = page.title;
+								}}
+							/>
+						</div>
+						{#if titleProblem}<Field.Error>{titleProblem}</Field.Error>{/if}
+					</Field.Field>
+					<Field.Field>
+						<Field.Label for="{uid}-pgroup">Sidebar heading</Field.Label>
+						<Input
+							id="{uid}-pgroup"
+							class="h-8"
+							placeholder="None"
+							list="{uid}-pgroups"
+							value={page.group}
+							oninput={(e) => {
+								const v = e.currentTarget.value;
+								editPage((p) => (p.group = v.trim()), 'group');
+							}}
+							onblur={() => appSession.seal()}
+						/>
+						<datalist id="{uid}-pgroups">{#each groups as g (g)}<option value={g}></option>{/each}</datalist>
+						<Field.Description>Pages with the same heading are listed together. Drag pages in the sidebar to reorder them.</Field.Description>
+					</Field.Field>
+					<Field.Field orientation="horizontal">
+						<Switch id="{uid}-pshow" checked={!page.hidden} onCheckedChange={(v) => editPage((p) => (p.hidden = !v))} />
+						<Field.Label for="{uid}-pshow" class="font-normal">Show in the sidebar</Field.Label>
+					</Field.Field>
+					<Field.Field orientation="horizontal">
+						<Switch
+							id="{uid}-pfirst"
+							checked={def.startPage === page.id}
+							disabled={def.startPage === page.id}
+							onCheckedChange={(v) => v && appSession.change((d) => (d.startPage = page.id))}
+						/>
+						<Field.Label for="{uid}-pfirst" class="font-normal">Open this page first</Field.Label>
+					</Field.Field>
+				</Field.Group>
+				<Button size="sm" variant="destructive" disabled={def.pages.length === 1} onclick={deletePage}>
+					<TrashIcon data-icon="inline-start" /> Delete page
+				</Button>
 			</Tabs.Content>
 
 			<Tabs.Content value="data" class="flex flex-col gap-5 p-2">

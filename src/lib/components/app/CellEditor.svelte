@@ -1,16 +1,23 @@
 <script lang="ts">
-	import PaperclipIcon from '@lucide/svelte/icons/paperclip';
-	import XIcon from '@lucide/svelte/icons/x';
+	// Types
 	import type { FieldDef, JsonValue } from '#lib/api/types.js';
+	import type { LookupOption } from '#lib/logic/lookups.js';
+
+	// Utils
+	import { NUMERIC_TYPES } from '#lib/logic/field-types.js';
+	import { fileToAttachment, formatBytes, isBlobSummary, placeholderFor } from '#lib/logic/values.js';
+
+	// Components
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Select from '#lib/components/ui/select/index.js';
-	import { NUMERIC_TYPES } from '#lib/logic/field-types.js';
-	import type { LookupOption } from '#lib/logic/lookups.js';
-	import { fileToAttachment, formatBytes, isBlobSummary, placeholderFor } from '#lib/logic/values.js';
 	import DateTimeInput from './DateTimeInput.svelte';
 
+	// Icons
+	import { Paperclip as PaperclipIcon, X as XIcon } from '@lucide/svelte';
+
+	// Script
 	/**
 	 * The in-place editor for one datasheet cell. Every focusable control
 	 * carries `data-col` so the datasheet can move focus between cells.

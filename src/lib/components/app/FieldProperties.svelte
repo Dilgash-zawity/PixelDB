@@ -1,11 +1,15 @@
 <script lang="ts">
+	// Types
 	import type { DefaultValue, FieldDef } from '#lib/api/types.js';
+
+	// Components
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Select from '#lib/components/ui/select/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 
+	// Script
 	/** Edits `field` in place: its type options and its rules. */
 	let { field: f, disabled = false }: { field: FieldDef; disabled?: boolean } = $props();
 

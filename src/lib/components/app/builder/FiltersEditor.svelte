@@ -1,13 +1,20 @@
 <script lang="ts">
-	import PlusIcon from '@lucide/svelte/icons/plus';
-	import XIcon from '@lucide/svelte/icons/x';
+	// Types
 	import type { FilterOp } from '#lib/api/types.js';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import type { ValueRef, WidgetFilter } from '#lib/logic/app-def.js';
+
+	// Utils
 	import { FILTER_OPS, needsValue } from '#lib/logic/filters.js';
+
+	// Components
+	import { Button } from '#lib/components/ui/button/index.js';
 	import PropSelect from './PropSelect.svelte';
 	import ValueRefInput from './ValueRefInput.svelte';
 
+	// Icons
+	import { Plus as PlusIcon, X as XIcon } from '@lucide/svelte';
+
+	// Script
 	let {
 		filters,
 		columns,

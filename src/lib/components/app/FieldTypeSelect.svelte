@@ -1,9 +1,15 @@
 <script lang="ts">
+	// Types
 	import type { FieldTypeName } from '#lib/api/types.js';
-	import * as Select from '#lib/components/ui/select/index.js';
+
+	// Utils
 	import { FIELD_TYPES } from '#lib/logic/field-types.js';
+
+	// Components
+	import * as Select from '#lib/components/ui/select/index.js';
 	import FieldTypeIcon from './FieldTypeIcon.svelte';
 
+	// Script
 	let {
 		value,
 		onChange,

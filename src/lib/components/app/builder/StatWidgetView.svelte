@@ -1,12 +1,20 @@
 <script lang="ts">
+	// Services
+	import { recordService } from '#lib/services/records.js';
+
+	// Types
 	import type { AggregateResult } from '#lib/api/types.js';
-	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
+
+	// Utils
 	import { resolveFilters, usableSeries, type StatWidget } from '#lib/logic/app-def.js';
 	import { formatTotal, seriesLabel } from '#lib/logic/chart-data.js';
 	import { cleanMessage } from '#lib/state/feedback.svelte.js';
-	import { recordService } from '#lib/services/records.js';
 	import { appSession } from '#lib/state/app.svelte.js';
 
+	// Components
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
+
+	// Script
 	let { widget }: { widget: StatWidget } = $props();
 
 	let result = $state<AggregateResult | null>(null);
@@ -49,7 +57,7 @@
 	{:else if !result}
 		<Skeleton class="h-9 w-32" />
 	{:else}
-		<span class="truncate text-3xl font-semibold tracking-tight tabular-nums">
+		<span class="truncate text-3xl font-semibold tracking-tight tabular-nums vivid:text-(--app-accent)">
 			{formatTotal(result.rows[0]?.[0] ?? null, result.types[0] ?? null)}
 		</span>
 		<span class="truncate text-sm text-muted-foreground">{widget.caption || widget.title || seriesLabel(widget.series)}</span>

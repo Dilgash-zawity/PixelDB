@@ -19,7 +19,7 @@ export const FIELD_TYPES: FieldTypeInfo[] = [
 	{ name: 'yes_no', label: 'Checkbox', hint: 'Yes or no.', group: 'basic' },
 	{ name: 'hyperlink', label: 'Link', hint: 'A web address.', group: 'basic' },
 	{ name: 'attachment', label: 'File', hint: 'A document or image stored in the database.', group: 'basic' },
-	{ name: 'lookup', label: 'Relation', hint: 'Points to a record in another table.', group: 'advanced' },
+	{ name: 'lookup', label: 'Relationship', hint: 'Points to a record in another table, like an order’s customer.', group: 'advanced' },
 	{ name: 'calculated', label: 'Formula', hint: 'Computed from other fields.', group: 'advanced' },
 	{ name: 'large_number', label: 'Large number', hint: 'Whole numbers beyond ±2 billion.', group: 'advanced' },
 	{ name: 'auto_number', label: 'Auto ID', hint: 'A unique number assigned automatically.', group: 'advanced' }
@@ -33,6 +33,33 @@ export function fieldTypeLabel(t: FieldType): string {
 	if (t.type === 'unknown') return t.declared ? `Other (${t.declared})` : 'Any';
 	if (t.type === 'number' && t.real) return 'Decimal number';
 	return fieldTypeInfo(t)?.label ?? t.type;
+}
+
+/** Color families used to tell field types apart at a glance in the colorful look. */
+export type Tone = 'blue' | 'green' | 'amber' | 'pink' | 'violet' | 'cyan' | 'none';
+
+export function fieldTypeTone(t: FieldType): Tone {
+	switch (t.type) {
+		case 'short_text':
+		case 'long_text':
+			return 'blue';
+		case 'number':
+		case 'large_number':
+			return 'green';
+		case 'currency':
+			return 'amber';
+		case 'date_time':
+			return 'pink';
+		case 'yes_no':
+		case 'calculated':
+			return 'violet';
+		case 'hyperlink':
+		case 'attachment':
+		case 'lookup':
+			return 'cyan';
+		default:
+			return 'none';
+	}
 }
 
 /** A field type with default parameters. */

@@ -1,15 +1,23 @@
 <script lang="ts">
-	import { AreaChart, BarChart, LineChart, PieChart } from 'layerchart';
-	import ChartColumnIcon from '@lucide/svelte/icons/chart-column';
-	import * as Chart from '#lib/components/ui/chart/index.js';
-	import * as Empty from '#lib/components/ui/empty/index.js';
-	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
+	// Services
+	import { recordService } from '#lib/services/records.js';
+
+	// Utils
 	import { resolveFilters, usableSeries, type ChartWidget } from '#lib/logic/app-def.js';
 	import { toChartData, type ChartData } from '#lib/logic/chart-data.js';
-	import { recordService } from '#lib/services/records.js';
 	import { appSession } from '#lib/state/app.svelte.js';
 	import { cleanMessage } from '#lib/state/feedback.svelte.js';
 
+	// Components
+	import { AreaChart, BarChart, LineChart, PieChart } from 'layerchart';
+	import * as Chart from '#lib/components/ui/chart/index.js';
+	import * as Empty from '#lib/components/ui/empty/index.js';
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
+
+	// Icons
+	import { ChartColumn as ChartColumnIcon } from '@lucide/svelte';
+
+	// Script
 	let { widget }: { widget: ChartWidget } = $props();
 
 	let data = $state<ChartData | null>(null);

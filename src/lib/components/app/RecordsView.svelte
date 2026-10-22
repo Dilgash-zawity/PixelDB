@@ -1,30 +1,25 @@
 <script lang="ts">
+	// Services
+	import { recordService } from '#lib/services/records.js';
+	import { tableService } from '#lib/services/tables.js';
+
+	// Types
+	import type { FieldDef, FieldTypeName, JsonValue, RecordKey, RecordPage, RecordRow, SortSpec, TableDef } from '#lib/api/types.js';
+
+	// Utils
 	import { onDestroy, tick } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import ArrowDownIcon from '@lucide/svelte/icons/arrow-down';
-	import ArrowDownWideNarrowIcon from '@lucide/svelte/icons/arrow-down-wide-narrow';
-	import ArrowUpIcon from '@lucide/svelte/icons/arrow-up';
-	import ArrowUpNarrowWideIcon from '@lucide/svelte/icons/arrow-up-narrow-wide';
-	import AsteriskIcon from '@lucide/svelte/icons/asterisk';
-	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
-	import ChevronFirstIcon from '@lucide/svelte/icons/chevron-first';
-	import ChevronLastIcon from '@lucide/svelte/icons/chevron-last';
-	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
-	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
-	import FilterIcon from '@lucide/svelte/icons/list-filter';
-	import FilterXIcon from '@lucide/svelte/icons/funnel-x';
-	import KeyRoundIcon from '@lucide/svelte/icons/key-round';
-	import PanelRightIcon from '@lucide/svelte/icons/panel-right-open';
-	import PaperclipIcon from '@lucide/svelte/icons/paperclip';
-	import PencilIcon from '@lucide/svelte/icons/pencil';
-	import Settings2Icon from '@lucide/svelte/icons/settings-2';
-	import PlusIcon from '@lucide/svelte/icons/plus';
-	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
-	import SaveIcon from '@lucide/svelte/icons/save';
-	import SearchIcon from '@lucide/svelte/icons/search';
-	import TrashIcon from '@lucide/svelte/icons/trash-2';
-	import XIcon from '@lucide/svelte/icons/x';
-	import type { FieldDef, FieldTypeName, JsonValue, RecordKey, RecordPage, RecordRow, SortSpec, TableDef } from '#lib/api/types.js';
+	import { FIELD_TYPES, NUMERIC_TYPES, isReadOnlyType, makeFieldType } from '#lib/logic/field-types.js';
+	import { toFilterSpecs, type FilterRow } from '#lib/logic/filters.js';
+	import { loadLookups, lookupLabel, type LookupOption } from '#lib/logic/lookups.js';
+	import * as rb from '#lib/logic/record-buffer.js';
+	import { nextFreeName } from '#lib/logic/table-draft.js';
+	import { displayValue, formatBytes, identifierProblem, isBlobSummary } from '#lib/logic/values.js';
+	import { attempt, confirm } from '#lib/state/feedback.svelte.js';
+	import { session } from '#lib/state/session.svelte.js';
+	import { cn } from '#lib/utils.js';
+
+	// Components
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as ButtonGroup from '#lib/components/ui/button-group/index.js';
@@ -38,17 +33,6 @@
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
-	import { FIELD_TYPES, NUMERIC_TYPES, isReadOnlyType, makeFieldType } from '#lib/logic/field-types.js';
-	import { toFilterSpecs, type FilterRow } from '#lib/logic/filters.js';
-	import { loadLookups, lookupLabel, type LookupOption } from '#lib/logic/lookups.js';
-	import * as rb from '#lib/logic/record-buffer.js';
-	import { nextFreeName } from '#lib/logic/table-draft.js';
-	import { displayValue, formatBytes, identifierProblem, isBlobSummary } from '#lib/logic/values.js';
-	import { recordService } from '#lib/services/records.js';
-	import { tableService } from '#lib/services/tables.js';
-	import { attempt, confirm } from '#lib/state/feedback.svelte.js';
-	import { session } from '#lib/state/session.svelte.js';
-	import { cn } from '#lib/utils.js';
 	import CellEditor from './CellEditor.svelte';
 	import FieldTypeIcon from './FieldTypeIcon.svelte';
 	import FilterPopover from './FilterPopover.svelte';
@@ -56,6 +40,34 @@
 	import FieldDrawer from './FieldDrawer.svelte';
 	import RecordDrawer from './RecordDrawer.svelte';
 
+	// Icons
+	import {
+		ArrowDown as ArrowDownIcon,
+		ArrowDownWideNarrow as ArrowDownWideNarrowIcon,
+		ArrowUp as ArrowUpIcon,
+		ArrowUpNarrowWide as ArrowUpNarrowWideIcon,
+		Asterisk as AsteriskIcon,
+		ChevronDown as ChevronDownIcon,
+		ChevronFirst as ChevronFirstIcon,
+		ChevronLast as ChevronLastIcon,
+		ChevronLeft as ChevronLeftIcon,
+		ChevronRight as ChevronRightIcon,
+		ListFilter as FilterIcon,
+		FunnelX as FilterXIcon,
+		KeyRound as KeyRoundIcon,
+		PanelBottomOpen as PanelBottomIcon,
+		Paperclip as PaperclipIcon,
+		Pencil as PencilIcon,
+		Settings2 as Settings2Icon,
+		Plus as PlusIcon,
+		RefreshCw as RefreshCwIcon,
+		Save as SaveIcon,
+		Search as SearchIcon,
+		Trash2 as TrashIcon,
+		X as XIcon,
+	} from '@lucide/svelte';
+
+	// Script
 	let { table, isView }: { table: string; isView: boolean } = $props();
 
 	const PAGE_SIZE = 100;
@@ -525,8 +537,9 @@
 			</Badge>
 		{/if}
 		{#if !isView}
-			<Button variant="outline" size="sm" disabled={typeof current !== 'number'} onclick={() => openForm()}>
-				<PanelRightIcon data-icon="inline-start" /> Open as form
+			<!-- Opens the selected record, or a new one when none is selected. -->
+			<Button variant="outline" size="sm" onclick={() => openForm()}>
+				<PanelBottomIcon data-icon="inline-start" /> Open as form
 			</Button>
 		{/if}
 	</div>
@@ -718,7 +731,7 @@
 			{:else if menuTarget?.kind === 'row' && !isView}
 				{@const t = menuTarget}
 				<ContextMenu.Group>
-					<ContextMenu.Item onclick={() => openForm(t.index)}><PanelRightIcon /> Open as form</ContextMenu.Item>
+					<ContextMenu.Item onclick={() => openForm(t.index)}><PanelBottomIcon /> Open as form</ContextMenu.Item>
 					<ContextMenu.Item onclick={newRecord}><PlusIcon /> New record</ContextMenu.Item>
 				</ContextMenu.Group>
 				{#if t.col}

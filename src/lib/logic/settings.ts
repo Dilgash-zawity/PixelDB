@@ -1,13 +1,15 @@
 /** Look-and-feel preferences for this computer, kept in the webview's local storage. */
 
 export const ACCENTS = ['neutral', 'blue', 'green', 'amber', 'red', 'violet'] as const;
-export const RADII = ['none', 'small', 'medium', 'large'] as const;
+export const RADII = ['auto', 'none', 'small', 'medium', 'large'] as const;
 export const TEXT_SIZES = ['small', 'default', 'large'] as const;
 
 export interface Settings {
+	/** The plain grey look instead of the colorful default. */
+	focusMode: boolean;
 	/** Color of buttons, focus rings and highlights. */
 	accent: (typeof ACCENTS)[number];
-	/** Corner rounding of cards, buttons and inputs. */
+	/** Corner rounding of cards, buttons and inputs; 'auto' is rounded, or square in Focus mode. */
 	radius: (typeof RADII)[number];
 	textSize: (typeof TEXT_SIZES)[number];
 	/** Turn off animations, including the moving lines on the home map. */
@@ -20,8 +22,9 @@ export interface Settings {
 export const SETTINGS_KEY = 'slatedb.settings';
 
 export const DEFAULT_SETTINGS: Settings = {
+	focusMode: false,
 	accent: 'neutral',
-	radius: 'none',
+	radius: 'auto',
 	textSize: 'default',
 	reduceMotion: false,
 	canvasHints: true
@@ -34,20 +37,27 @@ const pick = <T extends string>(options: readonly T[], value: unknown, fallback:
 export function readSettings(raw: unknown): Settings {
 	const r = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
 	const d = DEFAULT_SETTINGS;
+	// Before Focus mode existed (no `version`), 'none' was the default rather than a choice.
+	const radius = r.version === undefined && r.radius === 'none' ? 'auto' : r.radius;
 	return {
+		focusMode: typeof r.focusMode === 'boolean' ? r.focusMode : d.focusMode,
 		accent: pick(ACCENTS, r.accent, d.accent),
-		radius: pick(RADII, r.radius, d.radius),
+		radius: pick(RADII, radius, d.radius),
 		textSize: pick(TEXT_SIZES, r.textSize, d.textSize),
 		reduceMotion: typeof r.reduceMotion === 'boolean' ? r.reduceMotion : d.reduceMotion,
 		canvasHints: typeof r.canvasHints === 'boolean' ? r.canvasHints : d.canvasHints
 	};
 }
 
+/** Stored with the settings so readSettings can tell old defaults from choices. */
+export const SETTINGS_VERSION = 2;
+
 /** The attributes on <html> that app.css keys the preferences on. */
 export function settingsAttributes(s: Settings): Record<string, string | null> {
 	return {
+		'data-focus': s.focusMode ? '' : null,
 		'data-ui-accent': s.accent === 'neutral' ? null : s.accent,
-		'data-radius': s.radius === 'none' ? null : s.radius,
+		'data-radius': s.radius === 'auto' ? null : s.radius,
 		'data-text': s.textSize === 'default' ? null : s.textSize,
 		'data-reduce-motion': s.reduceMotion ? '' : null
 	};

@@ -1,8 +1,14 @@
 <script lang="ts">
+	// Types
 	import type { TextWidget } from '#lib/logic/app-def.js';
+
+	// Utils
 	import { parseMarkdown, type Span } from '#lib/logic/markdown.js';
+
+	// Components
 	import { Separator } from '#lib/components/ui/separator/index.js';
 
+	// Script
 	let { widget }: { widget: TextWidget } = $props();
 
 	const blocks = $derived(parseMarkdown(widget.markdown));

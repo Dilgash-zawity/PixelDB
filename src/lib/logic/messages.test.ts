@@ -14,7 +14,10 @@ describe('humanizeError', () => {
 		);
 	});
 
-	test('other messages pass through', () => {
-		expect(humanizeError('field "Balance": "oops" is not a valid amount')).toBe('field "Balance": "oops" is not a valid amount');
+	test('other messages pass through as a sentence', () => {
+		expect(humanizeError('field "Balance": "oops" is not a valid amount')).toBe('Field "Balance": "oops" is not a valid amount');
+		expect(humanizeError('only queries that read data (SELECT) can be run here')).toBe(
+			'Only queries that read data (SELECT) can be run here'
+		);
 	});
 });

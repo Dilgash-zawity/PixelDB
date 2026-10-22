@@ -1,14 +1,24 @@
 <script lang="ts">
-	import XIcon from '@lucide/svelte/icons/x';
+	// Services
+	import { recordService } from '#lib/services/records.js';
+
+	// Types
 	import type { JsonValue } from '#lib/api/types.js';
+
+	// Utils
+	import { isBlank, type FilterWidget } from '#lib/logic/app-def.js';
+	import { displayValue } from '#lib/logic/values.js';
+	import { appSession } from '#lib/state/app.svelte.js';
+
+	// Components
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import * as Select from '#lib/components/ui/select/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
-	import { isBlank, type FilterWidget } from '#lib/logic/app-def.js';
-	import { displayValue } from '#lib/logic/values.js';
-	import { recordService } from '#lib/services/records.js';
-	import { appSession } from '#lib/state/app.svelte.js';
 
+	// Icons
+	import { X as XIcon } from '@lucide/svelte';
+
+	// Script
 	let { widget }: { widget: FilterWidget } = $props();
 
 	const id = $props.id();

@@ -1,10 +1,12 @@
 <script lang="ts">
+	// Components
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 
+	// Script
 	let {
 		open = $bindable(false),
 		title,
@@ -31,6 +33,7 @@
 	let value = $state('');
 	let touched = $state(false);
 	let busy = $state(false);
+	let input = $state<HTMLInputElement | null>(null);
 
 	// Reset each time the dialog opens.
 	$effect(() => {
@@ -56,7 +59,14 @@
 </script>
 
 <Dialog.Root bind:open>
-	<Dialog.Content class="sm:max-w-md">
+	<!-- Select the suggested name so typing replaces it. -->
+	<Dialog.Content
+		class="sm:max-w-md"
+		onOpenAutoFocus={(e) => {
+			e.preventDefault();
+			input?.select();
+		}}
+	>
 		<form onsubmit={submit} class="flex flex-col gap-6">
 			<Dialog.Header>
 				<Dialog.Title>{title}</Dialog.Title>
@@ -67,6 +77,7 @@
 					<Field.Label for="name-dialog-input">{label}</Field.Label>
 					<Input
 						id="name-dialog-input"
+						bind:ref={input}
 						bind:value
 						{placeholder}
 						autocomplete="off"

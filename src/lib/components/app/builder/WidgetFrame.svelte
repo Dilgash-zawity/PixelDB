@@ -1,18 +1,26 @@
 <script lang="ts">
-	import CopyIcon from '@lucide/svelte/icons/copy';
-	import EllipsisIcon from '@lucide/svelte/icons/ellipsis';
-	import GripVerticalIcon from '@lucide/svelte/icons/grip-vertical';
-	import TrashIcon from '@lucide/svelte/icons/trash-2';
-	import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
-	import * as Alert from '#lib/components/ui/alert/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	// Utils
 	import { widgetLabel, type Widget } from '#lib/logic/app-def.js';
 	import { appSession } from '#lib/state/app.svelte.js';
 	import { cn } from '#lib/utils.js';
+
+	// Components
+	import * as Alert from '#lib/components/ui/alert/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import WidgetTypeIcon from './WidgetTypeIcon.svelte';
 	import WidgetView from './WidgetView.svelte';
 
+	// Icons
+	import {
+		Copy as CopyIcon,
+		Ellipsis as EllipsisIcon,
+		GripVertical as GripVerticalIcon,
+		Trash2 as TrashIcon,
+		TriangleAlert as TriangleAlertIcon,
+	} from '@lucide/svelte';
+
+	// Script
 	let {
 		widget,
 		editing,
@@ -44,7 +52,7 @@
 <div
 	class={cn(
 		'group/widget relative flex h-full min-h-0 flex-col',
-		!bare && 'border bg-card text-card-foreground',
+		!bare && 'rounded-lg border bg-card text-card-foreground vivid:shadow-xs',
 		editing && 'border-dashed',
 		editing && selected && 'border-solid border-ring ring-2 ring-ring/40'
 	)}

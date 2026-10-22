@@ -1,5 +1,5 @@
 import type { FieldDef, FieldType, RecordValues, TableDef } from '../api/types';
-import { addPage, addVariable, newApp, newWidget, type AppDef, type Layout, type Widget, type WidgetType } from './app-def';
+import { addCommand, addPage, addVariable, newApp, newWidget, type AppDef, type Layout, type Widget, type WidgetType } from './app-def';
 
 /**
  * Starter templates: a database (tables, relationships, a few sample
@@ -83,6 +83,7 @@ const contacts: Template = {
 		addVariable(app, 'company', null);
 		const people = app.pages[0];
 		people.title = 'People';
+		people.icon = 'users';
 		const peopleTable = widget('table', { x: 0, y: 2, w: 7, h: 10 }, s, 'People', (w) => {
 			w.columns = ['Name', 'Email', 'Phone', 'Company'];
 			w.sort = { column: 'Name', descending: false };
@@ -98,7 +99,7 @@ const contacts: Template = {
 			peopleTable,
 			personForm
 		);
-		const companies = addPage(app, 'Companies');
+		const companies = addPage(app, 'Companies', 'building');
 		const companyTable = widget('table', { x: 0, y: 0, w: 5, h: 10 }, s, 'Companies', (w) => {
 			w.columns = ['Name', 'City'];
 			w.rowAction = { do: 'set-variable', name: 'company', value: { kind: 'column', column: 'ID' } };
@@ -116,6 +117,8 @@ const contacts: Template = {
 				w.action = { do: 'new-record', widget: staff.id };
 			})
 		);
+		addCommand(app, 'Add person').action = { do: 'new-record', widget: personForm.id };
+		app.commands[0].icon = 'plus';
 		app.accent = 'blue';
 		app.description = 'People and the companies they work for.';
 		return app;
@@ -172,6 +175,7 @@ const shop: Template = {
 		addVariable(app, 'category', null);
 		const dash = app.pages[0];
 		dash.title = 'Dashboard';
+		dash.icon = 'layout-dashboard';
 		dash.widgets.push(
 			widget('stat', { x: 0, y: 0, w: 4, h: 2 }, s, 'Orders', (w) => {
 				w.series = { column: 'Total', agg: 'sum' };
@@ -193,7 +197,7 @@ const shop: Template = {
 				w.groupBy = { column: 'Category', bucket: null };
 			})
 		);
-		const products = addPage(app, 'Products');
+		const products = addPage(app, 'Products', 'package', 'Shop');
 		products.widgets.push(
 			widget('filter', { x: 0, y: 0, w: 3, h: 2 }, null, null, (w) => {
 				w.title = 'Category';
@@ -207,7 +211,7 @@ const shop: Template = {
 				w.sort = { column: 'Name', descending: false };
 			})
 		);
-		const orders = addPage(app, 'Orders');
+		const orders = addPage(app, 'Orders', 'receipt', 'Shop');
 		orders.widgets.push(
 			widget('form', { x: 0, y: 0, w: 4, h: 9 }, s, 'Orders', (w) => {
 				w.title = 'Order';
@@ -218,6 +222,9 @@ const shop: Template = {
 				w.columns = ['Placed', 'Product', 'Quantity', 'Total'];
 			})
 		);
+		const print = addCommand(app, 'Print');
+		print.icon = 'printer';
+		print.action = { do: 'print' };
 		app.accent = 'green';
 		app.description = 'Products, orders and a sales dashboard.';
 		return app;

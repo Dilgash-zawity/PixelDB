@@ -1,15 +1,11 @@
 <script lang="ts">
-	import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
-	import XIcon from '@lucide/svelte/icons/x';
+	// Services
+	import { queryService } from '#lib/services/queries.js';
+
+	// Types
 	import type { Aggregate, AggregateOrder, DateBucket } from '#lib/api/types.js';
-	import * as Alert from '#lib/components/ui/alert/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import * as Field from '#lib/components/ui/field/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import { ScrollArea } from '#lib/components/ui/scroll-area/index.js';
-	import { Separator } from '#lib/components/ui/separator/index.js';
-	import { Switch } from '#lib/components/ui/switch/index.js';
-	import { Textarea } from '#lib/components/ui/textarea/index.js';
+
+	// Utils
 	import {
 		addVariable,
 		findWidget,
@@ -25,6 +21,17 @@
 	} from '#lib/logic/app-def.js';
 	import { AGGREGATE_LABELS } from '#lib/logic/chart-data.js';
 	import { appSession } from '#lib/state/app.svelte.js';
+	import { attempt } from '#lib/state/feedback.svelte.js';
+
+	// Components
+	import * as Alert from '#lib/components/ui/alert/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Field from '#lib/components/ui/field/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { ScrollArea } from '#lib/components/ui/scroll-area/index.js';
+	import { Separator } from '#lib/components/ui/separator/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
+	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import ActionEditor from './ActionEditor.svelte';
 	import BindingPicker from './BindingPicker.svelte';
 	import ColumnPicker from './ColumnPicker.svelte';
@@ -32,6 +39,10 @@
 	import PropSelect from './PropSelect.svelte';
 	import WidgetTypeIcon from './WidgetTypeIcon.svelte';
 
+	// Icons
+	import { TriangleAlert as TriangleAlertIcon, X as XIcon } from '@lucide/svelte';
+
+	// Script
 	let { widget }: { widget: Widget } = $props();
 
 	const uid = $props.id();
@@ -132,6 +143,27 @@
 		...(appSession.def?.variables ?? []).map((v) => ({ value: v.name, label: v.name })),
 		{ value: NEW_VARIABLE, label: 'New variable…' }
 	]);
+
+	// ----- Query widgets -----
+
+	const sourceOptions = $derived((appSession.def?.sources ?? []).map((s) => ({ value: s.alias, label: s.database })));
+	const savedQueries = $derived(
+		widget.type === 'query' && widget.source
+			? (appSession.objects[widget.source] ?? []).filter((o) => o.kind === 'view').map((o) => ({ value: o.name, label: o.name }))
+			: []
+	);
+
+	async function copySavedQuery(name: string) {
+		if (widget.type !== 'query') return;
+		const database = appSession.databaseOf(widget.source);
+		const saved = await attempt(() => queryService.get(name, database));
+		if (!saved) return;
+		edit((x) => {
+			if (x.type !== 'query') return;
+			x.sql = saved.sql;
+			if (!x.title || x.title === 'Query') x.title = name;
+		});
+	}
 
 	/** Creates a variable named after the filter's title and uses it. */
 	function newVariableFor() {
@@ -475,6 +507,74 @@
 				<Field.Set>
 					<Field.Legend variant="label">When clicked</Field.Legend>
 					<ActionEditor action={w.action} context="button" onchange={(next, group) => edit((x) => x.type === 'button' && (x.action = next), group)} />
+				</Field.Set>
+			{:else if widget.type === 'query'}
+				{@const w = widget}
+				<Separator />
+				<Field.Group class="gap-4">
+					<Field.Field>
+						<Field.Label>Database</Field.Label>
+						<PropSelect
+							label="Database"
+							value={w.source}
+							options={sourceOptions}
+							placeholder={sourceOptions.length ? 'Choose a database' : 'Add a database first'}
+							onchange={(v) => edit((x) => x.type === 'query' && (x.source = v))}
+						/>
+					</Field.Field>
+					{#if savedQueries.length}
+						<Field.Field>
+							<Field.Label>Start from a saved query</Field.Label>
+							<PropSelect label="Saved query" value="" options={savedQueries} placeholder="Copy its SQL…" onchange={copySavedQuery} />
+						</Field.Field>
+					{/if}
+					<Field.Field>
+						<Field.Label for="{uid}-sql">SQL</Field.Label>
+						<Textarea
+							id="{uid}-sql"
+							rows={10}
+							class="font-mono text-xs"
+							spellcheck={false}
+							placeholder="SELECT …"
+							value={w.sql}
+							oninput={(e) => {
+								const v = e.currentTarget.value;
+								edit((x) => x.type === 'query' && (x.sql = v), 'sql');
+							}}
+							onblur={() => appSession.seal()}
+						/>
+						<Field.Description>
+							One query that only reads data. Write <code>:name</code> to use an app variable, e.g.
+							<code>WHERE Company = :company</code>; an empty variable is NULL.
+						</Field.Description>
+						{#if appSession.def?.variables.length}
+							<div class="flex flex-wrap gap-1">
+								{#each appSession.def.variables as v (v.name)}
+									<Button
+										size="xs"
+										variant="outline"
+										class="font-mono"
+										onclick={() => edit((x) => x.type === 'query' && (x.sql = `${x.sql}${/\s$/.test(x.sql) || !x.sql ? '' : ' '}:${v.name}`))}
+									>
+										:{v.name}
+									</Button>
+								{/each}
+							</div>
+						{/if}
+					</Field.Field>
+					<Field.Field orientation="horizontal">
+						<Switch id="{uid}-qsearch" checked={w.search} onCheckedChange={(v) => edit((x) => x.type === 'query' && (x.search = v))} />
+						<Field.Label for="{uid}-qsearch" class="font-normal">Search box</Field.Label>
+					</Field.Field>
+				</Field.Group>
+				<Field.Set>
+					<Field.Legend variant="label">When a row is clicked</Field.Legend>
+					<ActionEditor
+						action={w.rowAction}
+						context="query"
+						columns={appSession.queryColumns[w.id] ?? []}
+						onchange={(next, group) => edit((x) => x.type === 'query' && (x.rowAction = next), group)}
+					/>
 				</Field.Set>
 			{:else if widget.type === 'text'}
 				{@const w = widget}
