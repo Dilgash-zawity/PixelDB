@@ -1,4 +1,4 @@
-import { DEFAULT_SETTINGS, SETTINGS_KEY, readSettings, settingsAttributes, type Settings } from '../logic/settings';
+import { DEFAULT_SETTINGS, SETTINGS_KEY, SETTINGS_VERSION, readSettings, settingsAttributes, type Settings } from '../logic/settings';
 
 class SettingsState {
 	current = $state<Settings>(load());
@@ -24,7 +24,7 @@ class SettingsState {
 
 	private persist() {
 		try {
-			localStorage.setItem(SETTINGS_KEY, JSON.stringify(this.current));
+			localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...this.current, version: SETTINGS_VERSION }));
 		} catch {
 			// Unavailable storage just means the choice lasts until restart.
 		}

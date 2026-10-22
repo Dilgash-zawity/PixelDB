@@ -14,7 +14,10 @@
 				var s = JSON.parse(localStorage.getItem('slatedb.settings') || '{}') || {};
 				var el = document.documentElement;
 				if (s.accent && s.accent !== 'neutral') el.setAttribute('data-ui-accent', s.accent);
-				if (s.radius && s.radius !== 'none') el.setAttribute('data-radius', s.radius);
+				if (s.focusMode === true) el.setAttribute('data-focus', '');
+				// Settings without a version predate the 'auto' corners, when 'none' was the default.
+				var r = s.version === undefined && s.radius === 'none' ? 'auto' : s.radius;
+				if (r && r !== 'auto') el.setAttribute('data-radius', r);
 				if (s.textSize && s.textSize !== 'default') el.setAttribute('data-text', s.textSize);
 				if (s.reduceMotion === true) el.setAttribute('data-reduce-motion', '');
 			} catch {}

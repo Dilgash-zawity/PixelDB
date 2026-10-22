@@ -3,6 +3,7 @@
 	import FileTextIcon from '@lucide/svelte/icons/file-text';
 	import FunnelIcon from '@lucide/svelte/icons/funnel';
 	import HashIcon from '@lucide/svelte/icons/hash';
+	import CodeIcon from '@lucide/svelte/icons/code';
 	import MousePointerClickIcon from '@lucide/svelte/icons/mouse-pointer-click';
 	import TableIcon from '@lucide/svelte/icons/table-2';
 	import TypeIcon from '@lucide/svelte/icons/type';
@@ -17,7 +18,8 @@
 		stat: HashIcon,
 		filter: FunnelIcon,
 		button: MousePointerClickIcon,
-		text: TypeIcon
+		text: TypeIcon,
+		query: CodeIcon
 	};
 	const Icon = $derived(icons[type]);
 </script>

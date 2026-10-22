@@ -50,6 +50,8 @@
 	import NameDialog from './NameDialog.svelte';
 	import ConfirmHost from './ConfirmHost.svelte';
 	import FieldDrawer from './FieldDrawer.svelte';
+	import NewTableDrawer from './NewTableDrawer.svelte';
+	import type { WizardField } from '#lib/logic/table-wizard.js';
 	import RelationshipPanel, { type Selection } from './RelationshipPanel.svelte';
 
 	const MIN_ZOOM = 0.25;
@@ -460,8 +462,8 @@
 		tick().then(fit);
 	}
 
-	async function addTable(name: string): Promise<boolean> {
-		if (!(await session.createTable(name, false))) return false;
+	async function addTable(name: string, fields: WizardField[]): Promise<boolean> {
+		if (!(await session.createTable(name, false, fields))) return false;
 		if (newTableAt) layout[name] = newTableAt;
 		await load();
 		selectTable(name);
@@ -703,13 +705,4 @@
 	onSubmit={(v) => (renamingTable ? renameTable(renamingTable, v) : Promise.resolve(true))}
 />
 
-<NameDialog
-	bind:open={addingTable}
-	title="Add table"
-	description="It starts with an automatic ID field, ready to be linked."
-	initial={suggestedTableName()}
-	placeholder="e.g. Customers"
-	submitLabel="Add table"
-	validate={(v) => session.tableNameProblem(v)}
-	onSubmit={addTable}
-/>
+<NewTableDrawer bind:open={addingTable} initial={suggestedTableName()} onCreate={addTable} />
