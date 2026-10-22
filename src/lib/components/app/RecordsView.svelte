@@ -54,7 +54,7 @@
 	import FilterPopover from './FilterPopover.svelte';
 	import NameDialog from './NameDialog.svelte';
 	import FieldDrawer from './FieldDrawer.svelte';
-	import RecordSheet from './RecordSheet.svelte';
+	import RecordDrawer from './RecordDrawer.svelte';
 
 	let { table, isView }: { table: string; isView: boolean } = $props();
 
@@ -495,7 +495,7 @@
 				<Button variant="outline" size="sm" onclick={newRecord}><PlusIcon data-icon="inline-start" /> New</Button>
 				<Button variant="outline" size="sm" disabled={!dirty || saving} onclick={commitRow}><SaveIcon data-icon="inline-start" /> Save</Button>
 				<Button
-					variant="outline"
+					variant="destructive"
 					size="sm"
 					disabled={!selectedKeys.length && typeof current !== 'number'}
 					onclick={() => deleteRecords()}
@@ -563,7 +563,7 @@
 												<DropdownMenu.Trigger>
 													{#snippet child({ props })}
 														<Button {...props} variant="ghost" size="sm" class="-ms-2">
-															{#if f?.primary_key}<KeyRoundIcon data-icon="inline-start" />{:else if f}<FieldTypeIcon type={f.field_type.type} data-icon="inline-start" />{/if}
+															{#if f?.primary_key}<KeyRoundIcon data-icon="inline-start" class="text-warning" />{:else if f}<FieldTypeIcon type={f.field_type.type} data-icon="inline-start" />{/if}
 															{col}
 															{#if sort?.column === col}
 																{#if sort.descending}<ArrowDownIcon data-icon="inline-end" />{:else}<ArrowUpIcon data-icon="inline-end" />{/if}
@@ -782,7 +782,7 @@
 				<Kbd>Shift</Kbd><Kbd>Enter</Kbd> save · <Kbd>Esc</Kbd> undo
 			</span>
 		{:else if isView}
-			<Badge variant="secondary">Read-only</Badge>
+			<Badge variant="outline" class="border-warning/40 bg-warning/10 text-warning">Read-only</Badge>
 		{/if}
 	</div>
 </div>
@@ -813,7 +813,7 @@
 
 {#if def && !isView}
 	<FieldDrawer bind:open={fieldDrawer.open} {table} field={fieldDrawer.field} onSaved={load} />
-	<RecordSheet bind:open={sheetOpen} {table} {def} columns={columns} row={sheetRow} {lookups} onSaved={load} />
+	<RecordDrawer bind:open={sheetOpen} {table} {def} columns={columns} row={sheetRow} {lookups} onSaved={load} />
 {/if}
 
 <NameDialog

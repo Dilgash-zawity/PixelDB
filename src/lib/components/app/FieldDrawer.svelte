@@ -140,9 +140,9 @@
 				{:else}
 					<div class="flex flex-col gap-5">
 						{#if blocked}
-							<Alert.Root>
+							<Alert.Root class="border-warning/40 bg-warning/10 *:[svg]:text-warning">
 								<TriangleAlertIcon />
-								<Alert.Title>Read-only</Alert.Title>
+								<Alert.Title class="text-warning">Read-only</Alert.Title>
 								<Alert.Description>{blocked}</Alert.Description>
 							</Alert.Root>
 						{/if}
@@ -175,7 +175,7 @@
 					{field === null ? 'Add field' : 'Save'}
 				</Button>
 				{#if field !== null && edit && !edit.primary_key}
-					<Button type="button" variant="outline" disabled={busy || !!blocked} onclick={remove}>
+					<Button type="button" variant="destructive" disabled={busy || !!blocked} onclick={remove}>
 						<TrashIcon data-icon="inline-start" /> Delete
 					</Button>
 				{/if}

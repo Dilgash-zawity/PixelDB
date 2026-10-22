@@ -134,7 +134,7 @@
 			>
 				<span class="flex w-4 shrink-0 justify-center">
 					{#if f.primary_key}
-						<KeyRoundIcon class="size-3.5 text-foreground" aria-label="Primary key" />
+						<KeyRoundIcon class="size-3.5 text-warning" aria-label="Primary key" />
 					{:else if linked.has(f.name.toLowerCase())}
 						<LinkIcon class="size-3.5 text-muted-foreground" aria-label="Links to another table" />
 					{/if}

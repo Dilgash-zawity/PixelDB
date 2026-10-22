@@ -5,13 +5,15 @@
 	import LinkIcon from '@lucide/svelte/icons/link';
 	import MaximizeIcon from '@lucide/svelte/icons/maximize';
 	import MinusIcon from '@lucide/svelte/icons/minus';
+	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import PlusIcon from '@lucide/svelte/icons/plus';
+	import Rows3Icon from '@lucide/svelte/icons/rows-3';
 	import Table2Icon from '@lucide/svelte/icons/table-2';
+	import TrashIcon from '@lucide/svelte/icons/trash-2';
 	import type { DiagramLayout, FkAction, TableDef, TableInfo } from '#lib/api/types.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import * as ButtonGroup from '#lib/components/ui/button-group/index.js';
+	import * as ContextMenu from '#lib/components/ui/context-menu/index.js';
 	import * as Drawer from '#lib/components/ui/drawer/index.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import { Kbd } from '#lib/components/ui/kbd/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
@@ -71,6 +73,19 @@
 	let dropTarget = $state<{ table: string; field: string | null } | null>(null);
 	let viewport = $state<HTMLDivElement | null>(null);
 	let addingTable = $state(false);
+	/** Where a table added from the right-click menu goes; null lets it be placed automatically. */
+	let newTableAt = $state<Point | null>(null);
+	/** What was right-clicked, and where (in diagram coordinates). */
+	type MenuTarget =
+		| { kind: 'canvas' }
+		| { kind: 'table'; name: string }
+		| { kind: 'field'; table: string; field: string }
+		| { kind: 'relationship'; id: string };
+	let menu = $state<{ target: MenuTarget; at: Point }>({ target: { kind: 'canvas' }, at: { x: 0, y: 0 } });
+	const menuRel = $derived.by(() => {
+		const t = menu.target;
+		return t.kind === 'relationship' ? rels.find((r) => r.id === t.id) : undefined;
+	});
 
 	const rels = $derived(relationshipsOf(defs));
 	const byName = $derived(new Map(defs.map((d) => [d.name, d])));
@@ -446,6 +461,7 @@
 
 	async function addTable(name: string): Promise<boolean> {
 		if (!(await session.createTable(name, false))) return false;
+		if (newTableAt) layout[name] = newTableAt;
 		await load();
 		selectTable(name);
 		saveLayoutSoon();
@@ -456,6 +472,23 @@
 		let n = 1;
 		while (session.objects.some((o) => o.name.toLowerCase() === `table ${n}`)) n++;
 		return `Table ${n}`;
+	}
+
+	function openAddTable(at: Point | null = null) {
+		newTableAt = at;
+		addingTable = true;
+	}
+
+	function onContextMenu(e: MouseEvent) {
+		const el = e.target as Element;
+		const row = el.closest<HTMLElement>('[data-row]');
+		const card = el.closest<HTMLElement>('[data-card]');
+		const edge = el.closest<SVGElement>('[data-rel]');
+		const at = toWorld(e.clientX, e.clientY);
+		if (row?.dataset.table && row.dataset.field) menu = { target: { kind: 'field', table: row.dataset.table, field: row.dataset.field }, at };
+		else if (card?.dataset.card) menu = { target: { kind: 'table', name: card.dataset.card }, at };
+		else if (edge?.dataset.rel) menu = { target: { kind: 'relationship', id: edge.dataset.rel }, at };
+		else menu = { target: { kind: 'canvas' }, at: { x: Math.round(at.x), y: Math.round(at.y) } };
 	}
 
 	function onKey(e: KeyboardEvent) {
@@ -481,52 +514,20 @@
 <svelte:window onkeydown={onKey} />
 
 <div class="flex h-full min-h-0 flex-col">
-		<div class="flex flex-wrap items-center gap-2 border-b px-4 py-2">
-			<Button size="sm" onclick={() => startLink()} disabled={!defs.length}>
-				<LinkIcon data-icon="inline-start" /> Link tables
-			</Button>
-			<Button size="sm" variant="outline" onclick={() => (addingTable = true)}>
-				<PlusIcon data-icon="inline-start" /> Add table
-			</Button>
-			<Button size="sm" variant="outline" onclick={arrange} disabled={!defs.length}>
-				<LayoutGridIcon data-icon="inline-start" /> Tidy up
-			</Button>
-			<span class="flex-1"></span>
-			<ButtonGroup.Root>
-				<Button size="icon-sm" variant="outline" aria-label="Zoom out" onclick={() => zoomTo(zoom / 1.2)}><MinusIcon /></Button>
-				<DropdownMenu.Root>
-					<DropdownMenu.Trigger>
-						{#snippet child({ props })}
-							<Button {...props} size="sm" variant="outline" class="w-16 tabular-nums">{Math.round(zoom * 100)}%</Button>
-						{/snippet}
-					</DropdownMenu.Trigger>
-					<DropdownMenu.Content align="end">
-						<DropdownMenu.Group>
-							{#each [0.5, 0.75, 1, 1.25, 1.5] as z (z)}
-								<DropdownMenu.Item onclick={() => zoomTo(z)}>{z * 100}%</DropdownMenu.Item>
-							{/each}
-						</DropdownMenu.Group>
-						<DropdownMenu.Separator />
-						<DropdownMenu.Group>
-							<DropdownMenu.Item onclick={fit}><MaximizeIcon /> Fit to screen</DropdownMenu.Item>
-						</DropdownMenu.Group>
-					</DropdownMenu.Content>
-				</DropdownMenu.Root>
-				<Button size="icon-sm" variant="outline" aria-label="Zoom in" onclick={() => zoomTo(zoom * 1.2)}><PlusIcon /></Button>
-			</ButtonGroup.Root>
-		</div>
-
+		<ContextMenu.Root>
+		<ContextMenu.Trigger oncontextmenu={onContextMenu} onpointerdown={startPan} disabled={loading}>
+		{#snippet child({ props })}
 		<div
+			{...props}
 			bind:this={viewport}
 			{@attach wheel}
 			role="application"
 			aria-label="Relationships diagram"
-			class="relative min-h-0 flex-1 overflow-hidden bg-muted/40"
+			class="relative min-h-0 flex-1 overflow-hidden bg-muted/40 select-none"
 			class:cursor-crosshair={!!connecting}
 			style:background-image="radial-gradient(var(--border) 1px, transparent 1px)"
 			style:background-size="{20 * zoom}px {20 * zoom}px"
 			style:background-position="{pan.x}px {pan.y}px"
-			onpointerdown={startPan}
 		>
 			{#if loading}
 				<div class="flex gap-10 p-12">
@@ -540,7 +541,7 @@
 						<Empty.Description>Add a couple of tables, like Customers and Orders, then connect them here.</Empty.Description>
 					</Empty.Header>
 					<Empty.Content>
-						<Button onclick={() => (addingTable = true)}><PlusIcon data-icon="inline-start" /> Add table</Button>
+						<Button onclick={() => openAddTable()}><PlusIcon data-icon="inline-start" /> Add table</Button>
 					</Empty.Content>
 				</Empty.Root>
 			{:else}
@@ -552,6 +553,7 @@
 								<!-- Wide invisible stroke so the line is easy to click. -->
 								<path
 									role="presentation"
+									data-rel={rel.id}
 									d={route.path}
 									fill="none"
 									stroke="transparent"
@@ -601,34 +603,83 @@
 				</div>
 				<p class="pointer-events-none absolute bottom-3 left-4 flex items-center gap-1.5 text-xs text-muted-foreground">
 					Drag a field's <span class="inline-block size-2.5 rounded-full border-2 border-primary"></span> onto another table to link ·
-					<Kbd>⌘</Kbd> + scroll to zoom
+					<Kbd>⌘</Kbd> + scroll to zoom · Right-click to add tables and more
 				</p>
 			{/if}
 		</div>
+		{/snippet}
+		</ContextMenu.Trigger>
+		<ContextMenu.Content class="w-56">
+			{#if menu.target.kind === 'canvas'}
+				{@const at = menu.at}
+				<ContextMenu.Group>
+					<ContextMenu.Item onclick={() => openAddTable(at)}><PlusIcon /> New table…</ContextMenu.Item>
+					<ContextMenu.Item disabled={!defs.length} onclick={() => startLink()}><LinkIcon /> Link tables…</ContextMenu.Item>
+				</ContextMenu.Group>
+				<ContextMenu.Separator />
+				<ContextMenu.Group>
+					<ContextMenu.Item disabled={!defs.length} onclick={arrange}><LayoutGridIcon /> Tidy up</ContextMenu.Item>
+					<ContextMenu.Item disabled={!defs.length} onclick={fit}><MaximizeIcon /> Fit to screen</ContextMenu.Item>
+					<ContextMenu.Item disabled={!defs.length} onclick={() => zoomTo(zoom * 1.2)}><PlusIcon /> Zoom in</ContextMenu.Item>
+					<ContextMenu.Item disabled={!defs.length} onclick={() => zoomTo(zoom / 1.2)}><MinusIcon /> Zoom out</ContextMenu.Item>
+				</ContextMenu.Group>
+			{:else if menu.target.kind === 'relationship'}
+				{@const rel = menuRel}
+				<ContextMenu.Group>
+					<ContextMenu.Item disabled={!rel} onclick={() => rel && selectRelationship(rel.id)}><PencilIcon /> Edit relationship…</ContextMenu.Item>
+				</ContextMenu.Group>
+				<ContextMenu.Separator />
+				<ContextMenu.Group>
+					<ContextMenu.Item variant="destructive" disabled={!rel} onclick={() => rel && remove(rel)}><TrashIcon /> Remove relationship</ContextMenu.Item>
+				</ContextMenu.Group>
+			{:else}
+				{@const t = menu.target}
+				{@const table = t.kind === 'field' ? t.table : t.name}
+				{#if t.kind === 'field'}
+					<ContextMenu.Group>
+						<ContextMenu.Item onclick={() => openField(table, t.field)}><PencilIcon /> Edit “{t.field}”…</ContextMenu.Item>
+					</ContextMenu.Group>
+					<ContextMenu.Separator />
+				{/if}
+				<ContextMenu.Group>
+					<ContextMenu.Item onclick={() => session.select(table)}><Rows3Icon /> Open datasheet</ContextMenu.Item>
+					<ContextMenu.Item onclick={() => openField(table, null)}><PlusIcon /> Add field…</ContextMenu.Item>
+					<ContextMenu.Item onclick={() => startLink(table)}><LinkIcon /> Link to another table…</ContextMenu.Item>
+					<ContextMenu.Item onclick={() => (renamingTable = table)}><PencilIcon /> Rename table…</ContextMenu.Item>
+				</ContextMenu.Group>
+				<ContextMenu.Separator />
+				<ContextMenu.Group>
+					<ContextMenu.Item variant="destructive" onclick={() => deleteTable(table)}><TrashIcon /> Delete table</ContextMenu.Item>
+				</ContextMenu.Group>
+			{/if}
+		</ContextMenu.Content>
+		</ContextMenu.Root>
 </div>
 
 <Drawer.Root direction="right" bind:open={() => selection !== null, (open) => !open && (selection = null)}>
 	<Drawer.Content>
-		<Drawer.Header class="sr-only">
-			<Drawer.Title>{selection?.kind === 'table' ? selection.name : 'Relationship'}</Drawer.Title>
-			<Drawer.Description>Details of the selected item on the diagram</Drawer.Description>
-		</Drawer.Header>
-		<RelationshipPanel
-			{defs}
-			{infos}
-			{rels}
-			{selection}
-			bind:draft
-			{busy}
-			onSelect={(s) => (s?.kind === 'field' ? openField(s.table, s.field) : (selection = s))}
-			onCreate={create}
-			onUpdate={update}
-			onDelete={remove}
-			onOpen={(table) => session.select(table)}
-			onStartLink={startLink}
-			onRenameTable={(t) => (renamingTable = t)}
-			onDeleteTable={deleteTable}
-		/>
+		<div class="flex min-h-0 flex-1 flex-col">
+			<Drawer.Header class="sr-only">
+				<Drawer.Title>{selection?.kind === 'table' ? selection.name : 'Relationship'}</Drawer.Title>
+				<Drawer.Description>Details of the selected item on the diagram</Drawer.Description>
+			</Drawer.Header>
+			<RelationshipPanel
+				{defs}
+				{infos}
+				{rels}
+				{selection}
+				bind:draft
+				{busy}
+				onSelect={(s) => (s?.kind === 'field' ? openField(s.table, s.field) : (selection = s))}
+				onCreate={create}
+				onUpdate={update}
+				onDelete={remove}
+				onOpen={(table) => session.select(table)}
+				onStartLink={startLink}
+				onRenameTable={(t) => (renamingTable = t)}
+				onDeleteTable={deleteTable}
+			/>
+		</div>
 		<ConfirmHost scope={SCOPE} />
 	</Drawer.Content>
 </Drawer.Root>

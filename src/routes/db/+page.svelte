@@ -136,7 +136,7 @@
 						{/if}
 					</Select.Content>
 				</Select.Root>
-				{#if session.isView(session.table)}<Badge variant="secondary">Read-only view</Badge>{/if}
+				{#if session.isView(session.table)}<Badge variant="outline" class="border-warning/40 bg-warning/10 text-warning">Read-only view</Badge>{/if}
 			{/if}
 
 			<span class="flex-1"></span>

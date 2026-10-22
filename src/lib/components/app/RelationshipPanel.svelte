@@ -292,9 +292,9 @@
 							{/if}
 						{/if}
 						{#if mismatch || replaces}
-							<Alert.Root>
+							<Alert.Root class="border-warning/40 bg-warning/10 *:[svg]:text-warning">
 								<TriangleAlertIcon />
-								<Alert.Title>Check before linking</Alert.Title>
+								<Alert.Title class="text-warning">Check before linking</Alert.Title>
 								<Alert.Description>
 									{#if mismatch}<p>{mismatch}</p>{/if}
 									{#if replaces}<p>“{replaces.childColumns[0]}” already links to {replaces.parent}; this replaces that link.</p>{/if}
@@ -339,9 +339,9 @@
 							{@render integrity(edit.onUpdate, edit.onDelete, (v) => edit && (edit.onUpdate = v), (v) => edit && (edit.onDelete = v), rel.parent)}
 						{/if}
 						{#if blocked}
-							<Alert.Root>
+							<Alert.Root class="border-warning/40 bg-warning/10 *:[svg]:text-warning">
 								<TriangleAlertIcon />
-								<Alert.Title>Read-only</Alert.Title>
+								<Alert.Title class="text-warning">Read-only</Alert.Title>
 								<Alert.Description>{blocked}</Alert.Description>
 							</Alert.Root>
 						{/if}
@@ -350,7 +350,7 @@
 								{#if busy}<Spinner data-icon="inline-start" />{/if}
 								Save
 							</Button>
-							<Button variant="outline" disabled={busy || !!blocked} onclick={() => onDelete(rel)}>
+							<Button variant="destructive" disabled={busy || !!blocked} onclick={() => onDelete(rel)}>
 								<TrashIcon data-icon="inline-start" /> Unlink
 							</Button>
 						</div>
@@ -374,7 +374,7 @@
 						<div class="flex gap-2">
 							<Button variant="outline" size="sm" class="flex-1" onclick={() => onOpen(table.name)}><Rows3Icon data-icon="inline-start" /> Open datasheet</Button>
 							<Button variant="outline" size="icon-sm" aria-label={`Rename ${table.name}`} onclick={() => onRenameTable(table.name)}><PencilIcon /></Button>
-							<Button variant="outline" size="icon-sm" aria-label={`Delete ${table.name}`} onclick={() => onDeleteTable(table.name)}><TrashIcon /></Button>
+							<Button variant="destructive" size="icon-sm" aria-label={`Delete ${table.name}`} onclick={() => onDeleteTable(table.name)}><TrashIcon /></Button>
 						</div>
 						<Field.Set>
 							<Field.Legend variant="label">Fields</Field.Legend>
@@ -382,7 +382,7 @@
 								{#each table.fields as f (f.name)}
 									<li class="border-b last:border-b-0">
 										<button type="button" class="flex w-full items-center gap-2 px-3 py-1.5 text-start hover:bg-accent" onclick={() => onSelect({ kind: 'field', table: table.name, field: f.name })}>
-											<span class="flex w-4 justify-center">{#if f.primary_key}<KeyRoundIcon class="size-3.5 text-foreground" />{/if}</span>
+											<span class="flex w-4 justify-center">{#if f.primary_key}<KeyRoundIcon class="size-3.5 text-warning" />{/if}</span>
 											<span class="truncate">{f.name}</span>
 											<span class="ms-auto shrink-0 text-xs text-muted-foreground">{fieldTypeLabel(f.field_type)}</span>
 										</button>
