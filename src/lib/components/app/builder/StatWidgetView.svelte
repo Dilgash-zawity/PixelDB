@@ -49,7 +49,7 @@
 	{:else if !result}
 		<Skeleton class="h-9 w-32" />
 	{:else}
-		<span class="truncate text-3xl font-semibold tracking-tight tabular-nums vivid:text-(--app-accent)">
+		<span class="truncate text-3xl font-semibold tracking-tight tabular-nums">
 			{formatTotal(result.rows[0]?.[0] ?? null, result.types[0] ?? null)}
 		</span>
 		<span class="truncate text-sm text-muted-foreground">{widget.caption || widget.title || seriesLabel(widget.series)}</span>

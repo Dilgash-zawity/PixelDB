@@ -577,18 +577,6 @@ fn queries_read_only_and_save_as_views() {
     }
     assert_eq!(all_rows(&db, "Customers").rows.len(), 2);
 
-    // Named parameters are bound from the map; missing ones are NULL.
-    let params = json!({"who": "Bob"}).as_object().unwrap().clone();
-    let r = queries::run_query_with(&db.conn, "SELECT name FROM Customers WHERE name = :who", &params).unwrap();
-    assert_eq!(r.rows, vec![vec![json!("Bob")]]);
-    let r = queries::run_query_with(
-        &db.conn,
-        "SELECT name FROM Customers WHERE :missing IS NULL OR name = :missing ORDER BY name",
-        &params,
-    )
-    .unwrap();
-    assert_eq!(r.rows.len(), 2);
-
     queries::save_view(&db.conn, "Names", "SELECT name FROM Customers", None, false).unwrap();
     assert_eq!(queries::view_sql(&db.conn, "Names").unwrap(), "SELECT name FROM Customers");
     assert!(matches!(

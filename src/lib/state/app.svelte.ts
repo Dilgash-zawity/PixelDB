@@ -1,9 +1,7 @@
 import { toast } from 'svelte-sonner';
 import type { FieldType, JsonValue, ObjectSummary, TableDef } from '../api/types';
 import {
-	commandProblems,
 	defaultSize,
-	findCommand,
 	findPage,
 	findWidget,
 	newWidget,
@@ -14,7 +12,6 @@ import {
 	sourceOf,
 	widgetProblems,
 	type Action,
-	type AppCommand,
 	type AppDef,
 	type SchemaLookup,
 	type Binding,
@@ -47,15 +44,6 @@ export interface ObjectSchema {
 }
 
 const SAVE_DELAY_MS = 500;
-const SIDEBAR_KEY = 'slatedb.appSidebar';
-
-function loadCollapsed(): boolean {
-	try {
-		return localStorage.getItem(SIDEBAR_KEY) === 'collapsed';
-	} catch {
-		return false;
-	}
-}
 const schemaKey = (alias: string, table: string) => `${alias}\u0000${table}`;
 
 /** The app open on the app page: its definition, edits and run-time state. */
@@ -65,14 +53,8 @@ class AppSession {
 	loadError = $state<string | null>(null);
 	mode = $state<AppMode>('run');
 	pageId = $state('');
-	/** Widget or sidebar command selected in Edit mode. */
+	/** Widget selected in Edit mode. */
 	selected = $state<string | null>(null);
-	/** Tab of the Edit-mode panel shown while nothing is selected. */
-	builderTab = $state<'add' | 'page' | 'data' | 'style'>('add');
-	/** The page sidebar shows icons only. */
-	sidebarCollapsed = $state(loadCollapsed());
-	/** Columns of each query widget's latest result, for its properties. */
-	queryColumns = $state<Record<string, string[]>>({});
 	/** Current values of the app's variables (Run mode). */
 	vars = $state<Variables>({});
 	/** Bumped to make every data widget reload. */
@@ -95,16 +77,6 @@ class AppSession {
 
 	page = $derived(this.def ? (findPage(this.def, this.pageId) ?? this.def.pages[0]) : null);
 	selectedWidget = $derived(this.def && this.selected ? (findWidget(this.def, this.selected)?.widget ?? null) : null);
-	selectedCommand = $derived(this.def && this.selected ? (findCommand(this.def, this.selected) ?? null) : null);
-
-	toggleSidebar() {
-		this.sidebarCollapsed = !this.sidebarCollapsed;
-		try {
-			localStorage.setItem(SIDEBAR_KEY, this.sidebarCollapsed ? 'collapsed' : 'open');
-		} catch {
-			// Only a convenience.
-		}
-	}
 
 	/** What is known about the databases, for checking bindings. */
 	get schema(): SchemaLookup {
@@ -121,7 +93,6 @@ class AppSession {
 		this.def = null;
 		this.loadError = null;
 		this.selected = null;
-		this.queryColumns = {};
 		this.objects = {};
 		this.schemas = {};
 		this.pendingSchema.clear();
@@ -228,10 +199,6 @@ class AppSession {
 		return this.def ? widgetProblems(this.def, w, this.schema) : [];
 	}
 
-	commandProblems(c: AppCommand): string[] {
-		return this.def ? commandProblems(this.def, c) : [];
-	}
-
 	// ----- Editing -----
 
 	/**
@@ -248,7 +215,7 @@ class AppSession {
 
 	/** A starting table for a new data widget: the first table of the first database. */
 	private firstBinding(type: WidgetType): Binding | null {
-		if (!this.def || !['table', 'form', 'chart', 'stat', 'query'].includes(type)) return null;
+		if (!this.def || !['table', 'form', 'chart', 'stat'].includes(type)) return null;
 		for (const s of this.def.sources) {
 			const t = (this.objects[s.alias] ?? []).find((o) => o.kind === 'table');
 			if (t) return { source: s.alias, table: t.name };
@@ -300,7 +267,7 @@ class AppSession {
 	private restore(def: AppDef) {
 		this.def = def;
 		if (!findPage(def, this.pageId)) this.pageId = def.pages[0].id;
-		if (this.selected && !findWidget(def, this.selected) && !findCommand(def, this.selected)) this.selected = null;
+		if (this.selected && !findWidget(def, this.selected)) this.selected = null;
 		for (const v of def.variables) if (!(v.name in this.vars)) this.vars[v.name] = v.default;
 		this.syncHistory();
 		this.scheduleSave();

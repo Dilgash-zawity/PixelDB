@@ -9,7 +9,6 @@ import {
 	type QueryDraft,
 	type VisualQuery
 } from '../logic/query-builder';
-import { wizardTable, type WizardField } from '../logic/table-wizard';
 import { identifierProblem } from '../logic/values';
 import { databaseService } from '../services/database';
 import { tableService } from '../services/tables';
@@ -132,9 +131,14 @@ class Session {
 		);
 	}
 
-	/** Creates a table with an automatic ID plus `fields` and, unless `open` is false, opens it. */
-	async createTable(name: string, open = true, fields: WizardField[] = []): Promise<boolean> {
-		const created = await attempt(() => tableService.create(wizardTable(name, fields)));
+	/** Creates a table with an automatic ID and, unless `open` is false, opens it. */
+	async createTable(name: string, open = true): Promise<boolean> {
+		const created = await attempt(() =>
+			tableService.create({
+				name,
+				fields: [{ name: 'ID', field_type: { type: 'auto_number' }, primary_key: true }]
+			})
+		);
 		if (!created) return false;
 		await this.refresh();
 		if (!open) {
@@ -143,7 +147,7 @@ class Session {
 		}
 		await this.select(created.definition.name);
 		toast.success(`Created “${created.definition.name}”`, {
-			description: fields.length ? undefined : 'Use “Click to Add” to add fields.'
+			description: 'Use “Click to Add” to add fields.'
 		});
 		return true;
 	}

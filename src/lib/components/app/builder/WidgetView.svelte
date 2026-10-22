@@ -4,7 +4,6 @@
 	import ChartWidgetView from './ChartWidgetView.svelte';
 	import FilterWidgetView from './FilterWidgetView.svelte';
 	import FormWidgetView from './FormWidgetView.svelte';
-	import QueryWidgetView from './QueryWidgetView.svelte';
 	import StatWidgetView from './StatWidgetView.svelte';
 	import TableWidgetView from './TableWidgetView.svelte';
 	import TextWidgetView from './TextWidgetView.svelte';
@@ -22,8 +21,6 @@
 	<StatWidgetView {widget} />
 {:else if widget.type === 'filter'}
 	<FilterWidgetView {widget} />
-{:else if widget.type === 'query'}
-	<QueryWidgetView {widget} {editing} />
 {:else if widget.type === 'button'}
 	<ButtonWidgetView {widget} {editing} />
 {:else}

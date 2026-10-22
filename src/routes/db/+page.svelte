@@ -15,7 +15,6 @@
 	import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
 	import CommandPalette from '#lib/components/app/CommandPalette.svelte';
 	import Logo from '#lib/components/app/Logo.svelte';
-	import NewTableDrawer from '#lib/components/app/NewTableDrawer.svelte';
 	import NameDialog from '#lib/components/app/NameDialog.svelte';
 	import QueryView from '#lib/components/app/QueryView.svelte';
 	import RecordsView from '#lib/components/app/RecordsView.svelte';
@@ -91,7 +90,7 @@
 	</Empty.Root>
 {:else}
 	<div class="flex h-svh flex-col">
-		<header class="app-header flex h-12 shrink-0 items-center gap-2 border-b px-3">
+		<header class="flex h-12 shrink-0 items-center gap-2 border-b px-3">
 			<DropdownMenu.Root onOpenChange={(open) => open && workspace.refresh()}>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
@@ -126,9 +125,9 @@
 
 			<Tabs.Root bind:value={() => session.tab, (v) => session.showTab(v as Tab)}>
 				<Tabs.List>
-					<Tabs.Trigger value="diagram"><NetworkIcon class="vivid:text-tone-violet" /> Diagram</Tabs.Trigger>
-					<Tabs.Trigger value="datasheet"><TableIcon class="vivid:text-tone-blue" /> Datasheet</Tabs.Trigger>
-					<Tabs.Trigger value="query"><SearchCodeIcon class="vivid:text-tone-amber" /> Query</Tabs.Trigger>
+					<Tabs.Trigger value="diagram"><NetworkIcon /> Diagram</Tabs.Trigger>
+					<Tabs.Trigger value="datasheet"><TableIcon /> Datasheet</Tabs.Trigger>
+					<Tabs.Trigger value="query"><SearchCodeIcon /> Query</Tabs.Trigger>
 				</Tabs.List>
 			</Tabs.Root>
 
@@ -204,4 +203,13 @@
 	}}
 />
 
-<NewTableDrawer bind:open={creatingTable} initial={suggestedTableName()} onCreate={(t, fields) => session.createTable(t, true, fields)} />
+<NameDialog
+	bind:open={creatingTable}
+	title="New table"
+	description="It starts with an automatic ID field."
+	initial={suggestedTableName()}
+	placeholder="e.g. Customers"
+	submitLabel="Create table"
+	validate={(v) => session.tableNameProblem(v)}
+	onSubmit={(t) => session.createTable(t)}
+/>

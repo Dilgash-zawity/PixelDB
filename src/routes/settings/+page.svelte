@@ -5,7 +5,6 @@
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import DatabaseIcon from '@lucide/svelte/icons/database';
-	import FocusIcon from '@lucide/svelte/icons/focus';
 	import FolderOpenIcon from '@lucide/svelte/icons/folder-open';
 	import InfoIcon from '@lucide/svelte/icons/info';
 	import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
@@ -38,10 +37,10 @@
 	if (!workspace.loaded) workspace.load();
 
 	const SECTIONS = [
-		{ id: 'workspace', label: 'Workspace', icon: FolderOpenIcon, tone: 'vivid:text-tone-blue' },
-		{ id: 'appearance', label: 'Appearance', icon: PaletteIcon, tone: 'vivid:text-tone-pink' },
-		{ id: 'behaviour', label: 'Behaviour', icon: SlidersHorizontalIcon, tone: 'vivid:text-tone-green' },
-		{ id: 'about', label: 'About', icon: InfoIcon, tone: 'vivid:text-tone-amber' }
+		{ id: 'workspace', label: 'Workspace', icon: FolderOpenIcon },
+		{ id: 'appearance', label: 'Appearance', icon: PaletteIcon },
+		{ id: 'behaviour', label: 'Behaviour', icon: SlidersHorizontalIcon },
+		{ id: 'about', label: 'About', icon: InfoIcon }
 	];
 	let active = $state('workspace');
 
@@ -55,16 +54,16 @@
 		else setMode(value);
 	}
 
-	const SWATCH = $derived<Record<Settings['accent'], string>>({
-		neutral: settings.current.focusMode ? 'var(--foreground)' : 'oklch(0.53 0.17 260)',
+	const SWATCH: Record<Settings['accent'], string> = {
+		neutral: 'var(--foreground)',
 		blue: 'oklch(0.55 0.2 255)',
 		green: 'oklch(0.56 0.15 150)',
 		amber: 'oklch(0.75 0.16 75)',
 		red: 'oklch(0.58 0.22 25)',
 		violet: 'oklch(0.55 0.22 295)'
-	});
-	const RADIUS_PX = $derived<Record<Settings['radius'], string>>({ auto: settings.current.focusMode ? '0' : '8px', none: '0', small: '6px', medium: '10px', large: '14px' });
-	const label = (v: string) => (v === 'neutral' ? 'Default' : v[0].toUpperCase() + v.slice(1));
+	};
+	const RADIUS_PX: Record<Settings['radius'], string> = { none: '0', small: '6px', medium: '10px', large: '14px' };
+	const label = (v: string) => v[0].toUpperCase() + v.slice(1);
 
 	async function resetLayout() {
 		if (!workspace.info) return;
@@ -79,7 +78,7 @@
 	async function resetAll() {
 		const ok = await confirm({
 			title: 'Reset all settings?',
-			description: 'Focus mode, accent color, corners, text size and behaviour go back to their defaults. Your folder, databases and apps are not affected.',
+			description: 'Accent color, corners, text size and behaviour go back to their defaults. Your folder, databases and apps are not affected.',
 			action: 'Reset settings',
 			destructive: true
 		});
@@ -118,7 +117,7 @@
 {/snippet}
 
 <div class="flex h-svh flex-col">
-	<header class="app-header flex h-12 shrink-0 items-center gap-2 border-b bg-sidebar px-3">
+	<header class="flex h-12 shrink-0 items-center gap-2 border-b bg-sidebar px-3">
 		<Button variant="ghost" size="sm" onclick={() => history.back()}>
 			<ArrowLeftIcon data-icon="inline-start" /> Back
 		</Button>
@@ -135,7 +134,7 @@
 					aria-current={active === s.id ? 'true' : undefined}
 					onclick={() => jump(s.id)}
 				>
-					<s.icon data-icon="inline-start" class={s.tone} />
+					<s.icon data-icon="inline-start" />
 					{s.label}
 				</Button>
 			{/each}
@@ -148,7 +147,7 @@
 					{@render sectionHeading('Workspace', 'The folder on this computer where your databases and apps live.')}
 					<div class="flex flex-col gap-4 border bg-card p-4">
 						<div class="flex flex-wrap items-center gap-3">
-							<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground vivid:bg-tone-blue/15 vivid:text-tone-blue">
+							<span class="flex size-10 shrink-0 items-center justify-center bg-muted text-muted-foreground">
 								<FolderOpenIcon class="size-5" />
 							</span>
 							<div class="flex min-w-0 flex-1 flex-col gap-0.5">
@@ -187,19 +186,6 @@
 				<section id="appearance" class="flex scroll-mt-6 flex-col gap-6">
 					{@render sectionHeading('Appearance', 'Make SlateDB look the way you like. Changes apply straight away.')}
 					<Field.Group>
-						<Field.Field orientation="horizontal" class="rounded-lg border bg-card p-4">
-							<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground vivid:bg-primary/10 vivid:text-primary">
-								<FocusIcon class="size-5" />
-							</span>
-							<Field.Content>
-								<Field.Label for="focus-mode">Focus mode</Field.Label>
-								<Field.Description>A calm grey look with square corners and no decoration. Turn it off for the colorful look.</Field.Description>
-							</Field.Content>
-							<Switch id="focus-mode" checked={settings.current.focusMode} onCheckedChange={(v) => settings.update({ focusMode: v })} />
-						</Field.Field>
-
-						<Field.Separator />
-
 						<Field.Set>
 							<Field.Legend variant="label">Theme</Field.Legend>
 							<div class="grid grid-cols-3 gap-3">
@@ -347,7 +333,7 @@
 						<Field.Field orientation="horizontal">
 							<Field.Content>
 								<Field.Title>Reset all settings</Field.Title>
-								<Field.Description>Go back to the dark theme and the colorful look. Your data isn't touched.</Field.Description>
+								<Field.Description>Go back to the dark theme and default look. Your data isn't touched.</Field.Description>
 							</Field.Content>
 							<Button variant="outline" onclick={resetAll}><RotateCcwIcon data-icon="inline-start" /> Reset</Button>
 						</Field.Field>
