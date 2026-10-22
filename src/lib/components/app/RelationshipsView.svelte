@@ -45,6 +45,7 @@
 	import { tableService } from '#lib/services/tables.js';
 	import { attempt, confirm } from '#lib/state/feedback.svelte.js';
 	import { session } from '#lib/state/session.svelte.js';
+	import { settings } from '#lib/state/settings.svelte.js';
 	import DiagramCard from './DiagramCard.svelte';
 	import NameDialog from './NameDialog.svelte';
 	import ConfirmHost from './ConfirmHost.svelte';
@@ -601,10 +602,12 @@
 						{/if}
 					{/each}
 				</div>
-				<p class="pointer-events-none absolute bottom-3 left-4 flex items-center gap-1.5 text-xs text-muted-foreground">
-					Drag a field's <span class="inline-block size-2.5 rounded-full border-2 border-primary"></span> onto another table to link ·
-					<Kbd>⌘</Kbd> + scroll to zoom · Right-click to add tables and more
-				</p>
+				{#if settings.current.canvasHints}
+					<p class="pointer-events-none absolute bottom-3 left-4 flex items-center gap-1.5 text-xs text-muted-foreground">
+						Drag a field's <span class="inline-block size-2.5 rounded-full border-2 border-primary"></span> onto another table to link ·
+						<Kbd>⌘</Kbd> + scroll to zoom · Right-click to add tables and more
+					</p>
+				{/if}
 			{/if}
 		</div>
 		{/snippet}

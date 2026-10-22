@@ -514,7 +514,8 @@ export function edgeRoute(parent: Point, parentY: number, child: Point, childY: 
 	return { path: roundedPath(points), start: points[0], end: points[3], startDir, endDir };
 }
 
-function roundedPath(points: Point[]): string {
+/** An SVG path through orthogonal points, with each corner rounded. */
+export function roundedPath(points: Point[]): string {
 	let d = `M ${points[0].x} ${points[0].y}`;
 	for (let i = 1; i < points.length - 1; i++) {
 		const [prev, cur, next] = [points[i - 1], points[i], points[i + 1]];

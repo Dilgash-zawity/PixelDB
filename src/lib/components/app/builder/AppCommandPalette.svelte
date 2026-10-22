@@ -2,7 +2,7 @@
 	import { toggleMode } from 'mode-watcher';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import FileIcon from '@lucide/svelte/icons/file';
-	import InfoIcon from '@lucide/svelte/icons/info';
+	import SettingsIcon from '@lucide/svelte/icons/settings';
 	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import PlayIcon from '@lucide/svelte/icons/play';
 	import PrinterIcon from '@lucide/svelte/icons/printer';
@@ -17,8 +17,8 @@
 		open = $bindable(false),
 		onAdd,
 		onBack,
-		onAbout
-	}: { open?: boolean; onAdd: (type: WidgetType) => void; onBack: () => void; onAbout: () => void } = $props();
+		onSettings
+	}: { open?: boolean; onAdd: (type: WidgetType) => void; onBack: () => void; onSettings: () => void } = $props();
 
 	function run(action: () => void) {
 		open = false;
@@ -57,7 +57,7 @@
 			<Command.Item onSelect={() => run(() => setTimeout(() => window.print(), 100))}><PrinterIcon /> Print this page</Command.Item>
 			<Command.Item onSelect={() => run(toggleMode)}><SunMoonIcon /> Toggle light / dark</Command.Item>
 			<Command.Item onSelect={() => run(onBack)}><ArrowLeftIcon /> Home</Command.Item>
-			<Command.Item onSelect={() => run(onAbout)}><InfoIcon /> About SlateDB</Command.Item>
+			<Command.Item onSelect={() => run(onSettings)}><SettingsIcon /> Settings</Command.Item>
 		</Command.Group>
 	</Command.List>
 </Command.Dialog>

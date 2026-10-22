@@ -7,7 +7,7 @@
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import CloudAlertIcon from '@lucide/svelte/icons/cloud-alert';
-	import InfoIcon from '@lucide/svelte/icons/info';
+	import SettingsIcon from '@lucide/svelte/icons/settings';
 	import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
 	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import PlayIcon from '@lucide/svelte/icons/play';
@@ -60,8 +60,8 @@
 		if (await appSession.close()) goto(appHref(resolve('/app'), app));
 	}
 
-	async function about() {
-		if (await appSession.close()) goto(resolve('/about'));
+	async function openSettings() {
+		if (await appSession.close()) goto(resolve('/settings'));
 	}
 
 	function inTextBox(e: KeyboardEvent): boolean {
@@ -138,7 +138,7 @@
 					<DropdownMenu.Separator />
 					<DropdownMenu.Group>
 						<DropdownMenu.Item onclick={back}><ArrowLeftIcon /> Home</DropdownMenu.Item>
-						<DropdownMenu.Item onclick={about}><InfoIcon /> About SlateDB</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={openSettings}><SettingsIcon /> Settings</DropdownMenu.Item>
 					</DropdownMenu.Group>
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
@@ -230,7 +230,7 @@
 	</div>
 {/if}
 
-<AppCommandPalette bind:open={paletteOpen} onAdd={(t) => appSession.addWidget(t)} onBack={back} onAbout={about} />
+<AppCommandPalette bind:open={paletteOpen} onAdd={(t) => appSession.addWidget(t)} onBack={back} onSettings={openSettings} />
 
 <NameDialog
 	bind:open={addingPage}

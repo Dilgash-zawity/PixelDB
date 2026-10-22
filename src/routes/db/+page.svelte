@@ -6,7 +6,7 @@
 	import CheckIcon from '@lucide/svelte/icons/check';
 	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
 	import DatabaseIcon from '@lucide/svelte/icons/database';
-	import InfoIcon from '@lucide/svelte/icons/info';
+	import SettingsIcon from '@lucide/svelte/icons/settings';
 	import NetworkIcon from '@lucide/svelte/icons/network';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import SearchIcon from '@lucide/svelte/icons/search';
@@ -48,6 +48,10 @@
 
 	async function back() {
 		if (await session.close()) goto(resolve('/'));
+	}
+
+	async function openSettings() {
+		if (await session.close()) goto(resolve('/settings'));
 	}
 
 	async function switchTo(db: string) {
@@ -112,6 +116,7 @@
 					<DropdownMenu.Group>
 						<DropdownMenu.Item onclick={() => (creatingDatabase = true)}><PlusIcon /> New database…</DropdownMenu.Item>
 						<DropdownMenu.Item onclick={back}><ArrowLeftIcon /> All databases</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={openSettings}><SettingsIcon /> Settings</DropdownMenu.Item>
 					</DropdownMenu.Group>
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
