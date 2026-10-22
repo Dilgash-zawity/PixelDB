@@ -271,10 +271,17 @@ fn convert_expr(src: &str, old: &FieldType, new: &FieldType) -> String {
         (Currency { scale: a }, Currency { scale: b }) => {
             format!("CAST(ROUND({src} / {}.0) AS INTEGER)", 10i64.pow((a - b) as u32))
         }
-        (_, Currency { scale }) => format!(
-            "CASE WHEN typeof({src}) IN ('integer', 'real') THEN CAST(ROUND({src} * {}) AS INTEGER) ELSE {src} END",
-            10i64.pow(*scale as u32)
-        ),
+        // Numbers and numeric text ("12", "-3.5") are in major units; other
+        // text is kept as is, so the column's type check rejects the change.
+        (_, Currency { scale }) => {
+            let factor = 10i64.pow(*scale as u32);
+            format!(
+                "CASE WHEN typeof({src}) IN ('integer', 'real') THEN CAST(ROUND({src} * {factor}) AS INTEGER) \
+                 WHEN typeof({src}) = 'text' AND {} THEN CAST(ROUND(CAST(trim({src}) AS REAL) * {factor}) AS INTEGER) \
+                 ELSE {src} END",
+                numeric_text(&format!("trim({src})"))
+            )
+        }
         (Currency { scale }, Number { .. } | LargeNumber) => {
             format!("{src} / {}.0", 10i64.pow(*scale as u32))
         }
@@ -292,6 +299,14 @@ fn convert_expr(src: &str, old: &FieldType, new: &FieldType) -> String {
         ),
         _ => src.to_string(),
     }
+}
+
+/// SQL condition: `text` is a plain decimal like "12", "-3.5" or ".25".
+fn numeric_text(text: &str) -> String {
+    format!(
+        "({text} GLOB '*[0-9]*' AND {text} NOT GLOB '*[^0-9.+-]*' AND {text} NOT GLOB '*.*.*' \
+         AND {text} NOT GLOB '?*[+-]*')"
+    )
 }
 
 fn unused_temp_name(conn: &Connection) -> AppResult<String> {

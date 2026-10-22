@@ -313,6 +313,7 @@ fn add_modify_rename_drop_fields() {
     migrations::modify_field(c, "Customers", "balance", bal).unwrap();
     assert_eq!(all_rows(&db, "Customers").rows[1].values[3], json!(275));
 
+
     // Index survived the rebuilds; AutoNumber does not reuse deleted ids.
     assert!(schema::table_info(c, "Customers").unwrap().indexes.iter().any(|i| i.name == "idx_name"));
     let k = records::insert_record(c, "Customers", &values(json!({"full name": "D"}))).unwrap();
@@ -329,6 +330,22 @@ fn add_modify_rename_drop_fields() {
     let def_after = schema::load_table(c, "Customers").unwrap().definition;
     assert!(matches!(def_after.field("email").unwrap().field_type, FieldType::ShortText { .. }));
     assert_eq!(all_rows(&db, "Customers").total, 3);
+
+    // Text -> Currency reads numeric text in major units; other text blocks the change.
+    let note = field("note", FieldType::ShortText { max_length: None });
+    migrations::add_field(c, "Customers", note.clone(), None).unwrap();
+    let keys: Vec<_> = all_rows(&db, "Customers").rows.into_iter().map(|r| r.key.unwrap()).take(3).collect();
+    for (key, text) in keys.iter().zip([" 12 ", "-3.5", "1.2.3"]) {
+        records::update_record(c, "Customers", key, &values(json!({"note": text}))).unwrap();
+    }
+    let mut money = note;
+    money.field_type = FieldType::Currency { scale: 2 };
+    assert_eq!(migrations::modify_field(c, "Customers", "note", money.clone()).unwrap_err().kind(), "constraint");
+    records::update_record(c, "Customers", &keys[2], &values(json!({"note": ".25"}))).unwrap();
+    migrations::modify_field(c, "Customers", "note", money).unwrap();
+    let notes: Vec<_> = all_rows(&db, "Customers").rows.iter().map(|r| r.values.last().unwrap().clone()).collect();
+    assert_eq!(notes[..3], [json!(1200), json!(-350), json!(25)]);
+    migrations::drop_field(c, "Customers", "note", true).unwrap();
 
     // Dropping a field needs confirmation, and removes its index with a warning.
     assert_eq!(migrations::drop_field(c, "Customers", "full name", false).unwrap_err().kind(), "confirmation_required");
@@ -560,24 +577,99 @@ fn queries_read_only_and_save_as_views() {
     }
     assert_eq!(all_rows(&db, "Customers").rows.len(), 2);
 
-    queries::save_view(&db.conn, "Names", "SELECT name FROM Customers", false).unwrap();
+    queries::save_view(&db.conn, "Names", "SELECT name FROM Customers", None, false).unwrap();
     assert_eq!(queries::view_sql(&db.conn, "Names").unwrap(), "SELECT name FROM Customers");
     assert!(matches!(
-        queries::save_view(&db.conn, "names", "SELECT 1", false),
+        queries::save_view(&db.conn, "names", "SELECT 1", None, false),
         Err(AppError::ConfirmationRequired(_))
     ));
     assert!(matches!(
-        queries::save_view(&db.conn, "Customers", "SELECT 1", true),
+        queries::save_view(&db.conn, "Customers", "SELECT 1", None, true),
         Err(AppError::AlreadyExists(_))
     ));
-    assert!(queries::save_view(&db.conn, "Broken", "SELECT nope FROM Customers", false).is_err());
+    assert!(queries::save_view(&db.conn, "Broken", "SELECT nope FROM Customers", None, false).is_err());
     assert!(schema::find_object(&db.conn, "Broken").unwrap().is_none());
 
-    queries::save_view(&db.conn, "Names", "SELECT name AS who FROM Customers", true).unwrap();
+    queries::save_view(&db.conn, "Names", "SELECT name AS who FROM Customers", None, true).unwrap();
     assert_eq!(all_rows(&db, "Names").columns, vec!["who"]);
 
     assert!(matches!(queries::drop_view(&db.conn, "Names", false), Err(AppError::ConfirmationRequired(_))));
     assert!(queries::drop_view(&db.conn, "Customers", true).is_err());
     queries::drop_view(&db.conn, "Names", true).unwrap();
     assert!(schema::find_object(&db.conn, "Names").unwrap().is_none());
+}
+
+#[test]
+fn saved_queries_keep_their_visual_design() {
+    let (_dir, _path, db) = temp_db();
+    migrations::create_table(&db.conn, &customers_def()).unwrap();
+    let design = json!({"from": "Customers", "joins": [], "columns": []});
+
+    queries::save_view(&db.conn, "All", "SELECT * FROM \"Customers\";", Some(&design), false).unwrap();
+    let q = queries::saved_query(&db.conn, "all").unwrap();
+    assert_eq!(q.sql, "SELECT * FROM \"Customers\"");
+    assert_eq!(q.design, Some(design.clone()));
+    let names: Vec<_> = schema::list_objects(&db.conn).unwrap().into_iter().map(|o| o.name).collect();
+    assert_eq!(names, vec!["Customers", "All"], "the design store stays hidden");
+
+    // A bad design rolls the whole save back.
+    assert!(queries::save_view(&db.conn, "Bad", "SELECT 1", Some(&json!([1])), false).is_err());
+    assert!(schema::find_object(&db.conn, "Bad").unwrap().is_none());
+
+    // Replacing it from the SQL editor forgets the design.
+    queries::save_view(&db.conn, "All", "SELECT name FROM Customers", None, true).unwrap();
+    assert_eq!(queries::saved_query(&db.conn, "All").unwrap().design, None);
+
+    // A view whose SQL no longer matches the design opens as SQL only.
+    queries::save_view(&db.conn, "All", "SELECT * FROM Customers", Some(&design), true).unwrap();
+    db.conn.execute_batch("DROP VIEW \"All\"; CREATE VIEW \"All\" AS SELECT 1").unwrap();
+    assert_eq!(queries::saved_query(&db.conn, "All").unwrap().design, None);
+
+    // Deleting the query deletes its design.
+    queries::save_view(&db.conn, "All", "SELECT * FROM Customers", Some(&design), true).unwrap();
+    queries::drop_view(&db.conn, "All", true).unwrap();
+    queries::save_view(&db.conn, "All", "SELECT * FROM Customers", None, false).unwrap();
+    assert_eq!(queries::saved_query(&db.conn, "All").unwrap().design, None);
+}
+
+#[test]
+fn values_match_as_shown_and_views_keep_field_types() {
+    let (_dir, _path, db) = temp_db();
+    let c = &db.conn;
+    migrations::create_table(c, &customers_def()).unwrap();
+    records::insert_record(c, "Customers", &values(json!({"name": "Ann", "balance": "12.50", "active": true}))).unwrap();
+    records::insert_record(c, "Customers", &values(json!({"name": "Bob", "balance": "3", "active": false}))).unwrap();
+    let search = |table: &str, term: &str| {
+        let q = RecordQuery { search: Some(term.into()), ..Default::default() };
+        records::list_records(c, table, &q).unwrap().total
+    };
+    let contains = |table: &str, column: &str, term: &str| {
+        let q = RecordQuery {
+            filters: vec![FilterSpec { column: column.into(), op: FilterOp::Contains, value: json!(term) }],
+            ..Default::default()
+        };
+        records::list_records(c, table, &q).unwrap().total
+    };
+
+    // Currency and Yes/No match the text the user sees, not the stored value.
+    assert_eq!(search("Customers", "12.50"), 1);
+    assert_eq!(search("Customers", "1250"), 0);
+    assert_eq!(contains("Customers", "balance", "3.00"), 1);
+    assert_eq!(contains("Customers", "active", "yes"), 1);
+
+    // Views know the field types behind their columns.
+    queries::save_view(c, "Rich", "SELECT name, balance AS money, count(*) AS n FROM Customers GROUP BY name", None, false)
+        .unwrap();
+    let page = all_rows(&db, "Rich");
+    assert_eq!(page.types[1], Some(FieldType::Currency { scale: 2 }));
+    assert_eq!(page.types[2], None);
+    assert_eq!(contains("Rich", "money", "12.5"), 1);
+    let q = RecordQuery {
+        filters: vec![FilterSpec { column: "money".into(), op: FilterOp::Eq, value: json!("12.50") }],
+        ..Default::default()
+    };
+    assert_eq!(records::list_records(c, "Rich", &q).unwrap().total, 1);
+
+    let r = queries::run_query(c, "SELECT active, money FROM Customers JOIN Rich USING (name)").unwrap();
+    assert_eq!(r.types, vec![Some(FieldType::YesNo), Some(FieldType::Currency { scale: 2 })]);
 }

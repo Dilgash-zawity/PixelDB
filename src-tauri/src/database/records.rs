@@ -13,7 +13,7 @@ use crate::models::{
 use crate::validation::identifiers::quote_ident;
 use crate::validation::values::{coerce_value, sql_to_json, untyped_value};
 
-use super::schema::{load_table, require_object, rowid_alias, rowid_name};
+use super::schema::{load_table, require_object, result_types, rowid_alias, rowid_name};
 use super::transactions::with_transaction;
 
 pub const DEFAULT_PAGE_SIZE: u64 = 100;
@@ -33,6 +33,8 @@ struct Source {
     name: String,
     def: Option<TableDef>,
     columns: Vec<String>,
+    /// Field type of each column (for views, of the table column behind it).
+    types: Vec<Option<FieldType>>,
     key: KeyKind,
 }
 
@@ -42,7 +44,8 @@ impl Source {
         if obj.kind == "view" {
             let stmt = conn.prepare(&format!("SELECT * FROM {} LIMIT 0", quote_ident(&obj.name)))?;
             let columns = stmt.column_names().into_iter().map(String::from).collect();
-            return Ok(Source { name: obj.name, def: None, columns, key: KeyKind::None });
+            let types = result_types(conn, &stmt);
+            return Ok(Source { name: obj.name, def: None, columns, types, key: KeyKind::None });
         }
         let loaded = load_table(conn, &obj.name)?;
         let def = loaded.definition;
@@ -52,7 +55,8 @@ impl Source {
             KeyKind::RowId(rowid_name(&def)?)
         };
         let columns = def.fields.iter().map(|f| f.name.clone()).collect();
-        Ok(Source { name: obj.name, def: Some(def), columns, key })
+        let types = def.fields.iter().map(|f| Some(f.field_type.clone())).collect();
+        Ok(Source { name: obj.name, def: Some(def), columns, types, key })
     }
 
     fn table_def(&self) -> AppResult<&TableDef> {
@@ -69,15 +73,16 @@ impl Source {
             .ok_or_else(|| AppError::Validation(format!("unknown field {name:?} in {:?}", self.name)))
     }
 
-    fn field(&self, name: &str) -> Option<&FieldDef> {
-        self.def.as_ref().and_then(|d| d.field(name))
+    fn column_type(&self, name: &str) -> Option<&FieldType> {
+        let i = self.columns.iter().position(|c| c.eq_ignore_ascii_case(name))?;
+        self.types[i].as_ref()
     }
 
     /// Value used to compare against a column in a filter.
     fn filter_value(&self, column: &str, value: &JsonValue) -> AppResult<Value> {
-        match self.field(column) {
-            Some(f) if !matches!(f.field_type, FieldType::Calculated { .. } | FieldType::Unknown { .. }) => {
-                coerce_value(f, value)
+        match self.column_type(column) {
+            Some(t) if !matches!(t, FieldType::Calculated { .. } | FieldType::Unknown { .. }) => {
+                coerce_value(&FieldDef::new(column, t.clone()), value)
             }
             _ => untyped_value(value),
         }
@@ -107,6 +112,21 @@ impl Source {
     }
 }
 
+/// A column as the text the user sees, for text matching: currency in major
+/// units ("12.50") and Yes/No as "Yes"/"No".
+fn display_text(qc: &str, t: Option<&FieldType>) -> String {
+    match t {
+        Some(FieldType::Currency { scale }) => format!(
+            "CASE WHEN typeof({qc}) = 'integer' THEN printf('%.{scale}f', {qc} / {}.0) ELSE CAST({qc} AS TEXT) END",
+            10i64.pow(*scale as u32)
+        ),
+        Some(FieldType::YesNo) => {
+            format!("CASE {qc} WHEN 1 THEN 'Yes' WHEN 0 THEN 'No' ELSE CAST({qc} AS TEXT) END")
+        }
+        _ => format!("CAST({qc} AS TEXT)"),
+    }
+}
+
 fn like_pattern(s: &str, prefix: bool, suffix: bool) -> String {
     let escaped = s.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
     format!("{}{escaped}{}", if prefix { "%" } else { "" }, if suffix { "%" } else { "" })
@@ -130,7 +150,7 @@ fn build_where(src: &Source, q: &RecordQuery) -> AppResult<(String, Vec<Value>)>
                     FilterOp::StartsWith => like_pattern(s, false, true),
                     _ => like_pattern(s, true, false),
                 };
-                clauses.push(format!("CAST({qc} AS TEXT) LIKE ? ESCAPE '\\'"));
+                clauses.push(format!("{} LIKE ? ESCAPE '\\'", display_text(&qc, src.column_type(&col))));
                 params.push(Value::Text(pattern));
             }
             FilterOp::In => {
@@ -176,13 +196,13 @@ fn build_where(src: &Source, q: &RecordQuery) -> AppResult<(String, Vec<Value>)>
         let searchable: Vec<&String> = src
             .columns
             .iter()
-            .filter(|c| !src.field(c).is_some_and(|f| f.field_type.is_blob()))
+            .filter(|c| !src.column_type(c).is_some_and(FieldType::is_blob))
             .collect();
         if !searchable.is_empty() {
             let pattern = like_pattern(term, true, true);
             let ors: Vec<String> = searchable
                 .iter()
-                .map(|c| format!("CAST({} AS TEXT) LIKE ? ESCAPE '\\'", quote_ident(c)))
+                .map(|c| format!("{} LIKE ? ESCAPE '\\'", display_text(&quote_ident(c), src.column_type(c))))
                 .collect();
             params.extend(std::iter::repeat_n(Value::Text(pattern), ors.len()));
             clauses.push(format!("({})", ors.join(" OR ")));
@@ -260,7 +280,7 @@ pub fn list_records(conn: &Connection, table: &str, q: &RecordQuery) -> AppResul
     let rows = stmt
         .query_map(params_from_iter(page_params.iter()), |row| read_row(&src, row))?
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(RecordPage { columns: src.columns.clone(), rows, total, offset: q.offset, limit })
+    Ok(RecordPage { columns: src.columns.clone(), types: src.types.clone(), rows, total, offset: q.offset, limit })
 }
 
 pub fn get_record(conn: &Connection, table: &str, key: &RecordKey) -> AppResult<RecordRow> {
