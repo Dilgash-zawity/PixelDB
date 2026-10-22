@@ -16,7 +16,7 @@
 		onBack
 	}: { open?: boolean; onNewTable: () => void; onBack: () => void } = $props();
 
-	const canEdit = $derived(session.screen === 'table' && !!session.table && !session.isView(session.table));
+	const canEdit = $derived(session.tab === 'datasheet' && !!session.table && !session.isView(session.table));
 
 	function run(action: () => void) {
 		open = false;
@@ -30,22 +30,22 @@
 		<Command.Empty>Nothing found.</Command.Empty>
 		{#if canEdit}
 			<Command.Group heading={session.table ?? ''}>
-				<Command.Item onSelect={() => run(async () => { if (await session.setView('records')) session.request('new-record'); })}>
+				<Command.Item onSelect={() => run(() => session.request('new-record'))}>
 					<PlusIcon /> New record
 				</Command.Item>
-				<Command.Item onSelect={() => run(async () => { if (await session.setView('fields')) session.request('new-field'); })}>
+				<Command.Item onSelect={() => run(() => session.request('new-field'))}>
 					<Settings2Icon /> Add a field
 				</Command.Item>
 			</Command.Group>
 		{/if}
 		<Command.Group heading="Tables">
 			{#each session.tables as t (t.name)}
-				<Command.Item value={`table ${t.name}`} onSelect={() => run(() => session.select(t.name, 'records'))}>
+				<Command.Item value={`table ${t.name}`} onSelect={() => run(() => session.select(t.name))}>
 					<TableIcon /> {t.name}
 				</Command.Item>
 			{/each}
 			{#each session.views as v (v.name)}
-				<Command.Item value={`view ${v.name}`} onSelect={() => run(() => session.select(v.name, 'records'))}>
+				<Command.Item value={`view ${v.name}`} onSelect={() => run(() => session.select(v.name))}>
 					<EyeIcon /> {v.name}
 				</Command.Item>
 			{/each}
@@ -53,7 +53,7 @@
 		<Command.Separator />
 		<Command.Group heading="General">
 			<Command.Item onSelect={() => run(onNewTable)}><PlusIcon /> New table</Command.Item>
-			<Command.Item onSelect={() => run(() => session.showRelationships())}><NetworkIcon /> Relationships</Command.Item>
+			<Command.Item onSelect={() => run(() => session.showTab('diagram'))}><NetworkIcon /> Diagram</Command.Item>
 			<Command.Item onSelect={() => run(toggleMode)}><SunMoonIcon /> Toggle light / dark</Command.Item>
 			<Command.Item onSelect={() => run(onBack)}><ArrowLeftIcon /> All databases</Command.Item>
 		</Command.Group>

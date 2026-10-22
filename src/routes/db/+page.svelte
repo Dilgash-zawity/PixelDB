@@ -3,31 +3,40 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
-	import PencilRulerIcon from '@lucide/svelte/icons/pencil-ruler';
+	import CheckIcon from '@lucide/svelte/icons/check';
+	import ChevronDownIcon from '@lucide/svelte/icons/chevron-down';
+	import DatabaseIcon from '@lucide/svelte/icons/database';
+	import NetworkIcon from '@lucide/svelte/icons/network';
 	import PlusIcon from '@lucide/svelte/icons/plus';
+	import SearchIcon from '@lucide/svelte/icons/search';
 	import TableIcon from '@lucide/svelte/icons/table-2';
 	import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
-	import AppSidebar from '#lib/components/app/AppSidebar.svelte';
 	import CommandPalette from '#lib/components/app/CommandPalette.svelte';
-	import DesignView from '#lib/components/app/DesignView.svelte';
+	import Logo from '#lib/components/app/Logo.svelte';
+	import NameDialog from '#lib/components/app/NameDialog.svelte';
 	import RecordsView from '#lib/components/app/RecordsView.svelte';
 	import RelationshipsView from '#lib/components/app/RelationshipsView.svelte';
+	import ThemeToggle from '#lib/components/app/ThemeToggle.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
-	import * as Breadcrumb from '#lib/components/ui/breadcrumb/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
+	import { Kbd } from '#lib/components/ui/kbd/index.js';
+	import * as Select from '#lib/components/ui/select/index.js';
 	import { Separator } from '#lib/components/ui/separator/index.js';
-	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import { databaseHref } from '#lib/logic/routes.js';
-	import { session, type TableView } from '#lib/state/session.svelte.js';
+	import { databaseNameProblem } from '#lib/logic/values.js';
+	import { session, type Tab } from '#lib/state/session.svelte.js';
 	import { workspace } from '#lib/state/workspace.svelte.js';
 
 	const name = $derived(page.url.searchParams.get('name') ?? '');
 	let paletteOpen = $state(false);
-	const crumb = $derived(session.screen === 'relationships' ? 'Relationships' : session.table);
-	let sidebar = $state<AppSidebar | null>(null);
+	let creatingDatabase = $state(false);
+	let creatingTable = $state(false);
+
+	const tableItems = $derived(session.objects.map((o) => ({ value: o.name, label: o.name })));
 
 	$effect(() => {
 		if (name) session.open(name);
@@ -40,6 +49,12 @@
 
 	async function switchTo(db: string) {
 		if (!session.leaveGuard || (await session.leaveGuard())) goto(databaseHref(resolve('/db'), db));
+	}
+
+	function suggestedTableName(): string {
+		let n = 1;
+		while (session.objects.some((o) => o.name.toLowerCase() === `table ${n}`)) n++;
+		return `Table ${n}`;
 	}
 
 	function onKey(e: KeyboardEvent) {
@@ -65,78 +80,123 @@
 		</Empty.Content>
 	</Empty.Root>
 {:else}
-	<Sidebar.Provider>
-		<AppSidebar bind:this={sidebar} onBack={back} onSwitch={switchTo} onSearch={() => (paletteOpen = true)} />
-		<Sidebar.Inset class="h-svh overflow-hidden">
-			<header class="flex h-14 shrink-0 items-center gap-2 border-b px-4">
-				<Sidebar.Trigger class="-ms-1" />
-				<Separator orientation="vertical" class="me-2 data-vertical:h-4 data-vertical:self-center" />
-				<Breadcrumb.Root>
-					<Breadcrumb.List>
-						<Breadcrumb.Item class="hidden md:block">
-							<Breadcrumb.Link href={resolve('/')} onclick={(e) => { e.preventDefault(); back(); }}>Databases</Breadcrumb.Link>
-						</Breadcrumb.Item>
-						<Breadcrumb.Separator class="hidden md:block" />
-						<Breadcrumb.Item>
-							{#if crumb}
-								<span class="hidden md:inline">{name}</span>
-							{:else}
-								<Breadcrumb.Page>{name}</Breadcrumb.Page>
-							{/if}
-						</Breadcrumb.Item>
-						{#if crumb}
-							<Breadcrumb.Separator class="hidden md:block" />
-							<Breadcrumb.Item><Breadcrumb.Page>{crumb}</Breadcrumb.Page></Breadcrumb.Item>
-						{/if}
-					</Breadcrumb.List>
-				</Breadcrumb.Root>
-				<span class="flex-1"></span>
-				{#if session.screen === 'relationships'}
-					<!-- The Relationships screen has its own toolbar. -->
-				{:else if session.table && !session.isView(session.table)}
-					<Tabs.Root bind:value={() => session.view, (v) => session.setView(v as TableView)}>
-						<Tabs.List>
-							<Tabs.Trigger value="records"><TableIcon /> Datasheet</Tabs.Trigger>
-							<Tabs.Trigger value="fields"><PencilRulerIcon /> Design</Tabs.Trigger>
-						</Tabs.List>
-					</Tabs.Root>
-				{:else if session.table}
-					<Badge variant="secondary">Read-only view</Badge>
-				{/if}
-			</header>
+	<div class="flex h-svh flex-col">
+		<header class="flex h-12 shrink-0 items-center gap-2 border-b px-3">
+			<DropdownMenu.Root onOpenChange={(open) => open && workspace.refresh()}>
+				<DropdownMenu.Trigger>
+					{#snippet child({ props })}
+						<Button {...props} variant="ghost" size="sm" class="max-w-64">
+							<Logo class="size-5" />
+							<span class="truncate font-semibold">{name}</span>
+							<ChevronDownIcon data-icon="inline-end" />
+						</Button>
+					{/snippet}
+				</DropdownMenu.Trigger>
+				<DropdownMenu.Content class="w-64" align="start">
+					<DropdownMenu.Group>
+						<DropdownMenu.Label>Databases</DropdownMenu.Label>
+						{#each workspace.databases.filter((d) => d.valid) as db (db.file_name)}
+							<DropdownMenu.Item onclick={() => db.name !== name && switchTo(db.name)}>
+								<DatabaseIcon />
+								<span class="truncate">{db.name}</span>
+								{#if db.name === name}<CheckIcon class="ms-auto" />{/if}
+							</DropdownMenu.Item>
+						{/each}
+					</DropdownMenu.Group>
+					<DropdownMenu.Separator />
+					<DropdownMenu.Group>
+						<DropdownMenu.Item onclick={() => (creatingDatabase = true)}><PlusIcon /> New database…</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={back}><ArrowLeftIcon /> All databases</DropdownMenu.Item>
+					</DropdownMenu.Group>
+				</DropdownMenu.Content>
+			</DropdownMenu.Root>
 
-			<div class="min-h-0 flex-1">
-				{#if session.loading}
-					<div class="flex flex-col gap-2 p-6">
-						{#each Array(5) as _, i (i)}<Skeleton class="h-9" />{/each}
-					</div>
-				{:else if session.screen === 'relationships'}
-					<RelationshipsView />
-				{:else if !session.table}
-					<Empty.Root class="h-full">
-						<Empty.Header>
-							<Empty.Media variant="icon"><TableIcon /></Empty.Media>
-							<Empty.Title>Create your first table</Empty.Title>
-							<Empty.Description>
-								A table holds one kind of thing — like customers, products or orders. You'll add its fields next.
-							</Empty.Description>
-						</Empty.Header>
-						<Empty.Content>
-							<Button onclick={() => sidebar?.newTable()}><PlusIcon data-icon="inline-start" /> New table</Button>
-						</Empty.Content>
-					</Empty.Root>
-				{:else}
-					{#key `${session.table}:${session.view}:${session.revision}`}
-						{#if session.view === 'fields' && !session.isView(session.table)}
-							<DesignView table={session.table} />
-						{:else}
-							<RecordsView table={session.table} isView={session.isView(session.table)} />
+			<Separator orientation="vertical" class="data-vertical:h-5 data-vertical:self-center" />
+
+			<Tabs.Root bind:value={() => session.tab, (v) => session.showTab(v as Tab)}>
+				<Tabs.List>
+					<Tabs.Trigger value="diagram"><NetworkIcon /> Diagram</Tabs.Trigger>
+					<Tabs.Trigger value="datasheet"><TableIcon /> Datasheet</Tabs.Trigger>
+				</Tabs.List>
+			</Tabs.Root>
+
+			{#if session.tab === 'datasheet' && tableItems.length}
+				<Select.Root type="single" items={tableItems} value={session.table ?? ''} onValueChange={(v) => v && session.select(v)}>
+					<Select.Trigger size="sm" class="w-48" aria-label="Table"><Select.Value placeholder="Choose a table" /></Select.Trigger>
+					<Select.Content>
+						<Select.Group>
+							<Select.Label>Tables</Select.Label>
+							{#each session.tables as t (t.name)}<Select.Item value={t.name} label={t.name}>{t.name}</Select.Item>{/each}
+						</Select.Group>
+						{#if session.views.length}
+							<Select.Group>
+								<Select.Label>Views</Select.Label>
+								{#each session.views as v (v.name)}<Select.Item value={v.name} label={v.name}>{v.name}</Select.Item>{/each}
+							</Select.Group>
 						{/if}
-					{/key}
-				{/if}
-			</div>
-		</Sidebar.Inset>
-	</Sidebar.Provider>
+					</Select.Content>
+				</Select.Root>
+				{#if session.isView(session.table)}<Badge variant="secondary">Read-only view</Badge>{/if}
+			{/if}
+
+			<span class="flex-1"></span>
+			<Button variant="ghost" size="sm" class="text-muted-foreground" onclick={() => (paletteOpen = true)}>
+				<SearchIcon data-icon="inline-start" /> Search <Kbd>⌘K</Kbd>
+			</Button>
+			<ThemeToggle />
+		</header>
+
+		<main class="min-h-0 flex-1">
+			{#if session.loading}
+				<div class="flex flex-col gap-2 p-6">
+					{#each Array(5) as _, i (i)}<Skeleton class="h-9" />{/each}
+				</div>
+			{:else if session.tab === 'diagram'}
+				<RelationshipsView />
+			{:else if !session.table}
+				<Empty.Root class="h-full">
+					<Empty.Header>
+						<Empty.Media variant="icon"><TableIcon /></Empty.Media>
+						<Empty.Title>No tables yet</Empty.Title>
+						<Empty.Description>A table holds one kind of thing, like customers or orders.</Empty.Description>
+					</Empty.Header>
+					<Empty.Content>
+						<Button onclick={() => (creatingTable = true)}><PlusIcon data-icon="inline-start" /> New table</Button>
+					</Empty.Content>
+				</Empty.Root>
+			{:else}
+				{#key `${session.table}:${session.revision}`}
+					<RecordsView table={session.table} isView={session.isView(session.table)} />
+				{/key}
+			{/if}
+		</main>
+	</div>
 {/if}
 
-<CommandPalette bind:open={paletteOpen} onNewTable={() => sidebar?.newTable()} onBack={back} />
+<CommandPalette bind:open={paletteOpen} onNewTable={() => (creatingTable = true)} onBack={back} />
+
+<NameDialog
+	bind:open={creatingDatabase}
+	title="New database"
+	description="It is saved as a single file in your databases folder."
+	initial=""
+	placeholder="e.g. Shop"
+	submitLabel="Create database"
+	validate={(v) => databaseNameProblem(v) ?? (workspace.nameTaken(v) ? 'A database with this name already exists' : null)}
+	onSubmit={async (db) => {
+		if (!(await workspace.create(db))) return false;
+		switchTo(db);
+		return true;
+	}}
+/>
+
+<NameDialog
+	bind:open={creatingTable}
+	title="New table"
+	description="It starts with an automatic ID field."
+	initial={suggestedTableName()}
+	placeholder="e.g. Customers"
+	submitLabel="Create table"
+	validate={(v) => session.tableNameProblem(v)}
+	onSubmit={(t) => session.createTable(t)}
+/>

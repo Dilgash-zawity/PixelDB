@@ -315,6 +315,7 @@
 				{:else if rel && edit}
 					{@const blocked = blockedReason(rel.child)}
 					<div class="flex flex-col gap-5">
+						<h2 class="font-semibold">Link</h2>
 						<Item.Root variant="outline" size="sm">
 							<Item.Content>
 								<Item.Title>{rel.parent}</Item.Title>
