@@ -2,7 +2,11 @@
 	import { goto } from '$app/navigation';
 	import type { DatabaseFile } from '#lib/api/types.js';
 	import { resolve } from '$app/paths';
+	import CopyIcon from '@lucide/svelte/icons/copy';
 	import DatabaseIcon from '@lucide/svelte/icons/database';
+	import EllipsisIcon from '@lucide/svelte/icons/ellipsis';
+	import PencilIcon from '@lucide/svelte/icons/pencil';
+	import TrashIcon from '@lucide/svelte/icons/trash-2';
 	import FolderOpenIcon from '@lucide/svelte/icons/folder-open';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import SearchIcon from '@lucide/svelte/icons/search';
@@ -13,6 +17,7 @@
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
@@ -25,6 +30,10 @@
 
 	let filter = $state('');
 	let creating = $state(false);
+	let renaming = $state<string | null>(null);
+	// The suggested copy name is fixed when the dialog opens, so the refresh
+	// after duplicating doesn't change the field while it closes.
+	let duplicating = $state<{ name: string; suggested: string } | null>(null);
 	const visible = $derived(
 		workspace.databases.filter((d) => d.name.toLowerCase().includes(filter.trim().toLowerCase()))
 	);
@@ -57,13 +66,47 @@
 </script>
 
 {#snippet dbCard(db: DatabaseFile)}
-	<Card.Root class="h-full transition-colors hover:bg-accent/40">
+	<Card.Root class="relative h-full transition-colors hover:bg-accent/40 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring">
 		<Card.Header>
-			<Card.Title class="flex items-center gap-2">
+			<Card.Title class="flex min-w-0 items-center gap-2">
 				<DatabaseIcon />
-				<span class="truncate">{db.name}</span>
+				{#if db.valid}
+					<!-- The link's ::after covers the card so the whole card opens the database. -->
+					<a href={databaseHref(resolve('/db'), db.name)} class="truncate outline-none after:absolute after:inset-0">
+						{db.name}
+					</a>
+				{:else}
+					<span class="truncate">{db.name}</span>
+				{/if}
 			</Card.Title>
 			<Card.Description>{db.file_name}</Card.Description>
+			<Card.Action class="relative">
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						{#snippet child({ props })}
+							<Button {...props} variant="ghost" size="icon-sm" aria-label="Database options">
+								<EllipsisIcon />
+							</Button>
+						{/snippet}
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content align="end">
+						<DropdownMenu.Group>
+							<DropdownMenu.Item onclick={() => (renaming = db.name)}>
+								<PencilIcon /> Rename
+							</DropdownMenu.Item>
+							<DropdownMenu.Item disabled={!db.valid} onclick={() => (duplicating = { name: db.name, suggested: workspace.copyName(db.name) })}>
+								<CopyIcon /> Duplicate
+							</DropdownMenu.Item>
+						</DropdownMenu.Group>
+						<DropdownMenu.Separator />
+						<DropdownMenu.Group>
+							<DropdownMenu.Item variant="destructive" onclick={() => workspace.remove(db.name)}>
+								<TrashIcon /> Delete
+							</DropdownMenu.Item>
+						</DropdownMenu.Group>
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
+			</Card.Action>
 		</Card.Header>
 		<Card.Footer class="flex items-center justify-between gap-2 text-sm text-muted-foreground">
 			{#if db.valid}
@@ -159,9 +202,7 @@
 				<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
 					{#each visible as db (db.file_name)}
 						{#if db.valid}
-							<a href={databaseHref(resolve('/db'), db.name)} class="rounded-lg focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none">
-								{@render dbCard(db)}
-							</a>
+							{@render dbCard(db)}
 						{:else}
 							<div class="opacity-60" title="This file is not a SQLite database">{@render dbCard(db)}</div>
 						{/if}
@@ -184,4 +225,25 @@
 		open(name);
 		return true;
 	}}
+/>
+
+<NameDialog
+	bind:open={() => renaming !== null, (o) => !o && (renaming = null)}
+	title="Rename database"
+	description="The database file in your folder is renamed too."
+	initial={renaming ?? ''}
+	submitLabel="Rename"
+	validate={(v) =>
+		databaseNameProblem(v) ?? (workspace.nameTaken(v, renaming ?? undefined) ? 'A database with this name already exists' : null)}
+	onSubmit={async (name) => (renaming ? workspace.rename(renaming, name) : true)}
+/>
+
+<NameDialog
+	bind:open={() => duplicating !== null, (o) => !o && (duplicating = null)}
+	title="Duplicate database"
+	description={`Makes a full copy of “${duplicating?.name ?? ''}”, including all tables and records.`}
+	initial={duplicating?.suggested ?? ''}
+	submitLabel="Duplicate"
+	validate={(v) => databaseNameProblem(v) ?? (workspace.nameTaken(v) ? 'A database with this name already exists' : null)}
+	onSubmit={async (name) => (duplicating ? workspace.duplicate(duplicating.name, name) : true)}
 />

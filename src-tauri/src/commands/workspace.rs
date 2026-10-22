@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use tauri::State;
 
 use crate::database::{DbManager, OpenDatabase};
@@ -65,4 +67,59 @@ pub async fn open_workspace_database(
         mgr.with_db(|db| db.info())
     })
     .await
+}
+
+/// Closes the open database if it is the file at `path`, so the file can be
+/// moved or removed.
+fn close_if_open(mgr: &DbManager, path: &Path) -> AppResult<()> {
+    let canonical = std::fs::canonicalize(path)?;
+    if mgr.with_db(|db| Ok(db.path == canonical)).unwrap_or(false) {
+        mgr.close()?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn rename_workspace_database(
+    store: State<'_, WorkspaceStore>,
+    db: State<'_, DbManager>,
+    name: String,
+    new_name: String,
+) -> AppResult<()> {
+    let dir = store.require()?;
+    let mgr = db.inner().clone();
+    DbManager::run_detached(move || {
+        close_if_open(&mgr, &workspace::resolve_database(&dir, &name)?)?;
+        workspace::rename_database(&dir, &name, &new_name).map(|_| ())
+    })
+    .await
+}
+
+/// Permanently deletes a database file; requires `confirm`.
+#[tauri::command]
+pub async fn delete_workspace_database(
+    store: State<'_, WorkspaceStore>,
+    db: State<'_, DbManager>,
+    name: String,
+    confirm: bool,
+) -> AppResult<()> {
+    let dir = store.require()?;
+    let mgr = db.inner().clone();
+    DbManager::run_detached(move || {
+        if confirm {
+            close_if_open(&mgr, &workspace::resolve_database(&dir, &name)?)?;
+        }
+        workspace::delete_database(&dir, &name, confirm)
+    })
+    .await
+}
+
+#[tauri::command]
+pub async fn duplicate_workspace_database(
+    store: State<'_, WorkspaceStore>,
+    name: String,
+    new_name: String,
+) -> AppResult<()> {
+    let dir = store.require()?;
+    DbManager::run_detached(move || workspace::duplicate_database(&dir, &name, &new_name).map(|_| ())).await
 }

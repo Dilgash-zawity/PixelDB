@@ -199,6 +199,92 @@ pub fn new_database_path(dir: &Path, name: &str) -> AppResult<PathBuf> {
     Ok(dir.join(file_name))
 }
 
+/// Files SQLite may keep next to a database; they belong to it and move with it.
+const SIDECAR_SUFFIXES: [&str; 3] = ["-journal", "-wal", "-shm"];
+
+fn sidecar(path: &Path, suffix: &str) -> PathBuf {
+    let mut s = path.as_os_str().to_owned();
+    s.push(suffix);
+    PathBuf::from(s)
+}
+
+/// Fails if another database (case-insensitively) already uses `name`.
+fn ensure_name_free(dir: &Path, name: &str, except_file: Option<&str>) -> AppResult<()> {
+    let taken = list_databases(dir)?
+        .iter()
+        .any(|d| d.name.eq_ignore_ascii_case(name) && Some(d.file_name.as_str()) != except_file);
+    if taken {
+        return Err(AppError::AlreadyExists(format!("a database named {name:?} already exists")));
+    }
+    Ok(())
+}
+
+/// Renames a database file, keeping its extension. Returns the new path.
+pub fn rename_database(dir: &Path, name: &str, new_name: &str) -> AppResult<PathBuf> {
+    let from = resolve_database(dir, name)?;
+    database_file_name(new_name)?;
+    let from_file = from.file_name().and_then(|f| f.to_str()).unwrap_or_default().to_string();
+    ensure_name_free(dir, new_name, Some(&from_file))?;
+    let ext = from.extension().and_then(|e| e.to_str()).unwrap_or(DEFAULT_EXTENSION);
+    let to = dir.join(format!("{new_name}.{ext}"));
+    if to == from {
+        return Ok(to);
+    }
+    // A case-only rename targets the same file on case-insensitive systems,
+    // so the existence check only applies to genuinely different names.
+    if !new_name.eq_ignore_ascii_case(name) && fs::symlink_metadata(&to).is_ok() {
+        return Err(AppError::AlreadyExists(format!(
+            "{}: refusing to overwrite an existing file",
+            to.display()
+        )));
+    }
+    fs::rename(&from, &to)?;
+    for suffix in SIDECAR_SUFFIXES {
+        let side = sidecar(&from, suffix);
+        if side.exists() {
+            fs::rename(&side, sidecar(&to, suffix))?;
+        }
+    }
+    Ok(to)
+}
+
+/// Permanently deletes a database file and its SQLite sidecar files.
+pub fn delete_database(dir: &Path, name: &str, confirm: bool) -> AppResult<()> {
+    if !confirm {
+        return Err(AppError::ConfirmationRequired(format!(
+            "deleting database {name:?} cannot be undone"
+        )));
+    }
+    let path = resolve_database(dir, name)?;
+    fs::remove_file(&path)?;
+    for suffix in SIDECAR_SUFFIXES {
+        let side = sidecar(&path, suffix);
+        if side.exists() {
+            fs::remove_file(&side)?;
+        }
+    }
+    Ok(())
+}
+
+/// Copies a database under a new name. `VACUUM INTO` produces a consistent
+/// snapshot even if the source has an uncommitted journal.
+pub fn duplicate_database(dir: &Path, name: &str, new_name: &str) -> AppResult<PathBuf> {
+    let from = resolve_database(dir, name)?;
+    check_sqlite_header(&from)?;
+    let to = new_database_path(dir, new_name)?;
+    let source = rusqlite::Connection::open_with_flags(
+        &from,
+        rusqlite::OpenFlags::SQLITE_OPEN_READ_ONLY | rusqlite::OpenFlags::SQLITE_OPEN_NO_MUTEX,
+    )
+    .map_err(|e| AppError::InvalidDatabase(format!("{}: {e}", from.display())))?;
+    let target = to.to_str().ok_or_else(|| AppError::InvalidPath("folder path is not valid UTF-8".into()))?;
+    source.execute("VACUUM INTO ?1", [target]).inspect_err(|_| {
+        // The target did not exist before, so whatever is there is ours.
+        let _ = fs::remove_file(&to);
+    })?;
+    Ok(to)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -240,5 +326,37 @@ mod tests {
         store.set(dir.path().to_str().unwrap()).unwrap();
         let reloaded = WorkspaceStore::load(settings);
         assert_eq!(reloaded.get().unwrap(), Some(fs::canonicalize(dir.path()).unwrap()));
+    }
+
+    #[test]
+    fn rename_delete_duplicate() {
+        let dir = tempfile::tempdir().unwrap();
+        let d = dir.path();
+        let p = new_database_path(d, "Shop").unwrap();
+        let db = crate::database::OpenDatabase::create(p.to_str().unwrap()).unwrap();
+        db.conn.execute_batch("CREATE TABLE t(x); INSERT INTO t VALUES (42);").unwrap();
+        db.close().unwrap();
+        fs::write(d.join("other.sqlite"), b"x").unwrap();
+
+        assert!(matches!(rename_database(d, "Shop", "OTHER"), Err(AppError::AlreadyExists(_))));
+        assert!(rename_database(d, "Shop", "a/b").is_err());
+        assert!(rename_database(d, "Shop", "shop").unwrap().ends_with("shop.db"));
+        assert!(rename_database(d, "shop", "Store").unwrap().ends_with("Store.db"));
+        assert!(rename_database(d, "other", "Misc").unwrap().ends_with("Misc.sqlite"));
+
+        assert!(matches!(duplicate_database(d, "Store", "misc"), Err(AppError::AlreadyExists(_))));
+        assert!(duplicate_database(d, "Misc", "Copy").is_err());
+        let copy = duplicate_database(d, "Store", "Store copy").unwrap();
+        let opened = crate::database::OpenDatabase::open(copy.to_str().unwrap()).unwrap();
+        let x: i64 = opened.conn.query_row("SELECT x FROM t", [], |r| r.get(0)).unwrap();
+        assert_eq!(x, 42);
+        let app_id: i32 = opened.conn.pragma_query_value(None, "application_id", |r| r.get(0)).unwrap();
+        assert_eq!(app_id, crate::database::connection::APPLICATION_ID);
+        opened.close().unwrap();
+
+        assert!(matches!(delete_database(d, "Store", false), Err(AppError::ConfirmationRequired(_))));
+        delete_database(d, "Store", true).unwrap();
+        let names: Vec<_> = list_databases(d).unwrap().into_iter().map(|x| x.name).collect();
+        assert_eq!(names, ["Misc", "Store copy"]);
     }
 }
