@@ -1,4 +1,6 @@
-use serde::Serialize;
+use std::collections::BTreeMap;
+
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize)]
 pub struct DatabaseInfo {
@@ -30,3 +32,13 @@ pub struct ObjectSummary {
     /// True when the table definition is owned by this application's metadata.
     pub managed: bool,
 }
+
+/// Where a table's card sits on the Relationships diagram.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+pub struct TablePosition {
+    pub x: f64,
+    pub y: f64,
+}
+
+/// Card positions on the Relationships diagram, keyed by table name.
+pub type DiagramLayout = BTreeMap<String, TablePosition>;

@@ -2,6 +2,7 @@
 	import { toggleMode } from 'mode-watcher';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import EyeIcon from '@lucide/svelte/icons/eye';
+	import NetworkIcon from '@lucide/svelte/icons/network';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import Settings2Icon from '@lucide/svelte/icons/settings-2';
 	import SunMoonIcon from '@lucide/svelte/icons/sun-moon';
@@ -15,7 +16,7 @@
 		onBack
 	}: { open?: boolean; onNewTable: () => void; onBack: () => void } = $props();
 
-	const canEdit = $derived(!!session.table && !session.isView(session.table));
+	const canEdit = $derived(session.screen === 'table' && !!session.table && !session.isView(session.table));
 
 	function run(action: () => void) {
 		open = false;
@@ -52,6 +53,7 @@
 		<Command.Separator />
 		<Command.Group heading="General">
 			<Command.Item onSelect={() => run(onNewTable)}><PlusIcon /> New table</Command.Item>
+			<Command.Item onSelect={() => run(() => session.showRelationships())}><NetworkIcon /> Relationships</Command.Item>
 			<Command.Item onSelect={() => run(toggleMode)}><SunMoonIcon /> Toggle light / dark</Command.Item>
 			<Command.Item onSelect={() => run(onBack)}><ArrowLeftIcon /> All databases</Command.Item>
 		</Command.Group>

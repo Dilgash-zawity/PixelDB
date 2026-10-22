@@ -5,6 +5,7 @@
 	import EllipsisIcon from '@lucide/svelte/icons/ellipsis';
 	import EyeIcon from '@lucide/svelte/icons/eye';
 	import ListIcon from '@lucide/svelte/icons/list';
+	import NetworkIcon from '@lucide/svelte/icons/network';
 	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import SearchIcon from '@lucide/svelte/icons/search';
@@ -16,6 +17,7 @@
 	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
 	import { session } from '#lib/state/session.svelte.js';
 	import { workspace } from '#lib/state/workspace.svelte.js';
+	import Logo from './Logo.svelte';
 	import NameDialog from './NameDialog.svelte';
 	import ThemeToggle from './ThemeToggle.svelte';
 
@@ -47,9 +49,7 @@
 					<DropdownMenu.Trigger>
 						{#snippet child({ props })}
 							<Sidebar.MenuButton {...props} size="lg">
-								<div class="flex aspect-square size-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-									<DatabaseIcon />
-								</div>
+								<Logo />
 								<div class="grid flex-1 text-start leading-tight">
 									<span class="truncate font-semibold">{session.name}</span>
 									<span class="truncate text-xs text-muted-foreground">
@@ -85,6 +85,19 @@
 
 	<Sidebar.Content>
 		<Sidebar.Group>
+			<Sidebar.GroupContent>
+				<Sidebar.Menu>
+					<Sidebar.MenuItem>
+						<Sidebar.MenuButton isActive={session.screen === 'relationships'} onclick={() => session.showRelationships()}>
+							<NetworkIcon />
+							<span>Relationships</span>
+						</Sidebar.MenuButton>
+					</Sidebar.MenuItem>
+				</Sidebar.Menu>
+			</Sidebar.GroupContent>
+		</Sidebar.Group>
+
+		<Sidebar.Group>
 			<Sidebar.GroupLabel>Tables</Sidebar.GroupLabel>
 			<Sidebar.GroupAction title="New table" onclick={() => (creating = true)}>
 				<PlusIcon />
@@ -94,7 +107,7 @@
 				<Sidebar.Menu>
 					{#each session.tables as table (table.name)}
 						<Sidebar.MenuItem>
-							<Sidebar.MenuButton isActive={session.table === table.name} onclick={() => session.select(table.name)}>
+							<Sidebar.MenuButton isActive={session.screen === 'table' && session.table === table.name} onclick={() => session.select(table.name)}>
 								<TableIcon />
 								<span>{table.name}</span>
 							</Sidebar.MenuButton>
@@ -147,7 +160,7 @@
 					<Sidebar.Menu>
 						{#each session.views as view (view.name)}
 							<Sidebar.MenuItem>
-								<Sidebar.MenuButton isActive={session.table === view.name} onclick={() => session.select(view.name, 'records')}>
+								<Sidebar.MenuButton isActive={session.screen === 'table' && session.table === view.name} onclick={() => session.select(view.name, 'records')}>
 									<EyeIcon />
 									<span>{view.name}</span>
 								</Sidebar.MenuButton>

@@ -11,6 +11,7 @@
 	import CommandPalette from '#lib/components/app/CommandPalette.svelte';
 	import DesignView from '#lib/components/app/DesignView.svelte';
 	import RecordsView from '#lib/components/app/RecordsView.svelte';
+	import RelationshipsView from '#lib/components/app/RelationshipsView.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import * as Breadcrumb from '#lib/components/ui/breadcrumb/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -25,6 +26,7 @@
 
 	const name = $derived(page.url.searchParams.get('name') ?? '');
 	let paletteOpen = $state(false);
+	const crumb = $derived(session.screen === 'relationships' ? 'Relationships' : session.table);
 	let sidebar = $state<AppSidebar | null>(null);
 
 	$effect(() => {
@@ -76,20 +78,22 @@
 						</Breadcrumb.Item>
 						<Breadcrumb.Separator class="hidden md:block" />
 						<Breadcrumb.Item>
-							{#if session.table}
+							{#if crumb}
 								<span class="hidden md:inline">{name}</span>
 							{:else}
 								<Breadcrumb.Page>{name}</Breadcrumb.Page>
 							{/if}
 						</Breadcrumb.Item>
-						{#if session.table}
+						{#if crumb}
 							<Breadcrumb.Separator class="hidden md:block" />
-							<Breadcrumb.Item><Breadcrumb.Page>{session.table}</Breadcrumb.Page></Breadcrumb.Item>
+							<Breadcrumb.Item><Breadcrumb.Page>{crumb}</Breadcrumb.Page></Breadcrumb.Item>
 						{/if}
 					</Breadcrumb.List>
 				</Breadcrumb.Root>
 				<span class="flex-1"></span>
-				{#if session.table && !session.isView(session.table)}
+				{#if session.screen === 'relationships'}
+					<!-- The Relationships screen has its own toolbar. -->
+				{:else if session.table && !session.isView(session.table)}
 					<Tabs.Root bind:value={() => session.view, (v) => session.setView(v as TableView)}>
 						<Tabs.List>
 							<Tabs.Trigger value="records"><TableIcon /> Datasheet</Tabs.Trigger>
@@ -106,6 +110,8 @@
 					<div class="flex flex-col gap-2 p-6">
 						{#each Array(5) as _, i (i)}<Skeleton class="h-9" />{/each}
 					</div>
+				{:else if session.screen === 'relationships'}
+					<RelationshipsView />
 				{:else if !session.table}
 					<Empty.Root class="h-full">
 						<Empty.Header>

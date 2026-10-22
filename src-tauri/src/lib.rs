@@ -38,6 +38,8 @@ pub fn run() {
       commands::database::close_database,
       commands::database::get_database_info,
       commands::database::list_objects,
+      commands::database::get_diagram_layout,
+      commands::database::save_diagram_layout,
       commands::tables::get_table,
       commands::tables::create_table,
       commands::tables::rename_table,

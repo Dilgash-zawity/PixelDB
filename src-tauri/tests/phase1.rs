@@ -1,7 +1,7 @@
 //! Phase 1 acceptance tests. Every test uses a real SQLite file in a
 //! temporary directory.
 
-use app_lib::database::{OpenDatabase, migrations, records, schema};
+use app_lib::database::{OpenDatabase, metadata, migrations, records, schema};
 use app_lib::errors::AppError;
 use app_lib::models::*;
 use serde_json::{Value, json};
@@ -462,4 +462,74 @@ fn identifiers_are_quoted_and_validated() {
     assert_eq!(migrations::create_table(c, &bad).unwrap_err().kind(), "validation");
     assert_eq!(migrations::create_table(c, &def).unwrap_err().kind(), "already_exists");
     assert_eq!(migrations::rename_table(c, evil, "__app_tables").unwrap_err().kind(), "invalid_identifier");
+}
+
+#[test]
+fn diagram_layout_round_trips_and_rejects_bad_positions() {
+    let (_dir, path, db) = temp_db();
+    assert!(metadata::load_layout(&db.conn).unwrap().is_empty());
+    let mut layout = DiagramLayout::new();
+    layout.insert("Customers".into(), TablePosition { x: 40.0, y: -12.5 });
+    metadata::save_layout(&db.conn, &layout).unwrap();
+    drop(db);
+
+    let db = OpenDatabase::open(&path).unwrap();
+    assert_eq!(metadata::load_layout(&db.conn).unwrap(), layout);
+    // The layout row is not a user table.
+    assert!(schema::list_objects(&db.conn).unwrap().is_empty());
+
+    layout.insert("Orders".into(), TablePosition { x: f64::INFINITY, y: 0.0 });
+    assert!(matches!(metadata::save_layout(&db.conn, &layout), Err(AppError::Validation(_))));
+}
+
+/// The Relationships screen links tables by saving the child's design with a
+/// foreign key, turning the linking number field into a lookup.
+#[test]
+fn linking_an_existing_field_keeps_data_and_enforces_it() {
+    let (_dir, _path, db) = temp_db();
+    let categories = TableDef {
+        name: "Categories".into(),
+        fields: vec![auto_id(), field("name", FieldType::ShortText { max_length: None })],
+        foreign_keys: vec![],
+        unique_constraints: vec![],
+        checks: vec![],
+        description: None,
+    };
+    let mut products = TableDef {
+        name: "Products".into(),
+        fields: vec![auto_id(), field("category_id", FieldType::Number { real: false })],
+        ..categories.clone()
+    };
+    migrations::create_table(&db.conn, &categories).unwrap();
+    migrations::create_table(&db.conn, &products).unwrap();
+    records::insert_record(&db.conn, "Categories", &values(json!({"name": "Tea"}))).unwrap();
+    records::insert_record(&db.conn, "Products", &values(json!({"category_id": 1}))).unwrap();
+
+    products.fields[1].field_type = FieldType::Lookup {
+        value_type: LookupValueType::Integer,
+        display_column: Some("name".into()),
+    };
+    products.foreign_keys.push(ForeignKeyDef {
+        columns: vec!["category_id".into()],
+        ref_table: "Categories".into(),
+        ref_columns: vec!["id".into()],
+        on_delete: FkAction::Restrict,
+        on_update: FkAction::Cascade,
+    });
+    let design = TableDesign { definition: products.clone(), renames: vec![] };
+    migrations::save_table_design(&db.conn, "Products", &design, false).unwrap();
+    assert_eq!(all_rows(&db, "Products").rows[0].values[1], json!(1));
+    let orphan = records::insert_record(&db.conn, "Products", &values(json!({"category_id": 99})));
+    assert!(matches!(orphan, Err(AppError::Constraint(_))), "{orphan:?}");
+
+    // Existing rows that would break a new link make the save fail untouched.
+    let mut orders = TableDef { name: "Orders".into(), ..products.clone() };
+    orders.fields[1].field_type = FieldType::Number { real: false };
+    orders.foreign_keys.clear();
+    migrations::create_table(&db.conn, &orders).unwrap();
+    records::insert_record(&db.conn, "Orders", &values(json!({"category_id": 7}))).unwrap();
+    orders.foreign_keys = products.foreign_keys.clone();
+    let design = TableDesign { definition: orders, renames: vec![] };
+    assert!(migrations::save_table_design(&db.conn, "Orders", &design, false).is_err());
+    assert_eq!(all_rows(&db, "Orders").rows.len(), 1);
 }

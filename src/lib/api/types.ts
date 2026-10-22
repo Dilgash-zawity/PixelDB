@@ -201,3 +201,11 @@ export interface DatabaseFile {
 	modified: number | null;
 	valid: boolean;
 }
+
+export interface TablePosition {
+	x: number;
+	y: number;
+}
+
+/** Card positions on the Relationships diagram, keyed by table name. */
+export type DiagramLayout = Record<string, TablePosition>;

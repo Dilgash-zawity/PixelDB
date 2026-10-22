@@ -12,6 +12,7 @@
 	import SearchIcon from '@lucide/svelte/icons/search';
 	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
 	import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
+	import Logo from '#lib/components/app/Logo.svelte';
 	import NameDialog from '#lib/components/app/NameDialog.svelte';
 	import ThemeToggle from '#lib/components/app/ThemeToggle.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
@@ -68,8 +69,10 @@
 {#snippet dbCard(db: DatabaseFile)}
 	<Card.Root class="relative h-full transition-colors hover:bg-accent/40 has-[a:focus-visible]:ring-2 has-[a:focus-visible]:ring-ring">
 		<Card.Header>
-			<Card.Title class="flex min-w-0 items-center gap-2">
-				<DatabaseIcon />
+			<Card.Title class="flex min-w-0 items-center gap-3">
+				<span class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+					<DatabaseIcon class="size-4.5" />
+				</span>
 				{#if db.valid}
 					<!-- The link's ::after covers the card so the whole card opens the database. -->
 					<a href={databaseHref(resolve('/db'), db.name)} class="truncate outline-none after:absolute after:inset-0">
@@ -120,9 +123,12 @@
 {/snippet}
 
 <div class="flex min-h-svh flex-col">
-	<header class="flex h-14 items-center gap-3 border-b px-6">
-		<DatabaseIcon />
-		<span class="font-semibold">Tables</span>
+	<header class="flex h-14 items-center gap-3 border-b bg-sidebar px-6">
+		<Logo class="size-7" />
+		<div class="flex flex-col leading-tight">
+			<span class="font-semibold">Tables</span>
+			<span class="text-xs text-muted-foreground">Offline database studio</span>
+		</div>
 		<span class="flex-1"></span>
 		<ThemeToggle />
 	</header>
@@ -135,7 +141,11 @@
 		{:else if !workspace.info}
 			<Empty.Root class="my-auto">
 				<Empty.Header>
-					<Empty.Media variant="icon"><FolderOpenIcon /></Empty.Media>
+					<Empty.Media><Logo class="size-24" /></Empty.Media>
+					<Empty.Title class="text-2xl">Welcome to Tables</Empty.Title>
+					<Empty.Description>Build databases the way you would in Access — tables, records and relationships — all stored privately on your computer.</Empty.Description>
+				</Empty.Header>
+				<Empty.Header>
 					<Empty.Title>Where should your databases live?</Empty.Title>
 					<Empty.Description>
 						Pick a folder on this computer. Each database is saved there as a single file, and nothing ever leaves
@@ -207,6 +217,12 @@
 							<div class="opacity-60" title="This file is not a SQLite database">{@render dbCard(db)}</div>
 						{/if}
 					{/each}
+					{#if !filter.trim()}
+						<Button variant="outline" class="h-full min-h-32 flex-col border-dashed text-muted-foreground" onclick={() => (creating = true)}>
+							<PlusIcon />
+							New database
+						</Button>
+					{/if}
 				</div>
 			{/if}
 		{/if}

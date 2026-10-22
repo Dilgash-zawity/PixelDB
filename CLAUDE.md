@@ -19,7 +19,7 @@ bunx tauri build --debug --no-bundle                  # build the app binary wit
 bunx --bun shadcn-svelte@latest add <component>       # add a UI component
 ```
 
-The shadcn-svelte CLI prompts interactively (e.g. "overwrite existing files?") and has no TTY in agent shells; drive it with `expect` sending Enter on idle, which accepts the safe defaults.
+The shadcn-svelte CLI prompts interactively and has no TTY in agent shells; drive it with `expect`, answering `y` to "Ready to install components and dependencies?" (Enter alone cancels it) and Enter on idle for other prompts.
 
 ## Architecture
 
@@ -39,9 +39,10 @@ The shadcn-svelte CLI prompts interactively (e.g. "overwrite existing files?") a
 - `services/` — typed wrappers around `invoke`.
 - `logic/` — framework-free, unit-tested business logic: `table-draft.ts` (design edits → `TableDesign` with rename tracking), `record-buffer.ts` (per-record edit buffer with field/record undo and submission rules), `filters.ts`, `lookups.ts`, `values.ts`. Put new non-UI logic here with a `*.test.ts`. Use `jsonClone`, not `structuredClone` — the latter throws on Svelte `$state` proxies.
 - `state/` — rune-based singletons: `workspace`, `session` (open DB, current table, `view: 'records' | 'fields'`), `feedback` (toasts + a promise-based `confirm()`).
+- Theme tokens live in `src/app.css` (blue primary, plus custom `--key` for primary-key icons and `--canvas`/`--canvas-dot` for the diagram). The logo is `src/lib/assets/logo.svg`; app icons in `src-tauri/icons` are generated from a 1024px render of it with `bunx tauri icon`.
 - `components/ui/` — generated shadcn-svelte components; change via the CLI rather than hand edits. `components/app/` — app screens composed only from those.
 
-**Screens.** `routes/+page.svelte` is the folder/database list; `routes/db/+page.svelte?name=…` is a database (query param keeps the route prerenderable). `RecordsView.svelte` is the Access-style Datasheet (in-place editing; a row commits when you leave it; Esc undoes field then record; `*` new-record row; "Click to Add"); `DesignView.svelte` is the Design grid + Field Properties with explicit Save. Each registers `session.leaveGuard` so switching tables/views/databases first commits the row or asks about unsaved design changes; navigation is serialized so a guard can't run twice. The command palette talks to the open view through `session.request(...)` / `session.intent`.
+**Screens.** `routes/+page.svelte` is the folder/database list; `routes/db/+page.svelte?name=…` is a database (query param keeps the route prerenderable). `RecordsView.svelte` is the Access-style Datasheet (in-place editing; a row commits when you leave it; Esc undoes field then record; `*` new-record row; "Click to Add"); `DesignView.svelte` is the Design grid + Field Properties with explicit Save. `RelationshipsView.svelte` (`session.screen === 'relationships'`) is the Access-style Relationships diagram: drag a field's dot onto another table to propose a link (`logic/relationships.ts` `proposeLink`), and every link change is a `save_table_design` of the child table (FK + optional lookup field, or a junction table for many-to-many). Card positions are saved in `__app_meta` (`metadata::save_layout`). Views each register `session.leaveGuard` so switching tables/views/databases first commits the row or asks about unsaved design changes; navigation is serialized so a guard can't run twice. The command palette talks to the open view through `session.request(...)` / `session.intent`.
 
 ## Conventions and gotchas
 

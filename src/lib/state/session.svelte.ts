@@ -7,6 +7,8 @@ import { workspaceService } from '../services/workspace';
 import { attempt, confirm } from './feedback.svelte';
 
 export type TableView = 'records' | 'fields';
+/** What fills the database page: one table, or the Relationships diagram. */
+export type Screen = 'table' | 'relationships';
 
 /** The database open on the database page and the table being viewed. */
 class Session {
@@ -17,6 +19,7 @@ class Session {
 	loadError = $state<string | null>(null);
 	table = $state<string | null>(null);
 	view = $state<TableView>('records');
+	screen = $state<Screen>('table');
 	/** Bumped whenever the open table's structure changes elsewhere. */
 	revision = $state(0);
 	/** One-shot requests from the command palette, read by the open view. */
@@ -35,6 +38,7 @@ class Session {
 		this.info = null;
 		this.objects = [];
 		this.table = null;
+		this.screen = 'table';
 		this.loadError = null;
 		this.loading = true;
 		try {
@@ -74,14 +78,27 @@ class Session {
 	/** Opens a table (and view), letting the current view save or cancel first. */
 	async select(name: string, view: TableView = this.view): Promise<boolean> {
 		const next = this.isView(name) ? 'records' : view;
-		if (name === this.table && next === this.view) return true;
+		if (name === this.table && next === this.view && this.screen === 'table') return true;
+		return this.navigate(() => {
+			this.table = name;
+			this.view = next;
+			this.screen = 'table';
+		});
+	}
+
+	/** Shows the Relationships diagram, letting the open view save or cancel first. */
+	async showRelationships(): Promise<boolean> {
+		if (this.screen === 'relationships') return true;
+		return this.navigate(() => (this.screen = 'relationships'));
+	}
+
+	private async navigate(apply: () => void): Promise<boolean> {
 		// One navigation at a time, so a guard's dialog is never opened twice.
 		if (this.navigating) return false;
 		this.navigating = true;
 		try {
 			if (this.leaveGuard && !(await this.leaveGuard())) return false;
-			this.table = name;
-			this.view = next;
+			apply();
 			return true;
 		} finally {
 			this.navigating = false;
@@ -108,8 +125,8 @@ class Session {
 		);
 	}
 
-	/** Creates a table with an automatic ID and opens its fields. */
-	async createTable(name: string): Promise<boolean> {
+	/** Creates a table with an automatic ID and, unless `open` is false, opens it. */
+	async createTable(name: string, open = true): Promise<boolean> {
 		const created = await attempt(() =>
 			tableService.create({
 				name,
@@ -118,6 +135,10 @@ class Session {
 		);
 		if (!created) return false;
 		await this.refresh();
+		if (!open) {
+			toast.success(`Created “${created.definition.name}”`);
+			return true;
+		}
 		await this.select(created.definition.name, 'records');
 		toast.success(`Created “${created.definition.name}”`, {
 			description: 'Use “Click to Add” to add fields, or switch to Design view.'
