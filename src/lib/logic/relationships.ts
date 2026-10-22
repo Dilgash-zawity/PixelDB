@@ -7,6 +7,7 @@ import type {
 	TableDef,
 	TableDesign
 } from '../api/types';
+import * as draft from './table-draft';
 import { jsonClone } from './values';
 
 /**
@@ -362,6 +363,36 @@ export function describeRelationship(rel: Pick<Relationship, 'parent' | 'child' 
 		: `Each ${rel.parent} record can have many ${rel.child} records; each of those belongs to one ${rel.parent} record.`;
 }
 
+// ── Editing a single field from the diagram ──
+
+/**
+ * The table's design with one field added (`original` null) or replaced.
+ * Renames carry over to the table's relationships. Returns the client-side
+ * problems instead of a design when the field can't be saved as is.
+ */
+export function fieldDesign(def: TableDef, original: string | null, f: FieldDef): TableDesign | string[] {
+	const d = draft.draftFromDefinition(def);
+	let target: draft.DraftField | undefined;
+	if (original === null) {
+		target = draft.addField(d, f.field_type.type, f.name);
+	} else {
+		target = d.fields.find((x) => x.originalName !== null && same(x.originalName, original));
+		if (!target) return [`“${def.name}” has no field “${original}”`];
+		if (target.field.name !== f.name) draft.renameField(d, target.id, f.name);
+	}
+	target.field = jsonClone(f);
+	const problems = draft.validateDraft(d);
+	return problems.length ? problems : draft.toDesign(d);
+}
+
+/** The table's design without field `name` (and the links that use it). */
+export function withoutField(def: TableDef, name: string): TableDesign {
+	const d = draft.draftFromDefinition(def);
+	const target = d.fields.find((x) => same(x.field.name, name));
+	if (target) draft.removeField(d, target.id);
+	return draft.toDesign(d);
+}
+
 // ── Diagram geometry ────────────────────────────────────────────────────────
 
 export const CARD_WIDTH = 248;
@@ -369,8 +400,9 @@ export const CARD_HEADER = 44;
 export const CARD_ROW = 30;
 export const CARD_PADDING = 6;
 
+/** Card height: header, one row per field, and the "Add field" row. */
 export function cardHeight(def: TableDef): number {
-	return CARD_HEADER + CARD_PADDING * 2 + Math.max(1, def.fields.length) * CARD_ROW;
+	return CARD_HEADER + CARD_PADDING * 2 + (def.fields.length + 1) * CARD_ROW;
 }
 
 /** Vertical centre of field `index` relative to the card's top. */

@@ -12,7 +12,7 @@
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
-	<title>Tables</title>
+	<title>Base</title>
 </svelte:head>
 
 <ModeWatcher defaultMode="dark" />

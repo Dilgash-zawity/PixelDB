@@ -1,38 +1,32 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
   <defs>
-    <linearGradient id="bg" x1="0.15" y1="0" x2="0.85" y2="1">
-      <stop offset="0" stop-color="#4C8DFF"/>
-      <stop offset="1" stop-color="#3B3FD8"/>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#EF4444"/>
+      <stop offset="1" stop-color="#B91C1C"/>
     </linearGradient>
-    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.22"/>
-      <stop offset="0.5" stop-color="#FFFFFF" stop-opacity="0"/>
+    <linearGradient id="gloss" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#FFFFFF" stop-opacity="0.18"/>
+      <stop offset="0.45" stop-color="#FFFFFF" stop-opacity="0"/>
     </linearGradient>
-    <linearGradient id="disc" x1="0" y1="0" x2="0" y2="1">
+    <linearGradient id="side" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#FFE9E9"/>
+      <stop offset="0.35" stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#FAD4D4"/>
+    </linearGradient>
+    <linearGradient id="top" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#FFFFFF"/>
-      <stop offset="1" stop-color="#E3EBFF"/>
+      <stop offset="1" stop-color="#FFF1F1"/>
     </linearGradient>
-    <clipPath id="body"><path d="M232 318 V658 A168 56 0 0 0 568 658 V318 Z"/></clipPath>
   </defs>
-  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#bg)"/>
-  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#shine)"/>
-  <g transform="translate(-38 0)">
-  <!-- database cylinder -->
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#tile)"/>
+  <rect x="100" y="100" width="824" height="824" rx="186" fill="url(#gloss)"/>
+  <g transform="translate(512 528) scale(0.9) translate(-512 -528)">
+  <ellipse cx="512" cy="840" rx="216" ry="26" fill="#7F1D1D" opacity="0.35"/>
   <g>
-    <path d="M232 318 V658 A168 56 0 0 0 568 658 V318 Z" fill="url(#disc)"/>
-    <g clip-path="url(#body)"><path d="M232 431 A168 56 0 0 0 568 431" fill="none" stroke="#4560EC" stroke-width="18" stroke-linecap="butt"/>
-    <path d="M232 544 A168 56 0 0 0 568 544" fill="none" stroke="#4560EC" stroke-width="18" stroke-linecap="butt"/></g>
-    <ellipse cx="400" cy="318" rx="168" ry="56" fill="#FFFFFF"/>
-    <ellipse cx="400" cy="318" rx="122" ry="34" fill="#C9D7FF"/>
+    <path d="M276 326 A236 72 0 0 0 748 326 V446 A236 72 0 0 1 276 446 Z" fill="url(#side)"/>
+    <path d="M276 486 A236 72 0 0 0 748 486 V606 A236 72 0 0 1 276 606 Z" fill="url(#side)"/>
+    <path d="M276 646 A236 72 0 0 0 748 646 V742 A236 72 0 0 1 276 742 Z" fill="url(#side)"/>
+    <ellipse cx="512" cy="286" rx="236" ry="72" fill="url(#top)"/>
   </g>
-  <!-- relationship connector -->
-  <path d="M568 488 H624 Q652 488 652 516 V640 Q652 668 680 668 H700" fill="none" stroke="#FFFFFF" stroke-width="22" stroke-linecap="round"/>
-  <circle cx="568" cy="488" r="22" fill="#FFFFFF"/>
-  <!-- linked table -->
-  <rect x="690" y="560" width="200" height="216" rx="34" fill="#FFFFFF"/>
-  <path d="M690 594 A34 34 0 0 1 724 560 H856 A34 34 0 0 1 890 594 V616 H690 Z" fill="#9EB6FF"/>
-  <rect x="722" y="646" width="136" height="18" rx="9" fill="#C9D7FF"/>
-  <rect x="722" y="686" width="104" height="18" rx="9" fill="#C9D7FF"/>
-  <rect x="722" y="726" width="122" height="18" rx="9" fill="#C9D7FF"/>
   </g>
 </svg>

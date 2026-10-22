@@ -6,6 +6,8 @@ import {
 	autoLayout,
 	cardHeight,
 	edgeRoute,
+	fieldDesign,
+	withoutField,
 	junctionDef,
 	junctionName,
 	keyColumns,
@@ -170,6 +172,45 @@ describe('drag to link', () => {
 		expect(typeMismatch(categories, 'ID', products, 'Title')).toContain('whole numbers');
 		expect(typeMismatch(categories, 'ID', products, 'CategoryID')).toBeNull();
 		expect(typeMismatch(categories, 'ID', products, null)).toBeNull();
+	});
+});
+
+describe('editing fields on the diagram', () => {
+	test('adds a field with its rules', () => {
+		const design = fieldDesign(suppliers, null, {
+			name: 'rating',
+			field_type: { type: 'number', real: false },
+			required: true,
+			check: 'rating BETWEEN 1 AND 5'
+		});
+		if (Array.isArray(design)) throw new Error(design.join());
+		expect(design.definition.fields.at(-1)).toEqual({
+			name: 'rating',
+			field_type: { type: 'number', real: false },
+			required: true,
+			check: 'rating BETWEEN 1 AND 5'
+		});
+		expect(design.renames).toEqual([]);
+	});
+
+	test('renaming keeps the relationship and reports the rename', () => {
+		const design = fieldDesign(products, 'CategoryID', { ...products.fields[2], name: 'Category' });
+		if (Array.isArray(design)) throw new Error(design.join());
+		expect(design.renames).toEqual([{ from: 'CategoryID', to: 'Category' }]);
+		expect(design.definition.foreign_keys?.[0].columns).toEqual(['Category']);
+	});
+
+	test('problems are returned instead of a design', () => {
+		expect(fieldDesign(products, null, { name: 'Title', field_type: { type: 'short_text' } })).toEqual([
+			'Duplicate field name "Title"'
+		]);
+		expect(fieldDesign(products, 'Nope', products.fields[1])).toEqual(['“Products” has no field “Nope”']);
+	});
+
+	test('removing a field drops its relationship', () => {
+		const { definition } = withoutField(products, 'CategoryID');
+		expect(definition.fields.map((f) => f.name)).toEqual(['ID', 'Title']);
+		expect(definition.foreign_keys).toEqual([]);
 	});
 });
 

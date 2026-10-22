@@ -17,7 +17,7 @@
 	import PanelRightIcon from '@lucide/svelte/icons/panel-right-open';
 	import PaperclipIcon from '@lucide/svelte/icons/paperclip';
 	import PencilIcon from '@lucide/svelte/icons/pencil';
-	import PencilRulerIcon from '@lucide/svelte/icons/pencil-ruler';
+	import Settings2Icon from '@lucide/svelte/icons/settings-2';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
 	import SaveIcon from '@lucide/svelte/icons/save';
@@ -53,6 +53,7 @@
 	import FieldTypeIcon from './FieldTypeIcon.svelte';
 	import FilterPopover from './FilterPopover.svelte';
 	import NameDialog from './NameDialog.svelte';
+	import FieldDrawer from './FieldDrawer.svelte';
 	import RecordSheet from './RecordSheet.svelte';
 
 	let { table, isView }: { table: string; isView: boolean } = $props();
@@ -80,6 +81,8 @@
 	let selected = $state<Record<string, RecordKey>>({});
 	let lookups = $state<Record<string, LookupOption[]>>({});
 	let sheetOpen = $state(false);
+	/** The field drawer: which field (null for a new one) and whether it is open. */
+	let fieldDrawer = $state<{ open: boolean; field: string | null }>({ open: false, field: null });
 	let sheetRow = $state<RecordRow | null>(null);
 	let menuTarget = $state<MenuTarget>(null);
 	let addType = $state<FieldTypeName | null>(null);
@@ -458,6 +461,7 @@
 		if (n === lastIntent) return;
 		lastIntent = n;
 		if (kind === 'new-record' && !isView) newRecord();
+		if (kind === 'new-field' && !isView) fieldDrawer = { open: true, field: null };
 	});
 
 	function onWindowKey(e: KeyboardEvent) {
@@ -597,8 +601,8 @@
 													</DropdownMenu.Group>
 													<DropdownMenu.Separator />
 													<DropdownMenu.Group>
-														<DropdownMenu.Item onclick={() => session.setView('fields')}>
-															<PencilRulerIcon /> More types in Design view
+														<DropdownMenu.Item onclick={() => (fieldDrawer = { open: true, field: null })}>
+															<Settings2Icon /> More types and rules…
 														</DropdownMenu.Item>
 													</DropdownMenu.Group>
 												</DropdownMenu.Content>
@@ -801,13 +805,14 @@
 		<M.Separator />
 		<M.Group>
 			<M.Item onclick={() => (renaming = col)}><PencilIcon /> Rename field</M.Item>
-			<M.Item onclick={() => session.setView('fields')}><PencilRulerIcon /> Design view</M.Item>
+			<M.Item onclick={() => (fieldDrawer = { open: true, field: col })}><Settings2Icon /> Edit field…</M.Item>
 			<M.Item variant="destructive" disabled={columns.length <= 1} onclick={() => deleteColumn(col)}><TrashIcon /> Delete field</M.Item>
 		</M.Group>
 	{/if}
 {/snippet}
 
 {#if def && !isView}
+	<FieldDrawer bind:open={fieldDrawer.open} {table} field={fieldDrawer.field} onSaved={load} />
 	<RecordSheet bind:open={sheetOpen} {table} {def} columns={columns} row={sheetRow} {lookups} onSaved={load} />
 {/if}
 

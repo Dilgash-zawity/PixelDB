@@ -10,6 +10,7 @@
 	import type { DiagramLayout, FkAction, TableDef, TableInfo } from '#lib/api/types.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as ButtonGroup from '#lib/components/ui/button-group/index.js';
+	import * as Drawer from '#lib/components/ui/drawer/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import { Kbd } from '#lib/components/ui/kbd/index.js';
@@ -44,6 +45,8 @@
 	import { session } from '#lib/state/session.svelte.js';
 	import DiagramCard from './DiagramCard.svelte';
 	import NameDialog from './NameDialog.svelte';
+	import ConfirmHost from './ConfirmHost.svelte';
+	import FieldDrawer from './FieldDrawer.svelte';
 	import RelationshipPanel, { type Selection } from './RelationshipPanel.svelte';
 
 	const MIN_ZOOM = 0.25;
@@ -57,7 +60,10 @@
 	let zoom = $state(1);
 	let pan = $state<Point>({ x: 0, y: 0 });
 	let selection = $state<Selection>(null);
-	let tab = $state('relationship');
+	/** The field drawer: which table and field (null for a new one). */
+	let fieldDrawer = $state<{ open: boolean; table: string; field: string | null }>({ open: false, table: '', field: null });
+	let renamingTable = $state<string | null>(null);
+	const SCOPE = 'diagram-drawer';
 	let draft = $state<LinkDraft | null>(null);
 	let hoveredTable = $state<string | null>(null);
 	let hoveredEdge = $state<string | null>(null);
@@ -284,7 +290,6 @@
 	function openDraft(d: LinkDraft) {
 		draft = d;
 		selection = { kind: 'new' };
-		tab = 'relationship';
 	}
 
 	/** Opens an empty "new relationship" form, starting from `parent` if given. */
@@ -308,12 +313,10 @@
 
 	function selectTable(name: string) {
 		selection = { kind: 'table', name };
-		tab = 'table';
 	}
 
 	function selectRelationship(id: string) {
 		selection = { kind: 'relationship', id };
-		tab = 'relationship';
 	}
 
 	// ── Applying changes ──
@@ -392,7 +395,8 @@
 			title: `Unlink ${rel.child} from ${rel.parent}?`,
 			description: `Records keep the values in “${rel.childColumns.join(', ')}”, but they will no longer be checked against ${rel.parent}.`,
 			action: 'Remove relationship',
-			destructive: true
+			destructive: true,
+			scope: SCOPE
 		});
 		if (!ok) return;
 		busy = true;
@@ -405,6 +409,33 @@
 		} finally {
 			busy = false;
 		}
+	}
+
+	/** Opens a field of `table` in the field drawer; `name` null starts a new one. */
+	function openField(table: string, name: string | null) {
+		selection = null;
+		fieldDrawer = { open: true, table, field: name };
+	}
+
+	async function renameTable(name: string, newName: string): Promise<boolean> {
+		if (name === newName) return true;
+		if (!(await session.renameTable(name, newName))) return false;
+		if (layout[name]) {
+			layout[newName] = layout[name];
+			delete layout[name];
+		}
+		await load();
+		saveLayoutSoon();
+		if (selection?.kind === 'table' && selection.name === name) selection = { kind: 'table', name: newName };
+		return true;
+	}
+
+	async function deleteTable(name: string) {
+		if (!(await session.deleteTable(name, selection ? SCOPE : undefined))) return;
+		selection = null;
+		delete layout[name];
+		await load();
+		saveLayoutSoon();
 	}
 
 	function arrange() {
@@ -449,23 +480,18 @@
 
 <svelte:window onkeydown={onKey} />
 
-<div class="flex h-full min-h-0">
-	<div class="flex min-w-0 flex-1 flex-col">
-		<div class="flex flex-wrap items-center gap-3 border-b px-5 py-3">
-			<div class="flex min-w-0 flex-col">
-				<h1 class="text-lg font-semibold tracking-tight">Relationships</h1>
-				<p class="text-sm text-muted-foreground">Define how the tables in {session.name} connect</p>
-			</div>
-			<span class="flex-1"></span>
+<div class="flex h-full min-h-0 flex-col">
+		<div class="flex flex-wrap items-center gap-2 border-b px-4 py-2">
 			<Button size="sm" onclick={() => startLink()} disabled={!defs.length}>
-				<LinkIcon data-icon="inline-start" /> New relationship
+				<LinkIcon data-icon="inline-start" /> Link tables
 			</Button>
 			<Button size="sm" variant="outline" onclick={() => (addingTable = true)}>
 				<PlusIcon data-icon="inline-start" /> Add table
 			</Button>
 			<Button size="sm" variant="outline" onclick={arrange} disabled={!defs.length}>
-				<LayoutGridIcon data-icon="inline-start" /> Auto arrange
+				<LayoutGridIcon data-icon="inline-start" /> Tidy up
 			</Button>
+			<span class="flex-1"></span>
 			<ButtonGroup.Root>
 				<Button size="icon-sm" variant="outline" aria-label="Zoom out" onclick={() => zoomTo(zoom / 1.2)}><MinusIcon /></Button>
 				<DropdownMenu.Root>
@@ -495,9 +521,9 @@
 			{@attach wheel}
 			role="application"
 			aria-label="Relationships diagram"
-			class="relative min-h-0 flex-1 overflow-hidden bg-canvas"
+			class="relative min-h-0 flex-1 overflow-hidden bg-muted/40"
 			class:cursor-crosshair={!!connecting}
-			style:background-image="radial-gradient(var(--canvas-dot) 1px, transparent 1px)"
+			style:background-image="radial-gradient(var(--border) 1px, transparent 1px)"
 			style:background-size="{20 * zoom}px {20 * zoom}px"
 			style:background-position="{pan.x}px {pan.y}px"
 			onpointerdown={startPan}
@@ -561,8 +587,13 @@
 								connecting={!!connecting}
 								onHeaderDown={(e) => startCardDrag(e, def.name)}
 								onConnectStart={(e, field, side) => startConnect(e, def.name, field, side)}
-								onOpen={(view) => session.select(def.name, view)}
+								onOpen={() => session.select(def.name)}
+								onRename={() => (renamingTable = def.name)}
+								onDelete={() => deleteTable(def.name)}
 								onLink={() => startLink(def.name)}
+								selectedField={selection?.kind === 'field' && selection.table === def.name ? selection.field : null}
+								onFieldClick={(f) => openField(def.name, f)}
+								onAddField={() => openField(def.name, null)}
 								onHover={(inside) => (hoveredTable = inside ? def.name : hoveredTable === def.name ? null : hoveredTable)}
 							/>
 						{/if}
@@ -574,27 +605,49 @@
 				</p>
 			{/if}
 		</div>
-	</div>
-
-	<RelationshipPanel
-		{defs}
-		{infos}
-		{rels}
-		{selection}
-		bind:tab
-		bind:draft
-		{busy}
-		onSelect={(s) => {
-			selection = s;
-			if (s?.kind === 'relationship') tab = 'relationship';
-		}}
-		onCreate={create}
-		onUpdate={update}
-		onDelete={remove}
-		onOpen={(table, view) => session.select(table, view)}
-		onStartLink={startLink}
-	/>
 </div>
+
+<Drawer.Root direction="right" bind:open={() => selection !== null, (open) => !open && (selection = null)}>
+	<Drawer.Content>
+		<Drawer.Header class="sr-only">
+			<Drawer.Title>{selection?.kind === 'table' ? selection.name : 'Relationship'}</Drawer.Title>
+			<Drawer.Description>Details of the selected item on the diagram</Drawer.Description>
+		</Drawer.Header>
+		<RelationshipPanel
+			{defs}
+			{infos}
+			{rels}
+			{selection}
+			bind:draft
+			{busy}
+			onSelect={(s) => (s?.kind === 'field' ? openField(s.table, s.field) : (selection = s))}
+			onCreate={create}
+			onUpdate={update}
+			onDelete={remove}
+			onOpen={(table) => session.select(table)}
+			onStartLink={startLink}
+			onRenameTable={(t) => (renamingTable = t)}
+			onDeleteTable={deleteTable}
+		/>
+		<ConfirmHost scope={SCOPE} />
+	</Drawer.Content>
+</Drawer.Root>
+
+<FieldDrawer
+	bind:open={fieldDrawer.open}
+	table={fieldDrawer.table}
+	field={fieldDrawer.field}
+	onSaved={() => load()}
+/>
+
+<NameDialog
+	bind:open={() => renamingTable !== null, (o) => !o && (renamingTable = null)}
+	title="Rename table"
+	initial={renamingTable ?? ''}
+	submitLabel="Rename"
+	validate={(v) => session.tableNameProblem(v, renamingTable ?? undefined)}
+	onSubmit={(v) => (renamingTable ? renameTable(renamingTable, v) : Promise.resolve(true))}
+/>
 
 <NameDialog
 	bind:open={addingTable}

@@ -6,9 +6,8 @@ import { tableService } from '../services/tables';
 import { workspaceService } from '../services/workspace';
 import { attempt, confirm } from './feedback.svelte';
 
-export type TableView = 'records' | 'fields';
-/** What fills the database page: one table, or the Relationships diagram. */
-export type Screen = 'table' | 'relationships';
+/** The two tabs of the database page. */
+export type Tab = 'diagram' | 'datasheet';
 
 /** The database open on the database page and the table being viewed. */
 class Session {
@@ -18,8 +17,7 @@ class Session {
 	loading = $state(false);
 	loadError = $state<string | null>(null);
 	table = $state<string | null>(null);
-	view = $state<TableView>('records');
-	screen = $state<Screen>('table');
+	tab = $state<Tab>('diagram');
 	/** Bumped whenever the open table's structure changes elsewhere. */
 	revision = $state(0);
 	/** One-shot requests from the command palette, read by the open view. */
@@ -38,7 +36,7 @@ class Session {
 		this.info = null;
 		this.objects = [];
 		this.table = null;
-		this.screen = 'table';
+		this.tab = 'diagram';
 		this.loadError = null;
 		this.loading = true;
 		try {
@@ -75,21 +73,20 @@ class Session {
 	 */
 	leaveGuard: (() => Promise<boolean>) | null = null;
 
-	/** Opens a table (and view), letting the current view save or cancel first. */
-	async select(name: string, view: TableView = this.view): Promise<boolean> {
-		const next = this.isView(name) ? 'records' : view;
-		if (name === this.table && next === this.view && this.screen === 'table') return true;
+	/** Opens a table in the Datasheet tab, letting the open datasheet save first. */
+	async select(name: string): Promise<boolean> {
+		if (name === this.table && this.tab === 'datasheet') return true;
 		return this.navigate(() => {
 			this.table = name;
-			this.view = next;
-			this.screen = 'table';
+			this.tab = 'datasheet';
 		});
 	}
 
-	/** Shows the Relationships diagram, letting the open view save or cancel first. */
-	async showRelationships(): Promise<boolean> {
-		if (this.screen === 'relationships') return true;
-		return this.navigate(() => (this.screen = 'relationships'));
+	/** Switches tabs; leaving the Datasheet commits the row being edited first. */
+	async showTab(tab: Tab): Promise<boolean> {
+		if (tab === this.tab) return true;
+		if (tab === 'datasheet' && !this.table) this.table = this.tables[0]?.name ?? this.views[0]?.name ?? null;
+		return this.navigate(() => (this.tab = tab));
 	}
 
 	private async navigate(apply: () => void): Promise<boolean> {
@@ -106,10 +103,6 @@ class Session {
 	}
 
 	private navigating = false;
-
-	async setView(view: TableView): Promise<boolean> {
-		return this.table ? this.select(this.table, view) : false;
-	}
 
 	isView(name: string | null): boolean {
 		return !!name && this.views.some((v) => v.name === name);
@@ -139,9 +132,9 @@ class Session {
 			toast.success(`Created “${created.definition.name}”`);
 			return true;
 		}
-		await this.select(created.definition.name, 'records');
+		await this.select(created.definition.name);
 		toast.success(`Created “${created.definition.name}”`, {
-			description: 'Use “Click to Add” to add fields, or switch to Design view.'
+			description: 'Use “Click to Add” to add fields.'
 		});
 		return true;
 	}
@@ -154,19 +147,22 @@ class Session {
 		return true;
 	}
 
-	async deleteTable(name: string) {
+	/** Asks, then deletes a table. `scope` places the question above a drawer. */
+	async deleteTable(name: string, scope?: string): Promise<boolean> {
 		const ok = await confirm({
 			title: `Delete “${name}”?`,
 			description: 'The table and every record in it will be permanently deleted. This cannot be undone.',
 			action: 'Delete table',
-			destructive: true
+			destructive: true,
+			scope
 		});
-		if (!ok) return;
+		if (!ok) return false;
 		const result = await attempt(() => tableService.drop(name, true));
-		if (!result) return;
+		if (!result) return false;
 		await this.refresh();
 		if (this.table === name) this.table = this.tables[0]?.name ?? null;
 		toast.success(`Deleted “${name}”`, { description: result.warnings.join(' ') || undefined });
+		return true;
 	}
 }
 

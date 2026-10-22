@@ -2,9 +2,11 @@
 	import EllipsisVerticalIcon from '@lucide/svelte/icons/ellipsis-vertical';
 	import KeyRoundIcon from '@lucide/svelte/icons/key-round';
 	import LinkIcon from '@lucide/svelte/icons/link';
-	import PencilRulerIcon from '@lucide/svelte/icons/pencil-ruler';
+	import PlusIcon from '@lucide/svelte/icons/plus';
+	import PencilIcon from '@lucide/svelte/icons/pencil';
 	import Table2Icon from '@lucide/svelte/icons/table-2';
 	import Rows3Icon from '@lucide/svelte/icons/rows-3';
+	import TrashIcon from '@lucide/svelte/icons/trash-2';
 	import type { TableDef, TablePosition } from '#lib/api/types.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
@@ -22,10 +24,16 @@
 		/** Field (or '' for the whole card) a connection would be dropped on. */
 		dropTarget = null,
 		connecting = false,
+		/** The field open in the side panel, if it belongs to this table. */
+		selectedField = null,
 		onHeaderDown,
+		onFieldClick,
+		onAddField,
 		onConnectStart,
 		onOpen,
 		onLink,
+		onRename,
+		onDelete,
 		onHover
 	}: {
 		def: TableDef;
@@ -35,10 +43,15 @@
 		highlight?: string[];
 		dropTarget?: string | null;
 		connecting?: boolean;
+		selectedField?: string | null;
 		onHeaderDown: (e: PointerEvent) => void;
+		onFieldClick: (field: string) => void;
+		onAddField: () => void;
 		onConnectStart: (e: PointerEvent, field: string, side: 1 | -1) => void;
-		onOpen: (view: 'records' | 'fields') => void;
+		onOpen: () => void;
 		onLink: () => void;
+		onRename: () => void;
+		onDelete: () => void;
 		onHover: (inside: boolean) => void;
 	} = $props();
 
@@ -66,7 +79,7 @@
 		style:height="{CARD_HEADER}px"
 		role="presentation"
 		onpointerdown={onHeaderDown}
-		ondblclick={() => onOpen('records')}
+		ondblclick={onOpen}
 	>
 		<Table2Icon class="size-4 shrink-0 text-muted-foreground" />
 		<span class="truncate text-sm font-semibold">{def.name}</span>
@@ -85,40 +98,48 @@
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="start" side="right">
 					<DropdownMenu.Group>
+						<DropdownMenu.Item onclick={onOpen}><Rows3Icon /> Open datasheet</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={onAddField}><PlusIcon /> Add field</DropdownMenu.Item>
 						<DropdownMenu.Item onclick={onLink}><LinkIcon /> Link to another table…</DropdownMenu.Item>
+						<DropdownMenu.Item onclick={onRename}><PencilIcon /> Rename</DropdownMenu.Item>
 					</DropdownMenu.Group>
 					<DropdownMenu.Separator />
 					<DropdownMenu.Group>
-						<DropdownMenu.Item onclick={() => onOpen('records')}><Rows3Icon /> Open datasheet</DropdownMenu.Item>
-						<DropdownMenu.Item onclick={() => onOpen('fields')}><PencilRulerIcon /> Open design</DropdownMenu.Item>
+						<DropdownMenu.Item variant="destructive" onclick={onDelete}><TrashIcon /> Delete table</DropdownMenu.Item>
 					</DropdownMenu.Group>
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
 		</span>
 	</div>
-	<ul style:padding-block="{CARD_PADDING}px">
+	<div style:padding-block="{CARD_PADDING}px">
 		{#each def.fields as f (f.name)}
 			{@const isLit = lit.has(f.name.toLowerCase())}
-			<li
+			<div
+				role="button"
+				tabindex="0"
+				aria-label={`Edit field ${f.name}`}
 				data-row
 				data-table={def.name}
 				data-field={f.name}
 				class={cn(
-					'group/row relative flex items-center gap-2 px-3 text-sm',
+					'group/row relative flex cursor-pointer items-center gap-2 px-3 text-sm hover:bg-accent',
 					isLit && 'bg-primary/10',
+					selectedField === f.name && 'bg-accent font-medium',
 					dropTarget === f.name && 'bg-primary/20',
 					connecting && 'hover:bg-primary/15'
 				)}
 				style:height="{CARD_ROW}px"
+				onclick={() => onFieldClick(f.name)}
+				onkeydown={(e) => (e.key === 'Enter' || e.key === ' ') && (e.preventDefault(), onFieldClick(f.name))}
 			>
 				<span class="flex w-4 shrink-0 justify-center">
 					{#if f.primary_key}
-						<KeyRoundIcon class="size-3.5 text-key" aria-label="Primary key" />
+						<KeyRoundIcon class="size-3.5 text-foreground" aria-label="Primary key" />
 					{:else if linked.has(f.name.toLowerCase())}
-						<LinkIcon class="size-3.5 text-primary" aria-label="Links to another table" />
+						<LinkIcon class="size-3.5 text-muted-foreground" aria-label="Links to another table" />
 					{/if}
 				</span>
-				<span class={cn('truncate', isLit && 'font-medium text-primary')}>{f.name}</span>
+				<span class={cn('truncate', isLit && 'font-semibold')}>{f.name}</span>
 				<span class="ms-auto shrink-0 text-xs text-muted-foreground">{fieldTypeLabel(f.field_type)}</span>
 				{#each [-1, 1] as const as side (side)}
 					<button
@@ -131,9 +152,19 @@
 							side === 1 ? '-end-1.5' : '-start-1.5'
 						)}
 						onpointerdown={(e) => onConnectStart(e, f.name, side)}
+						onclick={(e) => e.stopPropagation()}
 					></button>
 				{/each}
-			</li>
+			</div>
 		{/each}
-	</ul>
+		<div style:height="{CARD_ROW}px">
+			<button
+				type="button"
+				class="flex size-full items-center gap-2 px-3 text-sm text-muted-foreground hover:bg-accent hover:text-foreground"
+				onclick={onAddField}
+			>
+				<PlusIcon class="size-3.5" /> Add field
+			</button>
+		</div>
+	</div>
 </div>

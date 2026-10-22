@@ -10,7 +10,6 @@
 	import FolderOpenIcon from '@lucide/svelte/icons/folder-open';
 	import PlusIcon from '@lucide/svelte/icons/plus';
 	import SearchIcon from '@lucide/svelte/icons/search';
-	import RefreshCwIcon from '@lucide/svelte/icons/refresh-cw';
 	import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
 	import Logo from '#lib/components/app/Logo.svelte';
 	import NameDialog from '#lib/components/app/NameDialog.svelte';
@@ -22,7 +21,6 @@
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
-	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import { databaseHref } from '#lib/logic/routes.js';
 	import { databaseNameProblem, formatBytes } from '#lib/logic/values.js';
 	import { databaseService } from '#lib/services/database.js';
@@ -42,6 +40,8 @@
 	// Returning here closes whichever database was open.
 	attempt(() => databaseService.close());
 	workspace.load();
+	// Files can change outside the app; pick that up when the window regains focus.
+	const refreshOnFocus = () => workspace.info && workspace.refresh();
 
 	function open(name: string) {
 		goto(databaseHref(resolve('/db'), name));
@@ -122,13 +122,12 @@
 	</Card.Root>
 {/snippet}
 
+<svelte:window onfocus={refreshOnFocus} />
+
 <div class="flex min-h-svh flex-col">
 	<header class="flex h-14 items-center gap-3 border-b bg-sidebar px-6">
 		<Logo class="size-7" />
-		<div class="flex flex-col leading-tight">
-			<span class="font-semibold">Tables</span>
-			<span class="text-xs text-muted-foreground">Offline database studio</span>
-		</div>
+		<span class="font-semibold">Base</span>
 		<span class="flex-1"></span>
 		<ThemeToggle />
 	</header>
@@ -142,15 +141,8 @@
 			<Empty.Root class="my-auto">
 				<Empty.Header>
 					<Empty.Media><Logo class="size-24" /></Empty.Media>
-					<Empty.Title class="text-2xl">Welcome to Tables</Empty.Title>
-					<Empty.Description>Build databases the way you would in Access — tables, records and relationships — all stored privately on your computer.</Empty.Description>
-				</Empty.Header>
-				<Empty.Header>
-					<Empty.Title>Where should your databases live?</Empty.Title>
-					<Empty.Description>
-						Pick a folder on this computer. Each database is saved there as a single file, and nothing ever leaves
-						your machine.
-					</Empty.Description>
+					<Empty.Title class="text-2xl">Welcome to Base</Empty.Title>
+					<Empty.Description>Choose a folder for your databases. Everything stays on this computer.</Empty.Description>
 				</Empty.Header>
 				<Empty.Content>
 					<Button onclick={() => workspace.chooseFolder()}>
@@ -169,22 +161,12 @@
 					</div>
 				</div>
 				<div class="flex items-center gap-2">
-					{#if workspace.databases.length > 0}
+					{#if workspace.databases.length > 6}
 						<InputGroup.Root class="w-56">
 							<InputGroup.Input placeholder="Search databases" bind:value={filter} />
 							<InputGroup.Addon><SearchIcon /></InputGroup.Addon>
 						</InputGroup.Root>
 					{/if}
-					<Tooltip.Root>
-						<Tooltip.Trigger>
-							{#snippet child({ props })}
-								<Button {...props} variant="outline" size="icon" aria-label="Refresh" onclick={() => workspace.refresh()}>
-									<RefreshCwIcon />
-								</Button>
-							{/snippet}
-						</Tooltip.Trigger>
-						<Tooltip.Content>Refresh</Tooltip.Content>
-					</Tooltip.Root>
 					<Button onclick={() => (creating = true)}>
 						<PlusIcon data-icon="inline-start" />
 						New database
@@ -217,12 +199,6 @@
 							<div class="opacity-60" title="This file is not a SQLite database">{@render dbCard(db)}</div>
 						{/if}
 					{/each}
-					{#if !filter.trim()}
-						<Button variant="outline" class="h-full min-h-32 flex-col border-dashed text-muted-foreground" onclick={() => (creating = true)}>
-							<PlusIcon />
-							New database
-						</Button>
-					{/if}
 				</div>
 			{/if}
 		{/if}
