@@ -2,7 +2,7 @@
 	import { toast } from 'svelte-sonner';
 	import TrashIcon from '@lucide/svelte/icons/trash-2';
 	import Undo2Icon from '@lucide/svelte/icons/undo-2';
-	import type { RecordRow, TableDef } from '#lib/api/types.js';
+	import type { JsonValue, RecordRow, TableDef } from '#lib/api/types.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Kbd } from '#lib/components/ui/kbd/index.js';
@@ -23,6 +23,9 @@
 		columns,
 		row,
 		lookups,
+		database,
+		prefill = {},
+		allowDelete = true,
 		onSaved
 	}: {
 		open?: boolean;
@@ -32,6 +35,11 @@
 		/** The record to edit, or null for a new record. */
 		row: RecordRow | null;
 		lookups: Record<string, LookupOption[]>;
+		/** Workspace database holding `table` (apps); the open database when omitted. */
+		database?: string;
+		/** Starting values for a new record. */
+		prefill?: Record<string, JsonValue>;
+		allowDelete?: boolean;
 		onSaved: () => void;
 	} = $props();
 
@@ -42,10 +50,16 @@
 	// Load the record each time the sheet opens.
 	$effect(() => {
 		if (open) {
-			buf = rb.newBuffer(def, row, columns);
+			buf = fresh();
 			submitted = false;
 		}
 	});
+
+	function fresh(): rb.RecordBuffer {
+		const b = rb.newBuffer(def, row, columns);
+		if (!row) for (const [k, v] of Object.entries(prefill)) if (k in b.current) b.current[k] = v;
+		return b;
+	}
 
 	const isNew = $derived(row === null);
 	const dirty = $derived(buf ? rb.isDirty(buf) : false);
@@ -79,8 +93,8 @@
 		const values = rb.submission(b, def);
 		saving = true;
 		const ok = await attempt(async () => {
-			if (b.key === null) await recordService.insert(table, values);
-			else if (Object.keys(values).length) await recordService.update(table, b.key, values);
+			if (b.key === null) await recordService.insert(table, values, database);
+			else if (Object.keys(values).length) await recordService.update(table, b.key, values, database);
 			return true;
 		});
 		saving = false;
@@ -88,7 +102,7 @@
 		toast.success(isNew ? 'Record added' : 'Changes saved');
 		onSaved();
 		if (addAnother) {
-			buf = rb.newBuffer(def, null, columns);
+			buf = fresh();
 			submitted = false;
 		} else {
 			open = false;
@@ -106,7 +120,7 @@
 			scope: 'record-drawer'
 		});
 		if (!ok) return;
-		if ((await attempt(() => recordService.delete(table, [key], true))) === undefined) return;
+		if ((await attempt(() => recordService.delete(table, [key], true, database))) === undefined) return;
 		toast.success('Record deleted');
 		open = false;
 		onSaved();
@@ -181,7 +195,7 @@
 			{/if}
 
 			<Drawer.Footer class="flex-row items-center gap-2">
-				{#if !isNew}
+				{#if !isNew && allowDelete}
 					<Button variant="destructive" size="icon" aria-label="Delete record" onclick={remove}><TrashIcon /></Button>
 				{/if}
 				<span class="flex-1 text-xs text-muted-foreground">

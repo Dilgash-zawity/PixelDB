@@ -1,7 +1,7 @@
 {
   "name": "slatedb",
   "private": true,
-  "version": "0.0.4",
+  "version": "0.0.5",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
@@ -28,6 +28,7 @@
     "@types/bun": "^1.4.3",
     "bits-ui": "^2.18.0",
     "cn": "^0.3.0",
+    "layerchart": "^2.0.0",
     "mode-watcher": "^1.1.0",
     "shadcn-svelte": "^1.7.0",
     "svelte": "^5.57.1",

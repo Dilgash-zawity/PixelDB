@@ -41,3 +41,9 @@ export async function call<T>(cmd: string, args?: Record<string, unknown>): Prom
 		throw toApiError(err);
 	}
 }
+
+/**
+ * Argument naming the workspace database a command acts on (apps use several
+ * at once). Without it a command acts on the database open on the database page.
+ */
+export const on = (database?: string): { database?: string } => (database === undefined ? {} : { database });

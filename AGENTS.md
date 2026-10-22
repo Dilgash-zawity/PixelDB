@@ -4,7 +4,7 @@
 
 SlateDB is an offline desktop app using Tauri 2, Rust, bundled SQLite, SvelteKit 3, Svelte 5, and Bun.
 
-- `src/routes/`: workspace and database pages.
+- `src/routes/`: workspace, database and app pages.
 - `src/lib/`: typed IPC in `api/`, orchestration in `services/`, framework-free business logic in `logic/`, and rune-based state in `state/`.
 - `src/lib/components/app/`: application components; `components/ui/`: generated shadcn-svelte primitives.
 - `src-tauri/src/`: thin IPC `commands/`, database operations in `database/`, shared `models/`, and `validation/`.

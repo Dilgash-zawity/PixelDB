@@ -42,6 +42,15 @@ mod wire_format_tests {
         let q: RecordQuery = serde_json::from_value(json!({"filters": [{"column": "a", "op": "is_null"}]})).unwrap();
         assert_eq!(q.filters[0].op, FilterOp::IsNull);
         assert_eq!(serde_json::to_value(ObjectKind::View).unwrap(), json!("view"));
+        let a: AggregateQuery = serde_json::from_value(json!({
+            "group_by": {"column": "d", "bucket": "month"},
+            "series": [{"agg": "count"}, {"column": "x", "agg": "count_distinct"}],
+            "order": "value_desc"
+        }))
+        .unwrap();
+        assert_eq!(a.group_by.unwrap().bucket, Some(DateBucket::Month));
+        assert_eq!(a.series[1].agg, Aggregate::CountDistinct);
+        assert_eq!(a.order, AggregateOrder::ValueDesc);
         let e = serde_json::to_value(crate::errors::AppError::NoDatabase).unwrap();
         assert_eq!(e, json!({"kind": "no_database", "message": "no database is open"}));
     }

@@ -673,3 +673,75 @@ fn values_match_as_shown_and_views_keep_field_types() {
     let r = queries::run_query(c, "SELECT active, money FROM Customers JOIN Rich USING (name)").unwrap();
     assert_eq!(r.types, vec![Some(FieldType::YesNo), Some(FieldType::Currency { scale: 2 })]);
 }
+
+#[test]
+fn aggregates_group_total_and_filter() {
+    let (_dir, _path, db) = temp_db();
+    let c = &db.conn;
+    migrations::create_table(c, &customers_def()).unwrap();
+    for (name, balance, active, joined) in [
+        ("Ann", "12.50", true, "2024-01-05"),
+        ("Bob", "3", false, "2024-01-20"),
+        ("Cy", "10.01", true, "2024-03-02T10:00:00"),
+    ] {
+        let v = values(json!({"name": name, "balance": balance, "active": active, "joined": joined}));
+        records::insert_record(c, "Customers", &v).unwrap();
+    }
+    let series = |column: Option<&str>, agg| SeriesSpec { column: column.map(String::from), agg };
+    let query = |group_by, series, filters| AggregateQuery {
+        group_by,
+        series,
+        filters,
+        search: None,
+        order: AggregateOrder::Group,
+        limit: 0,
+    };
+
+    // Ungrouped: one row; money sums and averages stay whole minor units.
+    let q = query(
+        None,
+        vec![
+            series(None, Aggregate::Count),
+            series(Some("balance"), Aggregate::Sum),
+            series(Some("balance"), Aggregate::Avg),
+        ],
+        vec![],
+    );
+    let r = records::aggregate(c, "Customers", &q).unwrap();
+    assert_eq!(r.rows, vec![vec![json!(3), json!(2551), json!(850)]]);
+    assert_eq!(r.types, vec![None, Some(FieldType::Currency { scale: 2 }), Some(FieldType::Currency { scale: 2 })]);
+    assert_eq!(r.columns, ["Count", "Sum of balance", "Average balance"]);
+
+    // Grouped by month, filtered with typed values.
+    let by_month = Some(GroupBy { column: "joined".into(), bucket: Some(DateBucket::Month) });
+    let active = vec![FilterSpec { column: "active".into(), op: FilterOp::Eq, value: json!(true) }];
+    let r = records::aggregate(c, "Customers", &query(by_month.clone(), vec![series(None, Aggregate::Count)], active))
+        .unwrap();
+    assert_eq!(r.rows, vec![vec![json!("2024-01"), json!(1)], vec![json!("2024-03"), json!(1)]]);
+
+    // Ordered by value, limited.
+    let mut q = query(
+        Some(GroupBy { column: "name".into(), bucket: None }),
+        vec![series(Some("balance"), Aggregate::Max)],
+        vec![],
+    );
+    q.order = AggregateOrder::ValueDesc;
+    q.limit = 2;
+    let r = records::aggregate(c, "Customers", &q).unwrap();
+    assert_eq!(r.rows, vec![vec![json!("Ann"), json!(1250)], vec![json!("Cy"), json!(1001)]]);
+    assert!(r.truncated);
+    assert_eq!(r.types[0], Some(FieldType::ShortText { max_length: Some(50) }));
+
+    // Names are checked against the table; no SQL gets through.
+    let bad = query(None, vec![series(Some("balance) FROM x; --"), Aggregate::Sum)], vec![]);
+    assert!(matches!(records::aggregate(c, "Customers", &bad), Err(AppError::Validation(_))));
+    assert!(records::aggregate(c, "Customers", &query(None, vec![], vec![])).is_err());
+    assert!(records::aggregate(c, "Customers", &query(None, vec![series(None, Aggregate::Sum)], vec![])).is_err());
+
+    // Views work too.
+    queries::save_view(c, "Actives", "SELECT name, balance FROM Customers WHERE active", None, false).unwrap();
+    let r = records::aggregate(c, "Actives", &query(None, vec![series(Some("balance"), Aggregate::Sum)], vec![]))
+        .unwrap();
+    assert_eq!(r.rows, vec![vec![json!(2251)]]);
+    assert_eq!(r.types, vec![Some(FieldType::Currency { scale: 2 })]);
+}

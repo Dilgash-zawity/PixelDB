@@ -1,4 +1,10 @@
-import type { DatabaseFile, WorkspaceInfo } from '../api/types';
+import type { AppFile, DatabaseFile, WorkspaceInfo } from '../api/types';
+import { newApp } from '../logic/app-def';
+import type { Template } from '../logic/templates';
+import { appService } from '../services/apps';
+import { databaseService } from '../services/database';
+import { recordService } from '../services/records';
+import { tableService } from '../services/tables';
 import { pickFolder } from '../services/dialogs';
 import { workspaceService } from '../services/workspace';
 import { attempt, confirm } from './feedback.svelte';
@@ -7,12 +13,14 @@ import { attempt, confirm } from './feedback.svelte';
 class WorkspaceState {
 	info = $state<WorkspaceInfo | null>(null);
 	databases = $state<DatabaseFile[]>([]);
+	apps = $state<AppFile[]>([]);
 	loaded = $state(false);
 
 	async load() {
 		await attempt(async () => {
 			this.info = await workspaceService.get();
 			this.databases = this.info ? await workspaceService.listDatabases() : [];
+			this.apps = this.info ? await appService.list() : [];
 		});
 		this.loaded = true;
 	}
@@ -23,11 +31,16 @@ class WorkspaceState {
 			if (!folder) return;
 			this.info = await workspaceService.set(folder);
 			this.databases = await workspaceService.listDatabases();
+			this.apps = await appService.list();
 		});
 	}
 
 	async refresh() {
-		if (this.info) await attempt(async () => (this.databases = await workspaceService.listDatabases()));
+		if (!this.info) return;
+		await attempt(async () => {
+			this.databases = await workspaceService.listDatabases();
+			this.apps = await appService.list();
+		});
 	}
 
 	/** Creates a database; returns true on success. */
@@ -68,10 +81,72 @@ class WorkspaceState {
 	}
 
 	/** First free "<name> copy", "<name> copy 2", … */
-	copyName(name: string): string {
+	copyName(name: string, taken = (n: string) => this.nameTaken(n)): string {
 		let candidate = `${name} copy`;
-		for (let n = 2; this.nameTaken(candidate); n++) candidate = `${name} copy ${n}`;
+		for (let n = 2; taken(candidate); n++) candidate = `${name} copy ${n}`;
 		return candidate;
+	}
+
+	// ----- Apps -----
+
+	/** True when another app already uses `name` (case-insensitively). */
+	appNameTaken(name: string, except?: string): boolean {
+		return this.apps.some((a) => a.name !== except && a.name.toLowerCase() === name.toLowerCase());
+	}
+
+	/** Creates an app over `databases`; returns true on success. */
+	async createApp(name: string, databases: string[]): Promise<boolean> {
+		const ok = (await attempt(() => appService.create(name, newApp(databases)))) !== undefined;
+		await this.refresh();
+		return ok;
+	}
+
+	/**
+	 * Creates a database from a template (tables and sample records) and an
+	 * app over it, both called `name`. Returns true on success.
+	 */
+	async createFromTemplate(template: Template, name: string): Promise<boolean> {
+		const ok = await attempt(async () => {
+			// Creating the database makes it the open one, which creating tables needs.
+			await workspaceService.createDatabase(name);
+			try {
+				for (const table of template.tables) await tableService.create(table);
+				for (const table of template.tables) {
+					for (const values of template.rows[table.name] ?? []) await recordService.insert(table.name, values, name);
+				}
+			} finally {
+				await databaseService.close();
+			}
+			await appService.create(name, template.app(name));
+			return true;
+		});
+		await this.refresh();
+		return !!ok;
+	}
+
+	async renameApp(name: string, newName: string): Promise<boolean> {
+		if (name === newName) return true;
+		const ok = (await attempt(() => appService.rename(name, newName))) !== undefined;
+		await this.refresh();
+		return ok;
+	}
+
+	async duplicateApp(name: string, newName: string): Promise<boolean> {
+		const ok = (await attempt(() => appService.duplicate(name, newName))) !== undefined;
+		await this.refresh();
+		return ok;
+	}
+
+	async removeApp(name: string) {
+		const ok = await confirm({
+			title: `Delete “${name}”?`,
+			description: 'The app and its pages will be permanently deleted. Its databases and their records are kept.',
+			action: 'Delete app',
+			destructive: true
+		});
+		if (!ok) return;
+		await attempt(() => appService.delete(name, true));
+		await this.refresh();
 	}
 }
 

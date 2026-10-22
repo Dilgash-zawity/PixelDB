@@ -101,10 +101,16 @@ pub fn validate_folder(raw: &str) -> AppResult<PathBuf> {
     Ok(dir)
 }
 
-/// Checks a database name and returns its file name (`name.db`). Names are
-/// plain file stems: no separators, no reserved device names.
+/// Checks a database name and returns its file name (`name.db`).
 pub fn database_file_name(name: &str) -> AppResult<String> {
-    let bad = |why: &str| Err(AppError::Validation(format!("database name {name:?} {why}")));
+    check_file_stem(name, "database")?;
+    Ok(format!("{name}.{DEFAULT_EXTENSION}"))
+}
+
+/// Checks a name used as a file stem (databases, apps): no separators, no
+/// reserved device names.
+pub fn check_file_stem(name: &str, what: &str) -> AppResult<()> {
+    let bad = |why: &str| Err(AppError::Validation(format!("{what} name {name:?} {why}")));
     if name.trim().is_empty() {
         return bad("is empty");
     }
@@ -129,7 +135,7 @@ pub fn database_file_name(name: &str) -> AppResult<String> {
     if reserved {
         return bad("is reserved by the operating system");
     }
-    Ok(format!("{name}.{DEFAULT_EXTENSION}"))
+    Ok(())
 }
 
 fn database_extension(path: &Path) -> bool {

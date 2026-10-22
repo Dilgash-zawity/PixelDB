@@ -227,3 +227,49 @@ export interface TablePosition {
 
 /** Card positions on the Relationships diagram, keyed by table name. */
 export type DiagramLayout = Record<string, TablePosition>;
+
+export type Aggregate = 'count' | 'count_distinct' | 'sum' | 'avg' | 'min' | 'max';
+export type DateBucket = 'day' | 'month' | 'year';
+export type AggregateOrder = 'group' | 'value_asc' | 'value_desc';
+
+export interface GroupBy {
+	column: string;
+	bucket?: DateBucket | null;
+}
+
+export interface SeriesSpec {
+	/** Omitted only for `count` (count of rows). */
+	column?: string | null;
+	agg: Aggregate;
+}
+
+/** Totals over a table or view, optionally grouped (charts and number cards). */
+export interface AggregateQuery {
+	group_by?: GroupBy | null;
+	series: SeriesSpec[];
+	filters?: FilterSpec[];
+	search?: string | null;
+	order?: AggregateOrder;
+	limit?: number;
+}
+
+/** One row per group: the group value first when grouped, then one value per series. */
+export interface AggregateResult {
+	columns: string[];
+	rows: JsonValue[][];
+	/** Currency totals keep the currency type (minor units). */
+	types: (FieldType | null)[];
+	truncated: boolean;
+}
+
+/** An app file in the workspace's Apps folder. */
+export interface AppFile {
+	name: string;
+	size: number;
+	modified: number | null;
+	/** Databases the app uses (empty when the file can't be read). */
+	databases: string[];
+	description: string;
+	accent: string;
+	valid: boolean;
+}

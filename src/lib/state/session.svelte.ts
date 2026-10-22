@@ -13,6 +13,7 @@ import { identifierProblem } from '../logic/values';
 import { databaseService } from '../services/database';
 import { tableService } from '../services/tables';
 import { workspaceService } from '../services/workspace';
+import { renameFieldInApps, renameTableInApps } from './app-sync';
 import { attempt, confirm } from './feedback.svelte';
 
 /** The tabs of the database page. */
@@ -161,12 +162,14 @@ class Session {
 	/** Called after field `from` of `table` was renamed. */
 	renamedField(table: string, from: string, to: string) {
 		this.updateQueryDesign((q) => renameFieldInQuery(q, table, from, to));
+		if (this.name) renameFieldInApps(this.name, table, from, to);
 	}
 
 	async renameTable(name: string, newName: string): Promise<boolean> {
 		if ((await attempt(() => tableService.rename(name, newName))) === undefined) return false;
 		await this.refresh();
 		this.updateQueryDesign((q) => renameTableInQuery(q, name, newName));
+		if (this.name) renameTableInApps(this.name, name, newName);
 		if (this.table === name) this.table = newName;
 		this.revision++;
 		return true;
