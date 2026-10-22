@@ -5,9 +5,15 @@
 	import ConfirmHost from '#lib/components/app/ConfirmHost.svelte';
 	import { Toaster } from '#lib/components/ui/sonner/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
+	import { settings } from '#lib/state/settings.svelte.js';
 	import type { LayoutProps } from './$types';
 
 	let { children }: LayoutProps = $props();
+
+	$effect(() => {
+		void settings.current;
+		settings.apply();
+	});
 </script>
 
 <svelte:head>

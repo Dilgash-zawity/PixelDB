@@ -1,5 +1,5 @@
 import type { AppFile, DatabaseFile, WorkspaceInfo } from '../api/types';
-import { newApp } from '../logic/app-def';
+import { addSource, newApp, readApp, removeSource, widgetsUsingSource } from '../logic/app-def';
 import type { Template } from '../logic/templates';
 import { appService } from '../services/apps';
 import { databaseService } from '../services/database';
@@ -135,6 +135,40 @@ class WorkspaceState {
 		const ok = (await attempt(() => appService.duplicate(name, newName))) !== undefined;
 		await this.refresh();
 		return ok;
+	}
+
+	/** Adds `database` to an app's sources; returns true on success. */
+	async connectApp(name: string, database: string): Promise<boolean> {
+		const ok = await attempt(async () => {
+			const app = readApp(await appService.load(name));
+			if (app.sources.some((s) => s.database === database)) return true;
+			addSource(app, database);
+			await appService.save(name, app);
+			return true;
+		});
+		await this.refresh();
+		return !!ok;
+	}
+
+	/** Removes `database` from an app's sources after confirming; widgets reading it lose their data. */
+	async disconnectApp(name: string, database: string): Promise<boolean> {
+		const app = await attempt(async () => readApp(await appService.load(name)));
+		if (!app) return false;
+		const aliases = app.sources.filter((s) => s.database === database).map((s) => s.alias);
+		const used = aliases.reduce((n, a) => n + widgetsUsingSource(app, a).length, 0);
+		const ok = await confirm({
+			title: `Disconnect “${database}” from “${name}”?`,
+			description: used
+				? `${used} widget${used === 1 ? ' reads' : 's read'} from it and will need new data. The database itself is not changed.`
+				: 'The database itself is not changed.',
+			action: 'Disconnect',
+			destructive: true
+		});
+		if (!ok) return false;
+		for (const a of aliases) removeSource(app, a);
+		const saved = (await attempt(() => appService.save(name, app))) !== undefined;
+		await this.refresh();
+		return saved;
 	}
 
 	async removeApp(name: string) {

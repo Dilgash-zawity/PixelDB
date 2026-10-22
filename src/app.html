@@ -9,6 +9,15 @@
 			try {
 				if (!localStorage.getItem('mode-watcher-mode')) localStorage.setItem('mode-watcher-mode', 'dark');
 			} catch {}
+			// Apply saved look-and-feel settings before first paint (mirrors logic/settings.ts).
+			try {
+				var s = JSON.parse(localStorage.getItem('slatedb.settings') || '{}') || {};
+				var el = document.documentElement;
+				if (s.accent && s.accent !== 'neutral') el.setAttribute('data-ui-accent', s.accent);
+				if (s.radius && s.radius !== 'none') el.setAttribute('data-radius', s.radius);
+				if (s.textSize && s.textSize !== 'default') el.setAttribute('data-text', s.textSize);
+				if (s.reduceMotion === true) el.setAttribute('data-reduce-motion', '');
+			} catch {}
 		</script>
 		%sveltekit.head%
 	</head>
