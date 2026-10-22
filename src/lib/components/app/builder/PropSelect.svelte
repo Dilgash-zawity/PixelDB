@@ -1,4 +1,5 @@
 <script lang="ts" module>
+	// Script
 	export interface PropOption {
 		value: string;
 		label: string;
@@ -9,8 +10,10 @@
 </script>
 
 <script lang="ts">
+	// Components
 	import * as Select from '#lib/components/ui/select/index.js';
 
+	// Script
 	let {
 		id,
 		value,

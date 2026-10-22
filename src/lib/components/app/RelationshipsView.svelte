@@ -1,22 +1,14 @@
 <script lang="ts">
+	// Services
+	import { databaseService } from '#lib/services/database.js';
+	import { tableService } from '#lib/services/tables.js';
+
+	// Types
+	import type { DiagramLayout, FieldDef, FkAction, TableDef, TableInfo } from '#lib/api/types.js';
+
+	// Utils
 	import { onDestroy, tick } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import LayoutGridIcon from '@lucide/svelte/icons/layout-grid';
-	import LinkIcon from '@lucide/svelte/icons/link';
-	import MaximizeIcon from '@lucide/svelte/icons/maximize';
-	import MinusIcon from '@lucide/svelte/icons/minus';
-	import PencilIcon from '@lucide/svelte/icons/pencil';
-	import PlusIcon from '@lucide/svelte/icons/plus';
-	import Rows3Icon from '@lucide/svelte/icons/rows-3';
-	import Table2Icon from '@lucide/svelte/icons/table-2';
-	import TrashIcon from '@lucide/svelte/icons/trash-2';
-	import type { DiagramLayout, FkAction, TableDef, TableInfo } from '#lib/api/types.js';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import * as ContextMenu from '#lib/components/ui/context-menu/index.js';
-	import * as Drawer from '#lib/components/ui/drawer/index.js';
-	import * as Empty from '#lib/components/ui/empty/index.js';
-	import { Kbd } from '#lib/components/ui/kbd/index.js';
-	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import {
 		CARD_WIDTH,
 		type Cardinality,
@@ -33,7 +25,6 @@
 		linkDesign,
 		placeMissing,
 		proposeLink,
-		relationshipId,
 		relationshipsOf,
 		rowCenter,
 		suggestFieldName,
@@ -41,17 +32,37 @@
 		updateLinkDesign
 	} from '#lib/logic/relationships.js';
 	import { jsonClone } from '#lib/logic/values.js';
-	import { databaseService } from '#lib/services/database.js';
-	import { tableService } from '#lib/services/tables.js';
 	import { attempt, confirm } from '#lib/state/feedback.svelte.js';
 	import { session } from '#lib/state/session.svelte.js';
 	import { settings } from '#lib/state/settings.svelte.js';
+
+	// Components
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as ContextMenu from '#lib/components/ui/context-menu/index.js';
+	import * as Empty from '#lib/components/ui/empty/index.js';
+	import { Kbd } from '#lib/components/ui/kbd/index.js';
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import DiagramCard from './DiagramCard.svelte';
 	import NameDialog from './NameDialog.svelte';
-	import ConfirmHost from './ConfirmHost.svelte';
 	import FieldDrawer from './FieldDrawer.svelte';
+	import NewLinkDrawer from './NewLinkDrawer.svelte';
+	import NewTableDrawer from './NewTableDrawer.svelte';
 	import RelationshipPanel, { type Selection } from './RelationshipPanel.svelte';
 
+	// Icons
+	import {
+		LayoutGrid as LayoutGridIcon,
+		Link as LinkIcon,
+		Maximize as MaximizeIcon,
+		Minus as MinusIcon,
+		Pencil as PencilIcon,
+		Plus as PlusIcon,
+		Rows3 as Rows3Icon,
+		Table2 as Table2Icon,
+		Trash2 as TrashIcon,
+	} from '@lucide/svelte';
+
+	// Script
 	const MIN_ZOOM = 0.25;
 	const MAX_ZOOM = 2;
 
@@ -68,6 +79,7 @@
 	let renamingTable = $state<string | null>(null);
 	const SCOPE = 'diagram-drawer';
 	let draft = $state<LinkDraft | null>(null);
+	let linking = $state(false);
 	let hoveredTable = $state<string | null>(null);
 	let hoveredEdge = $state<string | null>(null);
 	let connecting = $state<{ table: string; field: string; start: Point; pointer: Point } | null>(null);
@@ -305,7 +317,8 @@
 
 	function openDraft(d: LinkDraft) {
 		draft = d;
-		selection = { kind: 'new' };
+		selection = null;
+		linking = true;
 	}
 
 	/** Opens an empty "new relationship" form, starting from `parent` if given. */
@@ -360,7 +373,7 @@
 				await session.refresh();
 				await load();
 				saveLayoutSoon();
-				selectTable(name);
+				linking = false;
 				toast.success(`Linked ${parent.name} and ${child.name}`, {
 					description: `Added the table “${name}”: each of its records pairs one ${parent.name} with one ${child.name}.`
 				});
@@ -378,10 +391,8 @@
 			});
 			const result = await attempt(() => tableService.saveDesign(child.name, design, false));
 			if (!result) return;
-			const columns = design.definition.foreign_keys?.at(-1)?.columns ?? [];
 			await load();
-			selectRelationship(relationshipId(child.name, columns));
-			draft = null;
+			linking = false;
 			toast.success('Relationship created', {
 				description: [describeRelationship({ parent: parent.name, child: child.name, cardinality: d.kind }), ...result.warnings].join(' ')
 			});
@@ -412,7 +423,7 @@
 			description: `Records keep the values in “${rel.childColumns.join(', ')}”, but they will no longer be checked against ${rel.parent}.`,
 			action: 'Remove relationship',
 			destructive: true,
-			scope: SCOPE
+			scope: selection ? SCOPE : undefined
 		});
 		if (!ok) return;
 		busy = true;
@@ -460,11 +471,10 @@
 		tick().then(fit);
 	}
 
-	async function addTable(name: string): Promise<boolean> {
-		if (!(await session.createTable(name, false))) return false;
+	async function addTable(name: string, fields: FieldDef[]): Promise<boolean> {
+		if (!(await session.createTable(name, false, fields))) return false;
 		if (newTableAt) layout[name] = newTableAt;
 		await load();
-		selectTable(name);
 		saveLayoutSoon();
 		return true;
 	}
@@ -659,33 +669,21 @@
 		</ContextMenu.Root>
 </div>
 
-<Drawer.Root direction="right" bind:open={() => selection !== null, (open) => !open && (selection = null)}>
-	<Drawer.Content>
-		<div class="flex min-h-0 flex-1 flex-col">
-			<Drawer.Header class="sr-only">
-				<Drawer.Title>{selection?.kind === 'table' ? selection.name : 'Relationship'}</Drawer.Title>
-				<Drawer.Description>Details of the selected item on the diagram</Drawer.Description>
-			</Drawer.Header>
-			<RelationshipPanel
-				{defs}
-				{infos}
-				{rels}
-				{selection}
-				bind:draft
-				{busy}
-				onSelect={(s) => (s?.kind === 'field' ? openField(s.table, s.field) : (selection = s))}
-				onCreate={create}
-				onUpdate={update}
-				onDelete={remove}
-				onOpen={(table) => session.select(table)}
-				onStartLink={startLink}
-				onRenameTable={(t) => (renamingTable = t)}
-				onDeleteTable={deleteTable}
-			/>
-		</div>
-		<ConfirmHost scope={SCOPE} />
-	</Drawer.Content>
-</Drawer.Root>
+<RelationshipPanel
+	{defs}
+	{infos}
+	{rels}
+	{selection}
+	{busy}
+	scope={SCOPE}
+	onSelect={(s) => (s?.kind === 'field' ? openField(s.table, s.field) : (selection = s))}
+	onUpdate={update}
+	onDelete={remove}
+	onOpen={(table) => session.select(table)}
+	onStartLink={startLink}
+	onRenameTable={(t) => (renamingTable = t)}
+	onDeleteTable={deleteTable}
+/>
 
 <FieldDrawer
 	bind:open={fieldDrawer.open}
@@ -703,13 +701,6 @@
 	onSubmit={(v) => (renamingTable ? renameTable(renamingTable, v) : Promise.resolve(true))}
 />
 
-<NameDialog
-	bind:open={addingTable}
-	title="Add table"
-	description="It starts with an automatic ID field, ready to be linked."
-	initial={suggestedTableName()}
-	placeholder="e.g. Customers"
-	submitLabel="Add table"
-	validate={(v) => session.tableNameProblem(v)}
-	onSubmit={addTable}
-/>
+<NewLinkDrawer bind:open={linking} bind:draft {defs} {infos} {rels} {busy} onCreate={create} />
+
+<NewTableDrawer bind:open={addingTable} initial={suggestedTableName()} onCreate={addTable} />

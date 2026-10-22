@@ -1,19 +1,29 @@
 <script lang="ts">
-	import EllipsisVerticalIcon from '@lucide/svelte/icons/ellipsis-vertical';
-	import KeyRoundIcon from '@lucide/svelte/icons/key-round';
-	import LinkIcon from '@lucide/svelte/icons/link';
-	import PlusIcon from '@lucide/svelte/icons/plus';
-	import PencilIcon from '@lucide/svelte/icons/pencil';
-	import Table2Icon from '@lucide/svelte/icons/table-2';
-	import Rows3Icon from '@lucide/svelte/icons/rows-3';
-	import TrashIcon from '@lucide/svelte/icons/trash-2';
+	// Types
 	import type { TableDef, TablePosition } from '#lib/api/types.js';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import { fieldTypeLabel } from '#lib/logic/field-types.js';
+
+	// Utils
+	import { fieldTypeLabel, fieldTypeTone, type Tone } from '#lib/logic/field-types.js';
 	import { CARD_HEADER, CARD_PADDING, CARD_ROW, CARD_WIDTH } from '#lib/logic/relationships.js';
 	import { cn } from '#lib/utils.js';
 
+	// Components
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+
+	// Icons
+	import {
+		EllipsisVertical as EllipsisVerticalIcon,
+		KeyRound as KeyRoundIcon,
+		Link as LinkIcon,
+		Plus as PlusIcon,
+		Pencil as PencilIcon,
+		Table2 as Table2Icon,
+		Rows3 as Rows3Icon,
+		Trash2 as TrashIcon,
+	} from '@lucide/svelte';
+
+	// Script
 	let {
 		def,
 		position,
@@ -57,6 +67,16 @@
 
 	const linked = $derived(new Set((def.foreign_keys ?? []).flatMap((fk) => fk.columns.map((c) => c.toLowerCase()))));
 	const lit = $derived(new Set(highlight.map((c) => c.toLowerCase())));
+
+	const TONE_TEXT: Record<Tone, string> = {
+		blue: 'vivid:text-tone-blue',
+		green: 'vivid:text-tone-green',
+		amber: 'vivid:text-tone-amber',
+		pink: 'vivid:text-tone-pink',
+		violet: 'vivid:text-tone-violet',
+		cyan: 'vivid:text-tone-cyan',
+		none: ''
+	};
 </script>
 
 <div
@@ -75,16 +95,16 @@
 	onpointerleave={() => onHover(false)}
 >
 	<div
-		class="flex shrink-0 cursor-grab items-center gap-2 border-b ps-3 pe-1.5 active:cursor-grabbing"
+		class="flex shrink-0 cursor-grab items-center gap-2 rounded-t-[inherit] border-b ps-3 pe-1.5 active:cursor-grabbing vivid:bg-muted/50"
 		style:height="{CARD_HEADER}px"
 		role="presentation"
 		onpointerdown={onHeaderDown}
 		ondblclick={onOpen}
 	>
-		<Table2Icon class="size-4 shrink-0 text-muted-foreground" />
+		<Table2Icon class="size-4 shrink-0 text-muted-foreground vivid:text-tone-blue" />
 		<span class="truncate text-sm font-semibold">{def.name}</span>
 		{#if rows !== null}
-			<span class="shrink-0 text-xs text-muted-foreground tabular-nums">{rows.toLocaleString()}</span>
+			<span class="shrink-0 text-xs text-muted-foreground tabular-nums vivid:rounded-full vivid:bg-tone-blue/12 vivid:px-1.5 vivid:text-tone-blue">{rows.toLocaleString()}</span>
 		{/if}
 		<span class="flex-1"></span>
 		<span role="presentation" onpointerdown={(e) => e.stopPropagation()}>
@@ -136,11 +156,11 @@
 					{#if f.primary_key}
 						<KeyRoundIcon class="size-3.5 text-warning" aria-label="Primary key" />
 					{:else if linked.has(f.name.toLowerCase())}
-						<LinkIcon class="size-3.5 text-muted-foreground" aria-label="Links to another table" />
+						<LinkIcon class="size-3.5 text-muted-foreground vivid:text-tone-cyan" aria-label="Links to another table" />
 					{/if}
 				</span>
 				<span class={cn('truncate', isLit && 'font-semibold')}>{f.name}</span>
-				<span class="ms-auto shrink-0 text-xs text-muted-foreground">{fieldTypeLabel(f.field_type)}</span>
+				<span class={cn('ms-auto shrink-0 text-xs text-muted-foreground', TONE_TEXT[fieldTypeTone(f.field_type)])}>{fieldTypeLabel(f.field_type)}</span>
 				{#each [-1, 1] as const as side (side)}
 					<button
 						type="button"

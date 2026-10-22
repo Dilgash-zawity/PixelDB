@@ -13,8 +13,12 @@ pub async fn run_query(
     store: State<'_, WorkspaceStore>,
     database: Option<String>,
     sql: String,
+    params: Option<serde_json::Map<String, JsonValue>>,
 ) -> AppResult<QueryResult> {
-    state.run_on(target(&store, database)?, move |db| queries::run_query(&db.conn, &sql)).await
+    let params = params.unwrap_or_default();
+    state
+        .run_on(target(&store, database)?, move |db| queries::run_query_with(&db.conn, &sql, &params))
+        .await
 }
 
 #[tauri::command]

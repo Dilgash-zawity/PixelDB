@@ -1,11 +1,14 @@
 <script lang="ts">
-	import ArrowDownIcon from '@lucide/svelte/icons/arrow-down';
-	import ArrowUpIcon from '@lucide/svelte/icons/arrow-up';
+	// Components
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
 
+	// Icons
+	import { ArrowDown as ArrowDownIcon, ArrowUp as ArrowUpIcon } from '@lucide/svelte';
+
+	// Script
 	let {
 		columns,
 		selected,

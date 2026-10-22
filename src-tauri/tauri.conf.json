@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "SlateDB",
-  "version": "0.0.6",
+  "version": "0.0.8",
   "identifier": "io.github.dilgash.databasebuilder",
   "build": {
     "frontendDist": "../build",

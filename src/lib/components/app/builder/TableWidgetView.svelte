@@ -1,22 +1,34 @@
 <script lang="ts">
-	import ChevronLeftIcon from '@lucide/svelte/icons/chevron-left';
-	import ChevronRightIcon from '@lucide/svelte/icons/chevron-right';
-	import PlusIcon from '@lucide/svelte/icons/plus';
-	import SearchIcon from '@lucide/svelte/icons/search';
+	// Services
+	import { recordService } from '#lib/services/records.js';
+
+	// Types
 	import type { JsonValue, RecordPage, RecordRow } from '#lib/api/types.js';
+
+	// Utils
+	import { prefillFromFilters, resolveFilters, type TableWidget } from '#lib/logic/app-def.js';
+	import { loadLookups, lookupLabel, type LookupOption } from '#lib/logic/lookups.js';
+	import { displayValue, toEditorValue } from '#lib/logic/values.js';
+	import { appSession } from '#lib/state/app.svelte.js';
+	import { cleanMessage } from '#lib/state/feedback.svelte.js';
+	import { cn } from '#lib/utils.js';
+
+	// Components
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
-	import { prefillFromFilters, resolveFilters, type TableWidget } from '#lib/logic/app-def.js';
-	import { loadLookups, lookupLabel, type LookupOption } from '#lib/logic/lookups.js';
-	import { displayValue, toEditorValue } from '#lib/logic/values.js';
-	import { recordService } from '#lib/services/records.js';
-	import { appSession } from '#lib/state/app.svelte.js';
-	import { cleanMessage } from '#lib/state/feedback.svelte.js';
-	import { cn } from '#lib/utils.js';
 	import RecordDrawer from '../RecordDrawer.svelte';
 
+	// Icons
+	import {
+		ChevronLeft as ChevronLeftIcon,
+		ChevronRight as ChevronRightIcon,
+		Plus as PlusIcon,
+		Search as SearchIcon,
+	} from '@lucide/svelte';
+
+	// Script
 	let { widget, editing }: { widget: TableWidget; editing: boolean } = $props();
 
 	let page = $state<RecordPage | null>(null);

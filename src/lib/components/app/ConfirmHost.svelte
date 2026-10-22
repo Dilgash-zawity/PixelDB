@@ -1,8 +1,12 @@
 <script lang="ts">
-	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
-	import { buttonVariants } from '#lib/components/ui/button/index.js';
+	// Utils
 	import { confirmation } from '#lib/state/feedback.svelte.js';
 
+	// Components
+	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
+	import { buttonVariants } from '#lib/components/ui/button/index.js';
+
+	// Script
 	let { scope }: { scope?: string } = $props();
 	const mine = $derived(confirmation.options.scope === scope);
 </script>

@@ -1,8 +1,12 @@
 <script lang="ts">
-	import LinkIcon from '@lucide/svelte/icons/link';
-	import PaperclipIcon from '@lucide/svelte/icons/paperclip';
-	import XIcon from '@lucide/svelte/icons/x';
+	// Types
 	import type { FieldDef, JsonValue } from '#lib/api/types.js';
+	import type { LookupOption } from '#lib/logic/lookups.js';
+
+	// Utils
+	import { displayValue, fileToAttachment, formatBytes, isBlobSummary } from '#lib/logic/values.js';
+
+	// Components
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -10,10 +14,12 @@
 	import * as Select from '#lib/components/ui/select/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
-	import { displayValue, fileToAttachment, formatBytes, isBlobSummary } from '#lib/logic/values.js';
-	import type { LookupOption } from '#lib/logic/lookups.js';
 	import DateTimeInput from './DateTimeInput.svelte';
 
+	// Icons
+	import { Link as LinkIcon, Paperclip as PaperclipIcon, X as XIcon } from '@lucide/svelte';
+
+	// Script
 	let {
 		id,
 		field,

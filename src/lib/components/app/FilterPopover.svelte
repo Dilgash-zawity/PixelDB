@@ -1,14 +1,18 @@
 <script lang="ts">
-	import FilterIcon from '@lucide/svelte/icons/list-filter';
-	import PlusIcon from '@lucide/svelte/icons/plus';
-	import XIcon from '@lucide/svelte/icons/x';
+	// Utils
+	import { FILTER_OPS, needsValue, type FilterRow } from '#lib/logic/filters.js';
+
+	// Components
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Popover from '#lib/components/ui/popover/index.js';
 	import * as Select from '#lib/components/ui/select/index.js';
-	import { FILTER_OPS, needsValue, type FilterRow } from '#lib/logic/filters.js';
 
+	// Icons
+	import { ListFilter as FilterIcon, Plus as PlusIcon, X as XIcon } from '@lucide/svelte';
+
+	// Script
 	let {
 		open = $bindable(false),
 		columns,

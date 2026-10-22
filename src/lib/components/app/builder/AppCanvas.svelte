@@ -1,12 +1,18 @@
 <script lang="ts">
-	import LayoutDashboardIcon from '@lucide/svelte/icons/layout-dashboard';
-	import * as Empty from '#lib/components/ui/empty/index.js';
+	// Utils
 	import { duplicateWidget, findPage, type Layout, type Page } from '#lib/logic/app-def.js';
 	import { cellsMoved, compact, findSpot, gridHeight, place, type Placed } from '#lib/logic/app-layout.js';
 	import { appSession } from '#lib/state/app.svelte.js';
 	import { confirm } from '#lib/state/feedback.svelte.js';
+
+	// Components
+	import * as Empty from '#lib/components/ui/empty/index.js';
 	import WidgetFrame from './WidgetFrame.svelte';
 
+	// Icons
+	import { LayoutDashboard as LayoutDashboardIcon } from '@lucide/svelte';
+
+	// Script
 	let { page, editing }: { page: Page; editing: boolean } = $props();
 
 	const ROW = 48;

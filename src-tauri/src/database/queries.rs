@@ -14,7 +14,7 @@ use serde_json::Value as JsonValue;
 use crate::errors::{AppError, AppResult};
 use crate::models::{QueryResult, SavedQuery};
 use crate::validation::identifiers::{quote_ident, validate_identifier};
-use crate::validation::values::sql_to_json;
+use crate::validation::values::{sql_to_json, untyped_value};
 
 use super::metadata;
 use super::schema::{find_object, require_object, result_types};
@@ -75,6 +75,16 @@ fn read_error(e: rusqlite::Error) -> AppError {
 
 /// Runs one read-only statement, returning at most `MAX_QUERY_ROWS` rows.
 pub fn run_query(conn: &Connection, sql: &str) -> AppResult<QueryResult> {
+    run_query_with(conn, sql, &serde_json::Map::new())
+}
+
+/// Like `run_query`, binding named parameters (`:name`, `@name`, `$name`)
+/// from `params`. Parameters missing from `params` are NULL.
+pub fn run_query_with(
+    conn: &Connection,
+    sql: &str,
+    params: &serde_json::Map<String, JsonValue>,
+) -> AppResult<QueryResult> {
     let body = normalize(sql)?;
     let started = Instant::now();
     let mut stmt = conn.prepare(body).map_err(prepare_error)?;
@@ -83,6 +93,18 @@ pub fn run_query(conn: &Connection, sql: &str) -> AppResult<QueryResult> {
     }
     let columns: Vec<String> = stmt.column_names().into_iter().map(String::from).collect();
     let types = result_types(conn, &stmt);
+    for i in 1..=stmt.parameter_count() {
+        let value = match stmt.parameter_name(i) {
+            Some(name) => match params.get(&name[1..]) {
+                Some(v) => untyped_value(v).map_err(|_| {
+                    AppError::Validation(format!("the value for {name} can't be used in a query"))
+                })?,
+                None => rusqlite::types::Value::Null,
+            },
+            None => rusqlite::types::Value::Null,
+        };
+        stmt.raw_bind_parameter(i, value)?;
+    }
 
     // Stops runaway queries (e.g. an unbounded recursive CTE) so the
     // database is not locked indefinitely.
@@ -94,7 +116,7 @@ pub fn run_query(conn: &Connection, sql: &str) -> AppResult<QueryResult> {
         }
     });
     let read = (|| -> rusqlite::Result<(Vec<Vec<serde_json::Value>>, bool)> {
-        let mut rows = stmt.query([])?;
+        let mut rows = stmt.raw_query();
         let mut out = Vec::new();
         while let Some(row) = rows.next()? {
             if out.len() == MAX_QUERY_ROWS {

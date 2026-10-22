@@ -18,5 +18,6 @@ export function humanizeError(message: string): string {
 	if (/CHECK constraint failed/i.test(text)) {
 		return `${where}A value doesn't meet one of this table's validation rules.`;
 	}
-	return message;
+	// Backend messages start in lower case; shown on their own they read as a sentence.
+	return message.charAt(0).toUpperCase() + message.slice(1);
 }

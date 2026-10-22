@@ -1,13 +1,18 @@
 <script lang="ts">
-	import PlusIcon from '@lucide/svelte/icons/plus';
-	import XIcon from '@lucide/svelte/icons/x';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import * as Field from '#lib/components/ui/field/index.js';
+	// Utils
 	import { widgetLabel, type Action, type ActionKind, type ValueRef } from '#lib/logic/app-def.js';
 	import { appSession } from '#lib/state/app.svelte.js';
+
+	// Components
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Field from '#lib/components/ui/field/index.js';
 	import PropSelect from './PropSelect.svelte';
 	import ValueRefInput from './ValueRefInput.svelte';
 
+	// Icons
+	import { Plus as PlusIcon, X as XIcon } from '@lucide/svelte';
+
+	// Script
 	let {
 		action,
 		context,
@@ -15,8 +20,8 @@
 		onchange
 	}: {
 		action: Action;
-		/** A button's click or a table row's click (which can pass on the row's fields). */
-		context: 'button' | 'row';
+		/** A button's click, or a table's or query's row click (which can pass on the row's fields). */
+		context: 'button' | 'row' | 'query';
 		columns?: string[];
 		onchange: (next: Action, group?: string) => void;
 	} = $props();
@@ -43,9 +48,9 @@
 				.map((w) => ({ value: w.id, label: w.title || widgetLabel(w.type), group: p.title }))
 		)
 	);
-	const rowColumns = $derived(context === 'row' ? columns : undefined);
+	const rowColumns = $derived(context === 'button' ? undefined : columns);
 	const firstColumn = (): ValueRef =>
-		context === 'row' && columns[0] ? { kind: 'column', column: columns[0] } : { kind: 'literal', value: null };
+		context !== 'button' && columns[0] ? { kind: 'column', column: columns[0] } : { kind: 'literal', value: null };
 
 	function setKind(kind: string) {
 		switch (kind as ActionKind) {

@@ -1,37 +1,13 @@
 <script lang="ts">
-	import { toast } from 'svelte-sonner';
-	import CheckIcon from '@lucide/svelte/icons/check';
-	import CodeIcon from '@lucide/svelte/icons/code';
-	import EyeIcon from '@lucide/svelte/icons/eye';
-	import FilePlusIcon from '@lucide/svelte/icons/file-plus';
-	import FolderOpenIcon from '@lucide/svelte/icons/folder-open';
-	import SearchIcon from '@lucide/svelte/icons/search';
-	import KeyRoundIcon from '@lucide/svelte/icons/key-round';
-	import PlayIcon from '@lucide/svelte/icons/play';
-	import PlusIcon from '@lucide/svelte/icons/plus';
-	import SaveIcon from '@lucide/svelte/icons/save';
-	import SearchCodeIcon from '@lucide/svelte/icons/search-code';
-	import TableIcon from '@lucide/svelte/icons/table-2';
-	import TrashIcon from '@lucide/svelte/icons/trash-2';
-	import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
-	import WorkflowIcon from '@lucide/svelte/icons/workflow';
-	import XIcon from '@lucide/svelte/icons/x';
+	// Services
+	import { queryService } from '#lib/services/queries.js';
+	import { tableService } from '#lib/services/tables.js';
+
+	// Types
 	import type { FilterOp, TableDef, TableInfo } from '#lib/api/types.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import * as ButtonGroup from '#lib/components/ui/button-group/index.js';
-	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
-	import * as ContextMenu from '#lib/components/ui/context-menu/index.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import * as Empty from '#lib/components/ui/empty/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import * as InputGroup from '#lib/components/ui/input-group/index.js';
-	import { Kbd } from '#lib/components/ui/kbd/index.js';
-	import * as Select from '#lib/components/ui/select/index.js';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import * as Table from '#lib/components/ui/table/index.js';
-	import { Textarea } from '#lib/components/ui/textarea/index.js';
-	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
+
+	// Utils
+	import { toast } from 'svelte-sonner';
 	import { FILTER_OPS, needsValue } from '#lib/logic/filters.js';
 	import {
 		AGGREGATES,
@@ -50,14 +26,50 @@
 		type SortOrder
 	} from '#lib/logic/query-builder.js';
 	import { displayValue, identifierProblem, jsonClone } from '#lib/logic/values.js';
-	import { queryService } from '#lib/services/queries.js';
-	import { tableService } from '#lib/services/tables.js';
 	import { attempt, confirm } from '#lib/state/feedback.svelte.js';
 	import { session } from '#lib/state/session.svelte.js';
 	import { cn } from '#lib/utils.js';
+
+	// Components
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as ButtonGroup from '#lib/components/ui/button-group/index.js';
+	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
+	import * as ContextMenu from '#lib/components/ui/context-menu/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import * as Empty from '#lib/components/ui/empty/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+	import { Kbd } from '#lib/components/ui/kbd/index.js';
+	import * as Select from '#lib/components/ui/select/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import * as Table from '#lib/components/ui/table/index.js';
+	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
 	import FieldTypeIcon from './FieldTypeIcon.svelte';
 	import NameDialog from './NameDialog.svelte';
 
+	// Icons
+	import {
+		Check as CheckIcon,
+		Code as CodeIcon,
+		Eye as EyeIcon,
+		FilePlus as FilePlusIcon,
+		FolderOpen as FolderOpenIcon,
+		Search as SearchIcon,
+		KeyRound as KeyRoundIcon,
+		Play as PlayIcon,
+		Plus as PlusIcon,
+		Save as SaveIcon,
+		SearchCode as SearchCodeIcon,
+		Table2 as TableIcon,
+		Trash2 as TrashIcon,
+		TriangleAlert as TriangleAlertIcon,
+		Workflow as WorkflowIcon,
+		X as XIcon,
+	} from '@lucide/svelte';
+
+	// Script
 	const draft = $derived(session.query);
 	let defs = $state<TableDef[]>([]);
 	let running = $state(false);
@@ -336,7 +348,7 @@
 
 			<Button size="sm" disabled={!currentSql.trim() || running} onclick={() => run()}>
 				{#if running}<Spinner data-icon="inline-start" />{:else}<PlayIcon data-icon="inline-start" />{/if}
-				Run <Kbd>Ctrl ↵</Kbd>
+				Run <Kbd>⌘ ↵</Kbd>
 			</Button>
 
 			<ButtonGroup.Root>

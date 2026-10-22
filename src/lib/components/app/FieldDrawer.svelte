@@ -1,28 +1,42 @@
 <script lang="ts">
+	// Services
+	import { tableService } from '#lib/services/tables.js';
+
+	// Types
+	import type { FieldDef, FieldTypeName, TableInfo } from '#lib/api/types.js';
+
+	// Utils
 	import { untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import TrashIcon from '@lucide/svelte/icons/trash-2';
-	import TriangleAlertIcon from '@lucide/svelte/icons/triangle-alert';
-	import type { FieldDef, FieldTypeName, TableInfo } from '#lib/api/types.js';
-	import * as Alert from '#lib/components/ui/alert/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import * as Drawer from '#lib/components/ui/drawer/index.js';
-	import * as Field from '#lib/components/ui/field/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { makeFieldType } from '#lib/logic/field-types.js';
 	import { fieldDesign, withoutField } from '#lib/logic/relationships.js';
 	import { nextFreeName } from '#lib/logic/table-draft.js';
 	import { jsonClone } from '#lib/logic/values.js';
-	import { tableService } from '#lib/services/tables.js';
 	import { attempt, confirm } from '#lib/state/feedback.svelte.js';
 	import { session } from '#lib/state/session.svelte.js';
-	import ConfirmHost from './ConfirmHost.svelte';
-	import FieldProperties from './FieldProperties.svelte';
-	import FieldTypeSelect from './FieldTypeSelect.svelte';
 
-	/** Adds (`field` null) or edits one field of `table`, saving straight away. */
+	// Components
+	import * as Alert from '#lib/components/ui/alert/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Field from '#lib/components/ui/field/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
+	import FieldProperties from './FieldProperties.svelte';
+	import FieldTypeCards from './FieldTypeCards.svelte';
+	import NewFieldDrawer from './NewFieldDrawer.svelte';
+	import StepDrawer from './StepDrawer.svelte';
+
+	// Icons
+	import {
+		Shapes as ShapesIcon,
+		ShieldCheck as ShieldCheckIcon,
+		TextCursorInput as TextCursorInputIcon,
+		Trash2 as TrashIcon,
+		TriangleAlert as TriangleAlertIcon,
+	} from '@lucide/svelte';
+
+	// Script
+	/** Edits one field of `table` step by step (name, type, rules); with `field` null, adds one instead (NewFieldDrawer). */
 	let {
 		open = $bindable(false),
 		table,
@@ -37,20 +51,27 @@
 	} = $props();
 
 	const SCOPE = 'field-drawer';
+	const STEPS = [
+		{ label: 'Name', icon: TextCursorInputIcon },
+		{ label: 'Type', icon: ShapesIcon },
+		{ label: 'Rules', icon: ShieldCheckIcon }
+	];
 
+	let step = $state(0);
 	let info = $state<TableInfo | null>(null);
 	let edit = $state<FieldDef | null>(null);
 	let baseline = $state('');
 	let busy = $state(false);
 
 	$effect(() => {
-		if (open) {
+		if (open && field !== null) {
 			const [t, f] = [table, field];
 			untrack(() => load(t, f));
 		}
 	});
 
 	async function load(t: string, f: string | null) {
+		step = 0;
 		info = null;
 		edit = null;
 		const loaded = await attempt(() => tableService.get(t));
@@ -79,8 +100,7 @@
 		}
 	}
 
-	async function save(e: SubmitEvent) {
-		e.preventDefault();
+	async function save() {
 		if (!info || !edit || busy || !dirty) return;
 		const f = jsonClone(edit);
 		f.name = f.name.trim();
@@ -127,62 +147,63 @@
 	}
 </script>
 
-<Drawer.Root bind:open direction="right">
-	<Drawer.Content>
-		<form class="flex min-h-0 flex-1 flex-col" onsubmit={save}>
-			<Drawer.Header>
-				<Drawer.Title>{field === null ? 'New field' : field}</Drawer.Title>
-				<Drawer.Description>In {table}</Drawer.Description>
-			</Drawer.Header>
-			<div class="min-h-0 flex-1 overflow-y-auto px-4 pb-4">
-				{#if !edit}
-					<div class="flex flex-col gap-3">
-						{#each [1, 2, 3, 4] as i (i)}<Skeleton class="h-9" />{/each}
-					</div>
+{#if field === null}
+	<NewFieldDrawer bind:open {table} {onSaved} />
+{:else}
+<StepDrawer
+	bind:open
+	bind:step
+	title={field}
+	description="In {table}"
+	steps={STEPS}
+	finishLabel="Save"
+	{busy}
+	disabled={!edit || !!blocked || !edit.name.trim() || (step === STEPS.length - 1 && !dirty)}
+	onFinish={save}
+	scope={SCOPE}
+>
+	{#snippet actions()}
+		{#if edit && !edit.primary_key}
+			<Button variant="destructive" disabled={busy || !!blocked} onclick={remove}><TrashIcon data-icon="inline-start" /> Delete</Button>
+		{/if}
+	{/snippet}
+	{#if !edit}
+		<div class="flex flex-col gap-3">{#each [1, 2] as i (i)}<Skeleton class="h-9" />{/each}</div>
+	{:else}
+		<div class="flex flex-col gap-5">
+			{#if blocked}
+				<Alert.Root class="border-warning/40 bg-warning/10 *:[svg]:text-warning">
+					<TriangleAlertIcon />
+					<Alert.Title class="text-warning">Read-only</Alert.Title>
+					<Alert.Description>{blocked}</Alert.Description>
+				</Alert.Root>
+			{/if}
+			{#if step === 0}
+				<Field.Field>
+					<Field.Label for="fd-name">Name</Field.Label>
+					<Input id="fd-name" bind:value={edit.name} autocomplete="off" disabled={!!blocked} />
+					<Field.Description>Renaming keeps the data and updates links and apps that use it.</Field.Description>
+				</Field.Field>
+			{:else if step === 1}
+				{#if edit.field_type.type === 'auto_number' || edit.field_type.type === 'lookup'}
+					<p class="text-sm text-muted-foreground">
+						{edit.field_type.type === 'lookup'
+							? 'This field picks a record from a linked table. Change or remove the link on the Diagram.'
+							: 'An Auto ID numbers each record for you; its type cannot change.'}
+					</p>
 				{:else}
-					<div class="flex flex-col gap-5">
-						{#if blocked}
-							<Alert.Root class="border-warning/40 bg-warning/10 *:[svg]:text-warning">
-								<TriangleAlertIcon />
-								<Alert.Title class="text-warning">Read-only</Alert.Title>
-								<Alert.Description>{blocked}</Alert.Description>
-							</Alert.Root>
-						{/if}
-						<Field.Group class="gap-4">
-							<Field.Field>
-								<Field.Label for="fd-name">Name</Field.Label>
-								<Input id="fd-name" class="h-8" bind:value={edit.name} autocomplete="off" disabled={!!blocked} />
-							</Field.Field>
-							<Field.Field>
-								<Field.Label for="fd-type">Type</Field.Label>
-								<FieldTypeSelect
-									id="fd-type"
-									value={edit.field_type.type}
-									exclude={['auto_number', 'lookup']}
-									disabled={!!blocked || edit.field_type.type === 'auto_number'}
-									onChange={setType}
-								/>
-								{#if edit.field_type.type === 'lookup'}
-									<Field.Description>Picks a record from a linked table. Change the link on the Diagram.</Field.Description>
-								{/if}
-							</Field.Field>
-						</Field.Group>
-						<FieldProperties field={edit} disabled={!!blocked} />
-					</div>
+					<FieldTypeCards
+						value={edit.field_type.type}
+						exclude={['auto_number', 'lookup']}
+						disabled={!!blocked}
+						onChange={setType}
+						onPick={() => (step = 2)}
+					/>
 				{/if}
-			</div>
-			<Drawer.Footer class="flex-row">
-				<Button type="submit" class="flex-1" disabled={!dirty || busy || !!blocked || !edit?.name.trim()}>
-					{#if busy}<Spinner data-icon="inline-start" />{/if}
-					{field === null ? 'Add field' : 'Save'}
-				</Button>
-				{#if field !== null && edit && !edit.primary_key}
-					<Button type="button" variant="destructive" disabled={busy || !!blocked} onclick={remove}>
-						<TrashIcon data-icon="inline-start" /> Delete
-					</Button>
-				{/if}
-			</Drawer.Footer>
-		</form>
-		<ConfirmHost scope={SCOPE} />
-	</Drawer.Content>
-</Drawer.Root>
+			{:else}
+				<FieldProperties field={edit} disabled={!!blocked} />
+			{/if}
+		</div>
+	{/if}
+</StepDrawer>
+{/if}
