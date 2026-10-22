@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 
-use rusqlite::{Connection, OptionalExtension};
+use rusqlite::{Connection, OptionalExtension, Statement};
 
 use crate::errors::{AppError, AppResult};
 use crate::models::{
@@ -189,6 +189,28 @@ pub struct LoadedTable {
     pub unsupported_features: Vec<String>,
     pub schema_sql: String,
     pub without_rowid: bool,
+}
+
+/// The field type behind each result column of `stmt`, traced back to the
+/// table column it comes from (also through views); `None` for computed
+/// columns such as `count(*)`.
+pub fn result_types(conn: &Connection, stmt: &Statement<'_>) -> Vec<Option<FieldType>> {
+    let mut defs: HashMap<String, Option<TableDef>> = HashMap::new();
+    stmt.columns_with_metadata()
+        .iter()
+        .map(|c| {
+            let (Some(table), Some(column)) = (c.table_name(), c.origin_name()) else {
+                return None;
+            };
+            if is_reserved_name(table) {
+                return None;
+            }
+            let def = defs
+                .entry(table.to_string())
+                .or_insert_with(|| load_table(conn, table).ok().map(|t| t.definition));
+            def.as_ref()?.field(column).map(|f| f.field_type.clone())
+        })
+        .collect()
 }
 
 /// Loads a table definition: from metadata when it matches the live schema,

@@ -59,7 +59,7 @@ pub fn run() {
       commands::records::batch_records,
       commands::queries::run_query,
       commands::queries::save_query,
-      commands::queries::get_query_sql,
+      commands::queries::get_query,
       commands::queries::drop_query,
     ])
     .run(tauri::generate_context!())

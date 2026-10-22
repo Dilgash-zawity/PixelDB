@@ -54,9 +54,7 @@
 		if (!session.leaveGuard || (await session.leaveGuard())) goto(databaseHref(resolve('/db'), db));
 	}
 
-	async function about() {
-		if (!session.leaveGuard || (await session.leaveGuard())) goto(resolve('/about'));
-	}
+
 
 	function suggestedTableName(): string {
 		let n = 1;
@@ -114,7 +112,6 @@
 					<DropdownMenu.Group>
 						<DropdownMenu.Item onclick={() => (creatingDatabase = true)}><PlusIcon /> New database…</DropdownMenu.Item>
 						<DropdownMenu.Item onclick={back}><ArrowLeftIcon /> All databases</DropdownMenu.Item>
-						<DropdownMenu.Item onclick={about}><InfoIcon /> About SlateDB</DropdownMenu.Item>
 					</DropdownMenu.Group>
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>
@@ -185,7 +182,6 @@
 	</div>
 {/if}
 
-<CommandPalette bind:open={paletteOpen} onNewTable={() => (creatingTable = true)} onBack={back} onAbout={about} />
 
 <NameDialog
 	bind:open={creatingDatabase}

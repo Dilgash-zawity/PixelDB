@@ -98,11 +98,16 @@
 	const position = $derived(typeof current === 'number' ? offset + current : null);
 	const selectedKeys = $derived(Object.values(selected));
 	const keyId = (k: RecordKey | null | undefined) => JSON.stringify(k ?? null);
-	const fieldFor = (col: string): FieldDef | undefined => def?.fields.find((f) => f.name === col);
+	const fieldFor = (col: string): FieldDef | undefined => {
+		if (def) return def.fields.find((f) => f.name === col);
+		// Views: the type of the table column behind each column, for display only.
+		const t = data?.types[data.columns.indexOf(col)];
+		return t ? { name: col, field_type: t } : undefined;
+	};
 	const numeric = (f?: FieldDef) => !!f && NUMERIC_TYPES.includes(f.field_type.type);
 	const editable = (col: string) => {
 		const f = fieldFor(col);
-		return !!f && !isReadOnlyType(f.field_type);
+		return !isView && !!f && !isReadOnlyType(f.field_type);
 	};
 	const firstEditable = () => columns.find(editable) ?? columns[0] ?? null;
 	const allSelected = $derived(!!data?.rows.length && data.rows.every((r) => keyId(r.key) in selected));
@@ -411,6 +416,7 @@
 		if (!from || name === from) return true;
 		if (!(await commitRow())) return false;
 		if ((await attempt(() => tableService.renameField(table, from, name))) === undefined) return false;
+		session.renamedField(table, from, name);
 		if (sort?.column === from) sort = { ...sort, column: name };
 		filterRows = filterRows.map((f) => (f.column === from ? { ...f, column: name } : f));
 		await load();

@@ -1,6 +1,14 @@
 import { toast } from 'svelte-sonner';
 import type { DatabaseInfo, ObjectSummary } from '../api/types';
-import { newQueryDraft, type QueryDraft } from '../logic/query-builder';
+import {
+	hasUnsavedChanges,
+	markClean,
+	newQueryDraft,
+	renameFieldInQuery,
+	renameTableInQuery,
+	type QueryDraft,
+	type VisualQuery
+} from '../logic/query-builder';
 import { identifierProblem } from '../logic/values';
 import { databaseService } from '../services/database';
 import { tableService } from '../services/tables';
@@ -143,9 +151,22 @@ class Session {
 		return true;
 	}
 
+	/** Applies a structure change to the Query tab's design, keeping it unchanged-looking if it was saved. */
+	updateQueryDesign(change: (q: VisualQuery) => VisualQuery) {
+		const clean = !hasUnsavedChanges(this.query);
+		this.query.visual = change(this.query.visual);
+		if (clean) markClean(this.query);
+	}
+
+	/** Called after field `from` of `table` was renamed. */
+	renamedField(table: string, from: string, to: string) {
+		this.updateQueryDesign((q) => renameFieldInQuery(q, table, from, to));
+	}
+
 	async renameTable(name: string, newName: string): Promise<boolean> {
 		if ((await attempt(() => tableService.rename(name, newName))) === undefined) return false;
 		await this.refresh();
+		this.updateQueryDesign((q) => renameTableInQuery(q, name, newName));
 		if (this.table === name) this.table = newName;
 		this.revision++;
 		return true;

@@ -156,6 +156,8 @@ export interface RecordRow {
 
 export interface RecordPage {
 	columns: string[];
+	/** Field type of each column; for views, traced to the table it comes from. */
+	types: (FieldType | null)[];
 	rows: RecordRow[];
 	total: number;
 	offset: number;
@@ -170,6 +172,14 @@ export interface QueryResult {
 	/** True when more rows existed than were returned. */
 	truncated: boolean;
 	elapsed_ms: number;
+	/** Field type behind each column, when it comes straight from a table. */
+	types: (FieldType | null)[];
+}
+
+/** A saved query; `design` is a `VisualQuery` when it was built in the designer. */
+export interface SavedQuery {
+	sql: string;
+	design: unknown | null;
 }
 
 export type BatchOp =

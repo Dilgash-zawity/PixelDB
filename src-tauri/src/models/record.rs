@@ -1,6 +1,8 @@
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value as JsonValue};
 
+use super::FieldType;
+
 /// Identifies a row: by rowid for ordinary tables, by primary key values for
 /// WITHOUT ROWID tables.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -67,6 +69,8 @@ pub struct RecordRow {
 #[derive(Debug, Clone, Serialize)]
 pub struct RecordPage {
     pub columns: Vec<String>,
+    /// Field type of each column; for views, traced to the table it comes from.
+    pub types: Vec<Option<FieldType>>,
     pub rows: Vec<RecordRow>,
     pub total: i64,
     pub offset: u64,

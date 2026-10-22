@@ -2,19 +2,22 @@
 //!
 //! Queries are read-only: a single SELECT, WITH or VALUES statement that
 //! SQLite itself reports as not writing. Saved queries are ordinary views,
-//! so they also open in the Datasheet.
+//! so they also open in the Datasheet. A query built in the visual designer
+//! also keeps its design (in `__app_queries`) so it reopens in the designer.
 
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 use rusqlite::{Connection, ErrorCode};
+use serde_json::Value as JsonValue;
 
 use crate::errors::{AppError, AppResult};
-use crate::models::QueryResult;
+use crate::models::{QueryResult, SavedQuery};
 use crate::validation::identifiers::{quote_ident, validate_identifier};
 use crate::validation::values::sql_to_json;
 
-use super::schema::{find_object, require_object};
+use super::metadata;
+use super::schema::{find_object, require_object, result_types};
 use super::transactions::with_transaction;
 
 pub const MAX_QUERY_ROWS: usize = 1000;
@@ -79,6 +82,7 @@ pub fn run_query(conn: &Connection, sql: &str) -> AppResult<QueryResult> {
         return Err(AppError::Unsupported("only queries that read data can be run here".into()));
     }
     let columns: Vec<String> = stmt.column_names().into_iter().map(String::from).collect();
+    let types = result_types(conn, &stmt);
 
     // Stops runaway queries (e.g. an unbounded recursive CTE) so the
     // database is not locked indefinitely.
@@ -103,11 +107,18 @@ pub fn run_query(conn: &Connection, sql: &str) -> AppResult<QueryResult> {
     let _ = done.send(());
     let _ = watchdog.join();
     let (rows, truncated) = read.map_err(read_error)?;
-    Ok(QueryResult { columns, rows, truncated, elapsed_ms: started.elapsed().as_millis() as u64 })
+    Ok(QueryResult { columns, rows, truncated, elapsed_ms: started.elapsed().as_millis() as u64, types })
 }
 
-/// Saves a query as a view. An existing view is only replaced with `replace`.
-pub fn save_view(conn: &Connection, name: &str, sql: &str, replace: bool) -> AppResult<()> {
+/// Saves a query as a view, with the visual `design` it came from if any.
+/// An existing view is only replaced with `replace`.
+pub fn save_view(
+    conn: &Connection,
+    name: &str,
+    sql: &str,
+    design: Option<&JsonValue>,
+    replace: bool,
+) -> AppResult<()> {
     validate_identifier(name)?;
     let body = normalize(sql)?;
     // Checks the query on its own first, so a second statement can't hide
@@ -136,7 +147,7 @@ pub fn save_view(conn: &Connection, name: &str, sql: &str, replace: bool) -> App
             .map_err(prepare_error)?;
         // Views compile lazily; make sure this one actually works.
         tx.prepare(&format!("SELECT * FROM {} LIMIT 0", quote_ident(name)))?;
-        Ok(())
+        metadata::save_query_design(tx, name, design, body)
     })
 }
 
@@ -148,8 +159,10 @@ pub fn drop_view(conn: &Connection, name: &str, confirm: bool) -> AppResult<()> 
     if !confirm {
         return Err(AppError::ConfirmationRequired(format!("deleting query {:?}", o.name)));
     }
-    conn.execute_batch(&format!("DROP VIEW {}", quote_ident(&o.name)))?;
-    Ok(())
+    with_transaction(conn, |tx| {
+        tx.execute_batch(&format!("DROP VIEW {}", quote_ident(&o.name)))?;
+        metadata::delete_query_design(tx, &o.name)
+    })
 }
 
 /// The SELECT a view runs: its CREATE VIEW text after the top-level `AS`.
@@ -162,6 +175,16 @@ pub fn view_sql(conn: &Connection, name: &str) -> AppResult<String> {
     select_of_view(&sql)
         .map(str::to_string)
         .ok_or_else(|| AppError::Unsupported(format!("couldn't read the query behind {:?}", o.name)))
+}
+
+/// A saved query's SQL and, while that SQL is still what it was saved with,
+/// its visual design. A view changed outside the designer (or rewritten by a
+/// table rename) opens as plain SQL.
+pub fn saved_query(conn: &Connection, name: &str) -> AppResult<SavedQuery> {
+    let sql = view_sql(conn, name)?;
+    let design = metadata::load_query_design(conn, name)?
+        .and_then(|(design, saved_sql)| (saved_sql == sql).then_some(design));
+    Ok(SavedQuery { sql, design })
 }
 
 /// Finds the first `AS` keyword outside quotes and parentheses.

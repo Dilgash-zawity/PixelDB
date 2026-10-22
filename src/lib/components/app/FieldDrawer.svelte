@@ -17,6 +17,7 @@
 	import { jsonClone } from '#lib/logic/values.js';
 	import { tableService } from '#lib/services/tables.js';
 	import { attempt, confirm } from '#lib/state/feedback.svelte.js';
+	import { session } from '#lib/state/session.svelte.js';
 	import ConfirmHost from './ConfirmHost.svelte';
 	import FieldProperties from './FieldProperties.svelte';
 	import FieldTypeSelect from './FieldTypeSelect.svelte';
@@ -92,6 +93,7 @@
 		try {
 			const result = await attempt(() => tableService.saveDesign(table, design, false));
 			if (!result) return;
+			for (const r of design.renames) session.renamedField(table, r.from, r.to);
 			open = false;
 			toast.success(field === null ? `Added “${f.name}” to ${table}` : `Saved “${f.name}”`, {
 				description: result.warnings.join(' ') || undefined
