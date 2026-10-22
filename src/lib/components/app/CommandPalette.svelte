@@ -2,8 +2,10 @@
 	import { toggleMode } from 'mode-watcher';
 	import ArrowLeftIcon from '@lucide/svelte/icons/arrow-left';
 	import EyeIcon from '@lucide/svelte/icons/eye';
+	import InfoIcon from '@lucide/svelte/icons/info';
 	import NetworkIcon from '@lucide/svelte/icons/network';
 	import PlusIcon from '@lucide/svelte/icons/plus';
+	import SearchCodeIcon from '@lucide/svelte/icons/search-code';
 	import Settings2Icon from '@lucide/svelte/icons/settings-2';
 	import SunMoonIcon from '@lucide/svelte/icons/sun-moon';
 	import TableIcon from '@lucide/svelte/icons/table-2';
@@ -13,8 +15,9 @@
 	let {
 		open = $bindable(false),
 		onNewTable,
-		onBack
-	}: { open?: boolean; onNewTable: () => void; onBack: () => void } = $props();
+		onBack,
+		onAbout
+	}: { open?: boolean; onNewTable: () => void; onBack: () => void; onAbout: () => void } = $props();
 
 	const canEdit = $derived(session.tab === 'datasheet' && !!session.table && !session.isView(session.table));
 
@@ -54,8 +57,10 @@
 		<Command.Group heading="General">
 			<Command.Item onSelect={() => run(onNewTable)}><PlusIcon /> New table</Command.Item>
 			<Command.Item onSelect={() => run(() => session.showTab('diagram'))}><NetworkIcon /> Diagram</Command.Item>
+			<Command.Item onSelect={() => run(() => session.showTab('query'))}><SearchCodeIcon /> Query</Command.Item>
 			<Command.Item onSelect={() => run(toggleMode)}><SunMoonIcon /> Toggle light / dark</Command.Item>
 			<Command.Item onSelect={() => run(onBack)}><ArrowLeftIcon /> All databases</Command.Item>
+			<Command.Item onSelect={() => run(onAbout)}><InfoIcon /> About SlateDB</Command.Item>
 		</Command.Group>
 	</Command.List>
 </Command.Dialog>

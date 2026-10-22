@@ -1,7 +1,7 @@
 //! Phase 1 acceptance tests. Every test uses a real SQLite file in a
 //! temporary directory.
 
-use app_lib::database::{OpenDatabase, metadata, migrations, records, schema};
+use app_lib::database::{OpenDatabase, metadata, migrations, queries, records, schema};
 use app_lib::errors::AppError;
 use app_lib::models::*;
 use serde_json::{Value, json};
@@ -532,4 +532,52 @@ fn linking_an_existing_field_keeps_data_and_enforces_it() {
     let design = TableDesign { definition: orders, renames: vec![] };
     assert!(migrations::save_table_design(&db.conn, "Orders", &design, false).is_err());
     assert_eq!(all_rows(&db, "Orders").rows.len(), 1);
+}
+
+#[test]
+fn queries_read_only_and_save_as_views() {
+    let (_dir, _path, db) = temp_db();
+    migrations::create_table(&db.conn, &customers_def()).unwrap();
+    for n in ["Ann", "Bob"] {
+        records::insert_record(&db.conn, "Customers", &values(json!({"name": n}))).unwrap();
+    }
+
+    let r = queries::run_query(&db.conn, "SELECT name FROM Customers ORDER BY name;").unwrap();
+    assert_eq!(r.columns, vec!["name"]);
+    assert_eq!(r.rows, vec![vec![json!("Ann")], vec![json!("Bob")]]);
+    assert!(!r.truncated);
+
+    let many = queries::run_query(
+        &db.conn,
+        "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT x FROM c",
+    )
+    .unwrap();
+    assert_eq!(many.rows.len(), queries::MAX_QUERY_ROWS);
+    assert!(many.truncated);
+
+    for bad in ["DELETE FROM Customers", "SELECT 1; DROP TABLE Customers", "PRAGMA foreign_keys = OFF"] {
+        assert!(queries::run_query(&db.conn, bad).is_err(), "{bad}");
+    }
+    assert_eq!(all_rows(&db, "Customers").rows.len(), 2);
+
+    queries::save_view(&db.conn, "Names", "SELECT name FROM Customers", false).unwrap();
+    assert_eq!(queries::view_sql(&db.conn, "Names").unwrap(), "SELECT name FROM Customers");
+    assert!(matches!(
+        queries::save_view(&db.conn, "names", "SELECT 1", false),
+        Err(AppError::ConfirmationRequired(_))
+    ));
+    assert!(matches!(
+        queries::save_view(&db.conn, "Customers", "SELECT 1", true),
+        Err(AppError::AlreadyExists(_))
+    ));
+    assert!(queries::save_view(&db.conn, "Broken", "SELECT nope FROM Customers", false).is_err());
+    assert!(schema::find_object(&db.conn, "Broken").unwrap().is_none());
+
+    queries::save_view(&db.conn, "Names", "SELECT name AS who FROM Customers", true).unwrap();
+    assert_eq!(all_rows(&db, "Names").columns, vec!["who"]);
+
+    assert!(matches!(queries::drop_view(&db.conn, "Names", false), Err(AppError::ConfirmationRequired(_))));
+    assert!(queries::drop_view(&db.conn, "Customers", true).is_err());
+    queries::drop_view(&db.conn, "Names", true).unwrap();
+    assert!(schema::find_object(&db.conn, "Names").unwrap().is_none());
 }

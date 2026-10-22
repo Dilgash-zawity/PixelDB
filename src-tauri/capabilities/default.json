@@ -1,12 +1,23 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Core IPC plus the native folder picker. No filesystem plugin is exposed: databases are created and opened by name inside the chosen folder through the app's validated commands.",
+  "description": "Core IPC, the native folder picker, and opening the author's website from the About page. No filesystem plugin is exposed: databases are created and opened by name inside the chosen folder through the app's validated commands.",
   "windows": [
     "main"
   ],
   "permissions": [
     "core:default",
-    "dialog:allow-open"
+    "dialog:allow-open",
+    {
+      "identifier": "opener:allow-open-url",
+      "allow": [
+        {
+          "url": "https://dilgash.com"
+        },
+        {
+          "url": "https://dilgash.com/*"
+        }
+      ]
+    }
   ]
 }
