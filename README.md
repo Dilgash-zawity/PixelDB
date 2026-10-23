@@ -8,9 +8,10 @@ SvelteKit + Svelte 5, Bun, Tailwind CSS and shadcn-svelte.
 
 SlateDB is free to use, modify and share under the [MIT license](LICENSE).
 [Download releases for Windows, macOS and Linux](https://github.com/Dilgash-zawity/SlateDB/releases).
-Older releases are unsigned and can trigger operating-system warnings. Signed,
-notarized releases require the maintainer's platform signing credentials; the
-new release workflow will not publish installers until those are configured.
+Community releases include signed update payloads, while Apple notarization and
+Windows publisher signing are still pending. Operating-system warnings can still
+appear. Publisher-verified releases require the maintainer's platform signing
+credentials; community releases clearly state their signing status.
 
 The updater checks for new releases on launch and every six hours while the app
 is open. Use **Settings → Updates** to turn automatic checks off, check manually,
