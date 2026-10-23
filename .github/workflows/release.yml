@@ -91,7 +91,9 @@ jobs:
           RELEASE_SHA: ${{ steps.merge.outputs.sha }}
         run: |
           gh release create "v$VERSION" --target "$RELEASE_SHA" --draft --title "SlateDB v$VERSION" --notes-file docs/release-notes.md
-          echo "release_id=$(gh api "repos/$GH_REPO/releases/tags/v$VERSION" --jq .id)" >> "$GITHUB_OUTPUT"
+          RELEASE_ID=$(gh release view "v$VERSION" --json databaseId --jq .databaseId)
+          [[ "$RELEASE_ID" =~ ^[1-9][0-9]*$ ]] || { echo 'Missing draft release ID'; exit 1; }
+          echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
 
   build:
     needs: prepare
