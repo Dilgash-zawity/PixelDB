@@ -7,8 +7,10 @@ account. Never embed a GitHub token in the application.
 
 ## Current prerequisite
 
-Apple and Windows signing credentials have not been provisioned. The workflow
-intentionally stops before merging or publishing when credentials are missing.
+Apple and Windows signing credentials have not been provisioned. The verified
+release workflow stops before merging or publishing when credentials are missing.
+The maintainer can explicitly publish a community release with signed update
+payloads using the separate workflow described below.
 An update signature alone does **not** remove macOS Gatekeeper or Windows
 SmartScreen warnings. Existing unsigned downloads are not repaired retroactively.
 
@@ -82,7 +84,7 @@ Add Actions secrets `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, and
 The release script validates these variables and generates an ephemeral signing
 configuration. Tauri signs the app executable and the NSIS installer before
 generating update signatures. CI verifies Authenticode on both outputs.
-Unsigned fallback releases are not published. SmartScreen reputation may still
+The verified workflow never silently falls back to unsigned installers. SmartScreen reputation may still
 cause warnings for a newly signed app; signing cannot guarantee none appear.
 
 See [Tauri Windows signing](https://v2.tauri.app/distribute/sign/windows/).
@@ -110,6 +112,26 @@ the failed job and rerun failed jobs for that same release. Do not manually
 publish a partial draft or replace artifacts of a published version. Use a new
 version for fixes. Older installations check the stable `latest.json` URL over
 HTTPS; only newer versions with valid signatures can be installed.
+
+## Publish a community release without platform credentials
+
+For a release such as 0.0.10 before Apple/Windows credentials are available:
+
+1. Merge the desired version to `main` and wait for its CI to pass.
+2. Update `docs/community-release-notes.md` with that version's changes,
+   download filenames, and accurate signing status.
+3. Run **Actions → Publish community release → Run workflow** from `main`,
+   entering the exact version on main. This explicitly approves publishing
+   without Apple notarization or Windows Authenticode.
+4. The workflow requires the updater signing key and a passing CI run for the
+   exact commit. It builds all four platforms into a draft, verifies each update
+   signature and version, generates checksums and build attestations, then marks
+   the complete release as latest. The verified-release workflow is unchanged.
+
+Mac bundles are ad-hoc signed for integrity. Gatekeeper and SmartScreen warnings
+may remain. Community releases must never claim publisher verification or
+notarization. All update signatures remain mandatory. Use a new version for any
+later changes to published artifacts.
 
 ## Download verification
 

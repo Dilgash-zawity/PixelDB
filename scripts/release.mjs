@@ -45,10 +45,10 @@ export function createManifest(version, repo, files, signatureFor, notes = '') {
 	return { version, notes, pub_date: new Date().toISOString(), platforms };
 }
 
-function prepareAssets(folder, version, repo) {
+function prepareAssets(folder, version, repo, notesFile = 'docs/release-notes.md') {
 	if (version !== releaseVersion()) throw new Error('Release assets must match the checked-out version.');
 	const files = new Set(readdirSync(folder));
-	const manifest = createManifest(version, repo, files, (name) => readFileSync(join(folder, name), 'utf8'), readFileSync('docs/release-notes.md', 'utf8'));
+	const manifest = createManifest(version, repo, files, (name) => readFileSync(join(folder, name), 'utf8'), readFileSync(notesFile, 'utf8'));
 	const config = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8'));
 	const verificationDir = mkdtempSync(join(tmpdir(), 'slatedb-verify-'));
 	try {
@@ -86,5 +86,5 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
 	if (command === 'version') console.log(releaseVersion());
 	else if (command === 'assets') prepareAssets(...args);
 	else if (command === 'windows-config') writeFileSync('tauri-signing.windows.json', JSON.stringify(windowsConfig(process.env)));
-	else throw new Error('Usage: release.mjs version | assets <folder> <version> <owner/repo> | windows-config');
+	else throw new Error('Usage: release.mjs version | assets <folder> <version> <owner/repo> [notes-file] | windows-config');
 }
