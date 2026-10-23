@@ -14,7 +14,8 @@
 		widgetsUsingSource,
 		WIDGET_TYPES,
 		type AppAccent,
-		type Page
+		type Page,
+		type WidgetType
 	} from '#lib/logic/app-def.js';
 	import { appSession } from '#lib/state/app.svelte.js';
 	import { confirm } from '#lib/state/feedback.svelte.js';
@@ -24,11 +25,11 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import * as Item from '#lib/components/ui/item/index.js';
 	import { ScrollArea } from '#lib/components/ui/scroll-area/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import NameDialog from '../NameDialog.svelte';
 	import IconPicker from './IconPicker.svelte';
 	import PropSelect from './PropSelect.svelte';
@@ -42,6 +43,7 @@
 		Trash2 as TrashIcon,
 		TriangleAlert as TriangleAlertIcon,
 		Variable as VariableIcon,
+		WandSparkles as WandSparklesIcon,
 		X as XIcon,
 	} from '@lucide/svelte';
 
@@ -171,6 +173,23 @@
 		appSession.change((d) => removeVariable(d, name));
 	}
 
+	const WIDGET_GROUPS: { label: string; types: WidgetType[] }[] = [
+		{ label: 'Records', types: ['table', 'form', 'board', 'query'] },
+		{ label: 'Totals', types: ['chart', 'stat'] },
+		{ label: 'Controls and text', types: ['filter', 'button', 'text'] }
+	];
+	const WIDGET_TONES: Record<WidgetType, string> = {
+		table: 'vivid:bg-tone-blue/15 vivid:text-tone-blue',
+		form: 'vivid:bg-tone-violet/15 vivid:text-tone-violet',
+		board: 'vivid:bg-tone-pink/15 vivid:text-tone-pink',
+		query: 'vivid:bg-tone-cyan/15 vivid:text-tone-cyan',
+		chart: 'vivid:bg-tone-green/15 vivid:text-tone-green',
+		stat: 'vivid:bg-tone-amber/15 vivid:text-tone-amber',
+		filter: 'vivid:bg-tone-cyan/15 vivid:text-tone-cyan',
+		button: 'vivid:bg-tone-blue/15 vivid:text-tone-blue',
+		text: 'vivid:bg-tone-violet/15 vivid:text-tone-violet'
+	};
+
 	const ACCENT_SWATCH: Record<AppAccent, string> = {
 		neutral: 'bg-primary',
 		blue: 'bg-[oklch(0.55_0.2_255)]',
@@ -192,22 +211,34 @@
 			</Tabs.List>
 		</div>
 		<ScrollArea class="min-h-0 flex-1">
-			<Tabs.Content value="add" class="flex flex-col gap-1 p-2">
-				{#each WIDGET_TYPES as t (t.type)}
-					<Item.Root size="sm" class="cursor-pointer hover:bg-accent" onclick={() => appSession.addWidget(t.type)}>
-						{#snippet child({ props })}
-							<button type="button" {...props}>
-								<Item.Media variant="icon"><WidgetTypeIcon type={t.type} /></Item.Media>
-								<Item.Content class="text-start">
-									<Item.Title>{t.label}</Item.Title>
-									<Item.Description>{t.description}</Item.Description>
-								</Item.Content>
-							</button>
-						{/snippet}
-					</Item.Root>
+			<Tabs.Content value="add" class="flex flex-col gap-4 p-2">
+				{#each WIDGET_GROUPS as g (g.label)}
+					<section class="flex flex-col gap-1.5">
+						<h3 class="px-1 text-xs font-medium text-muted-foreground">{g.label}</h3>
+						<div class="grid grid-cols-2 gap-1.5">
+							{#each WIDGET_TYPES.filter((t) => g.types.includes(t.type)) as t (t.type)}
+								<button
+									type="button"
+									class="flex flex-col items-start gap-2 rounded-lg border bg-card p-2.5 text-start transition-colors hover:border-ring/60 hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+									title={t.description}
+									onclick={() => appSession.addWidget(t.type)}
+								>
+									<span class={cn('flex size-7 items-center justify-center rounded-md bg-muted text-muted-foreground', WIDGET_TONES[t.type])}>
+										<WidgetTypeIcon type={t.type} class="size-4" />
+									</span>
+									<span class="flex flex-col gap-0.5">
+										<span class="text-sm font-medium">{t.label}</span>
+										<span class="line-clamp-2 text-xs text-muted-foreground">{t.description}</span>
+									</span>
+								</button>
+							{/each}
+						</div>
+					</section>
 				{/each}
 				{#if !def.sources.length}
-					<p class="p-2 text-xs text-muted-foreground">Add a database under <strong>Data</strong> to show records.</p>
+					<p class="px-1 text-xs text-muted-foreground">Add a database under <strong>Data</strong> to show records.</p>
+				{:else}
+					<p class="px-1 text-xs text-muted-foreground">Tip: select a widget, then use the arrow keys to move it, Shift+arrows to resize, ⌘C / ⌘V to copy it to another page.</p>
 				{/if}
 			</Tabs.Content>
 
@@ -279,6 +310,18 @@
 							<div class="flex items-center gap-2 px-1 py-1 text-sm">
 								{#if missing}<TriangleAlertIcon class="size-4 shrink-0 text-warning" />{:else}<DatabaseIcon class="size-4 shrink-0 text-muted-foreground" />{/if}
 								<span class="min-w-0 flex-1 truncate" title={missing ? 'This database is missing from the folder' : s.database}>{s.database}</span>
+								{#if !missing}
+									<Tooltip.Root>
+										<Tooltip.Trigger>
+											{#snippet child({ props })}
+												<Button {...props} size="icon-xs" variant="ghost" aria-label="Build pages for {s.database}" onclick={() => appSession.buildPages(s.alias)}>
+													<WandSparklesIcon />
+												</Button>
+											{/snippet}
+										</Tooltip.Trigger>
+										<Tooltip.Content>Build a page for each table</Tooltip.Content>
+									</Tooltip.Root>
+								{/if}
 								<Button size="icon-xs" variant="ghost" aria-label="Remove {s.database}" onclick={() => removeDatabase(s.alias, s.database)}><XIcon /></Button>
 							</div>
 						{:else}
@@ -289,6 +332,20 @@
 						{/if}
 					</div>
 				</Field.Set>
+				{#if def.sources.some((s) => appSession.databases.includes(s.database))}
+					<Field.Set>
+						<Field.Legend variant="label">Update automatically</Field.Legend>
+						<Field.Description>New tables get pages, deleted ones lose them, and new fields show up in the lists.</Field.Description>
+						<div class="flex flex-col gap-2">
+							{#each def.sources.filter((s) => appSession.databases.includes(s.database)) as s (s.alias)}
+								<Field.Field orientation="horizontal">
+									<Switch id="{uid}-auto-{s.alias}" checked={s.auto} onCheckedChange={(v) => appSession.setAutoUpdate(s.alias, v)} />
+									<Field.Label for="{uid}-auto-{s.alias}" class="min-w-0 truncate font-normal">{s.database}</Field.Label>
+								</Field.Field>
+							{/each}
+						</div>
+					</Field.Set>
+				{/if}
 				<Field.Set>
 					<Field.Legend variant="label">Variables</Field.Legend>
 					<div class="flex flex-col gap-2">

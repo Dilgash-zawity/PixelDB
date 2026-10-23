@@ -20,6 +20,24 @@ export const GRID_COLUMNS = 12;
 export interface AppSource {
 	alias: string;
 	database: string;
+	/** Keep the pages built from this database in step with its tables (see `syncGeneratedPages`). */
+	auto: boolean;
+}
+
+/**
+ * Marks a page built from a table by "Build pages", so automatic updates can
+ * find it again. `fields` and `children` are what the last update saw, so a
+ * field the user took out of the list isn't put back.
+ */
+export interface PageOrigin {
+	source: string;
+	table: string;
+	kind: 'table' | 'board';
+	fields: string[];
+	/** Linking tables shown underneath, as `table.field`. */
+	children: string[];
+	/** The variable the page's list sets to pick a record; removed with the page. */
+	variable: string;
 }
 
 /** App-wide value that filter widgets and buttons set and other widgets read. */
@@ -90,7 +108,11 @@ export interface TableWidget extends WidgetBase {
 	pageSize: number;
 	search: boolean;
 	allowNew: boolean;
+	/** The record editor a row click opens can delete the record. */
+	allowDelete: boolean;
 	rowAction: Action;
+	/** Columns shown as colored labels, like a status. */
+	badges: string[];
 }
 
 export interface FormWidget extends WidgetBase {
@@ -103,6 +125,33 @@ export interface FormWidget extends WidgetBase {
 	allowNew: boolean;
 	allowEdit: boolean;
 	allowDelete: boolean;
+	/**
+	 * Starts blank; Enter adds the record and clears the form for the next
+	 * one. A record is edited when a filter on the key picks it (a click in a
+	 * linked list); saving it clears that pick again.
+	 */
+	quickEntry: boolean;
+}
+
+/**
+ * Records as cards in a column per value of `groupBy` (a kanban board).
+ * Dragging a card to another column sets that field of the record.
+ */
+export interface BoardWidget extends WidgetBase {
+	type: 'board';
+	data: Binding | null;
+	groupBy: string;
+	/** Columns shown first, in this order, even while empty; other values found get columns after them. */
+	lanes: string[];
+	/** Field shown as each card's heading; the first text field when empty. */
+	cardTitle: string;
+	/** More fields shown on each card. */
+	cardFields: string[];
+	filters: WidgetFilter[];
+	allowNew: boolean;
+	/** The record editor a card click opens can delete the record. */
+	allowDelete: boolean;
+	cardAction: Action;
 }
 
 export interface ChartWidget extends WidgetBase {
@@ -162,7 +211,7 @@ export interface QueryWidget extends WidgetBase {
 	rowAction: Action;
 }
 
-export type Widget = TableWidget | FormWidget | ChartWidget | StatWidget | FilterWidget | ButtonWidget | TextWidget | QueryWidget;
+export type Widget = TableWidget | FormWidget | BoardWidget | ChartWidget | StatWidget | FilterWidget | ButtonWidget | TextWidget | QueryWidget;
 export type WidgetType = Widget['type'];
 
 export interface Page {
@@ -175,6 +224,8 @@ export interface Page {
 	/** Left out of the sidebar; still reachable from buttons and links. */
 	hidden: boolean;
 	widgets: Widget[];
+	/** Set on pages built from a table; null for pages made by hand. */
+	origin: PageOrigin | null;
 }
 
 /** An action listed in the sidebar, like "New order" or "Print". */
@@ -202,6 +253,7 @@ export interface AppDef {
 export const WIDGET_TYPES: { type: WidgetType; label: string; description: string }[] = [
 	{ type: 'table', label: 'Table', description: 'A list of records' },
 	{ type: 'form', label: 'Form', description: 'View, add and edit one record at a time' },
+	{ type: 'board', label: 'Board', description: 'Cards in columns, like a status; drag to move' },
 	{ type: 'chart', label: 'Chart', description: 'Bar, line, area or pie chart of totals' },
 	{ type: 'stat', label: 'Number', description: 'One total, like revenue this month' },
 	{ type: 'filter', label: 'Filter', description: 'A control that sets a variable' },
@@ -242,7 +294,7 @@ export function newId(prefix: string): string {
 }
 
 /** First free `base`, `base2`, `base3`… */
-function uniqueName(base: string, taken: string[]): string {
+export function uniqueName(base: string, taken: string[]): string {
 	const lower = new Set(taken.map((t) => t.toLowerCase()));
 	if (!lower.has(base.toLowerCase())) return base;
 	let n = 2;
@@ -259,9 +311,9 @@ export function aliasFor(database: string, taken: string[]): string {
 export function newApp(databases: string[]): AppDef {
 	const sources: AppSource[] = [];
 	for (const database of databases) {
-		sources.push({ alias: aliasFor(database, sources.map((s) => s.alias)), database });
+		sources.push({ alias: aliasFor(database, sources.map((s) => s.alias)), database, auto: false });
 	}
-	const home: Page = { id: newId('page'), title: 'Home', icon: 'house', group: '', hidden: false, widgets: [] };
+	const home: Page = { id: newId('page'), title: 'Home', icon: 'house', group: '', hidden: false, widgets: [], origin: null };
 	return {
 		version: APP_FORMAT_VERSION,
 		description: '',
@@ -287,6 +339,7 @@ const int = (v: unknown, fallback: number, min = 0, max = Number.MAX_SAFE_INTEGE
 const oneOf = <T extends string>(v: unknown, options: readonly T[], fallback: T): T =>
 	options.includes(v as T) ? (v as T) : fallback;
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : []);
+const strings = (v: unknown): string[] => arr(v).filter((c): c is string => typeof c === 'string');
 
 const FILTER_OP_NAMES: FilterOp[] = [
 	'eq', 'ne', 'lt', 'le', 'gt', 'ge', 'contains', 'starts_with', 'ends_with', 'is_null', 'is_not_null', 'in'
@@ -301,6 +354,18 @@ function readLayout(v: unknown): Layout {
 	const o = isObj(v) ? v : {};
 	const w = int(o.w, 4, 1, GRID_COLUMNS);
 	return { x: int(o.x, 0, 0, GRID_COLUMNS - w), y: int(o.y, 0, 0, 10_000), w, h: int(o.h, 4, 1, 200) };
+}
+
+function readOrigin(v: unknown): PageOrigin | null {
+	if (!isObj(v) || typeof v.source !== 'string' || typeof v.table !== 'string') return null;
+	return {
+		source: v.source,
+		table: v.table,
+		kind: oneOf(v.kind, ['table', 'board'] as const, 'table'),
+		fields: strings(v.fields),
+		children: strings(v.children),
+		variable: str(v.variable)
+	};
 }
 
 function readBinding(v: unknown): Binding | null {
@@ -359,7 +424,7 @@ function readWidget(v: unknown): Widget | null {
 				...base,
 				type: 'table',
 				data: readBinding(v.data),
-				columns: arr(v.columns).filter((c): c is string => typeof c === 'string'),
+				columns: strings(v.columns),
 				filters: readFilters(v.filters),
 				sort: isObj(v.sort) && typeof v.sort.column === 'string'
 					? { column: v.sort.column, descending: bool(v.sort.descending, false) }
@@ -367,18 +432,35 @@ function readWidget(v: unknown): Widget | null {
 				pageSize: int(v.pageSize, 25, 5, 500),
 				search: bool(v.search, true),
 				allowNew: bool(v.allowNew, true),
-				rowAction: readAction(v.rowAction)
+				allowDelete: bool(v.allowDelete, false),
+				rowAction: readAction(v.rowAction),
+				badges: strings(v.badges)
 			};
 		case 'form':
 			return {
 				...base,
 				type: 'form',
 				data: readBinding(v.data),
-				fields: arr(v.fields).filter((c): c is string => typeof c === 'string'),
+				fields: strings(v.fields),
 				filters: readFilters(v.filters),
 				allowNew: bool(v.allowNew, true),
 				allowEdit: bool(v.allowEdit, true),
-				allowDelete: bool(v.allowDelete, false)
+				allowDelete: bool(v.allowDelete, false),
+				quickEntry: bool(v.quickEntry, true)
+			};
+		case 'board':
+			return {
+				...base,
+				type: 'board',
+				data: readBinding(v.data),
+				groupBy: str(v.groupBy),
+				lanes: strings(v.lanes),
+				cardTitle: str(v.cardTitle),
+				cardFields: strings(v.cardFields),
+				filters: readFilters(v.filters),
+				allowNew: bool(v.allowNew, true),
+				allowDelete: bool(v.allowDelete, false),
+				cardAction: isObj(v.cardAction) ? readAction(v.cardAction) : { do: 'edit-record' }
 			};
 		case 'chart': {
 			const g = isObj(v.groupBy) && typeof v.groupBy.column === 'string' ? v.groupBy : null;
@@ -464,9 +546,10 @@ export function readApp(raw: unknown): AppDef {
 			icon: oneOf(p.icon, ICONS, 'file'),
 			group: str(p.group).trim(),
 			hidden: bool(p.hidden, false),
-			widgets: arr(p.widgets).map(readWidget).filter((w): w is Widget => w !== null)
+			widgets: arr(p.widgets).map(readWidget).filter((w): w is Widget => w !== null),
+			origin: readOrigin(p.origin)
 		}));
-	if (!pages.length) pages.push({ id: newId('page'), title: 'Home', icon: 'house', group: '', hidden: false, widgets: [] });
+	if (!pages.length) pages.push({ id: newId('page'), title: 'Home', icon: 'house', group: '', hidden: false, widgets: [], origin: null });
 	const startPage = pages.some((p) => p.id === raw.startPage) ? (raw.startPage as string) : pages[0].id;
 	return {
 		version: APP_FORMAT_VERSION,
@@ -475,7 +558,7 @@ export function readApp(raw: unknown): AppDef {
 		accent: oneOf(raw.accent, ACCENTS, 'neutral'),
 		sources: arr(raw.sources)
 			.filter(isObj)
-			.map((s) => ({ alias: str(s.alias), database: str(s.database) }))
+			.map((s) => ({ alias: str(s.alias), database: str(s.database), auto: bool(s.auto, false) }))
 			.filter((s) => s.alias && s.database),
 		variables: arr(raw.variables)
 			.filter(isObj)
@@ -503,6 +586,8 @@ export function defaultSize(type: WidgetType): { w: number; h: number } {
 			return { w: 12, h: 8 };
 		case 'form':
 			return { w: 6, h: 9 };
+		case 'board':
+			return { w: 12, h: 9 };
 		case 'chart':
 			return { w: 6, h: 7 };
 		case 'stat':
@@ -534,7 +619,9 @@ export function newWidget(type: WidgetType, layout: Layout, data: Binding | null
 				pageSize: 25,
 				search: true,
 				allowNew: true,
-				rowAction: { do: 'edit-record' }
+				allowDelete: false,
+				rowAction: { do: 'edit-record' },
+				badges: []
 			};
 		case 'form':
 			return {
@@ -546,7 +633,23 @@ export function newWidget(type: WidgetType, layout: Layout, data: Binding | null
 				filters: [],
 				allowNew: true,
 				allowEdit: true,
-				allowDelete: false
+				allowDelete: false,
+				quickEntry: true
+			};
+		case 'board':
+			return {
+				...base,
+				type,
+				title: data?.table ?? 'Board',
+				data,
+				groupBy: '',
+				lanes: [],
+				cardTitle: '',
+				cardFields: [],
+				filters: [],
+				allowNew: true,
+				allowDelete: false,
+				cardAction: { do: 'edit-record' }
 			};
 		case 'chart':
 			return {
@@ -607,6 +710,7 @@ export function bindingOf(w: Widget): Binding | null {
 	switch (w.type) {
 		case 'table':
 		case 'form':
+		case 'board':
 		case 'chart':
 		case 'stat':
 			return w.data;
@@ -621,15 +725,8 @@ export function bindingOf(w: Widget): Binding | null {
 function actionsOf(w: Widget): Action[] {
 	if (w.type === 'button') return [w.action];
 	if (w.type === 'table' || w.type === 'query') return [w.rowAction];
+	if (w.type === 'board') return [w.cardAction];
 	return [];
-}
-
-export function duplicateWidget(page: Page, widgetId: string, layout: Layout): Widget | undefined {
-	const w = page.widgets.find((x) => x.id === widgetId);
-	if (!w) return undefined;
-	const copy = { ...jsonClone(w), id: newId('w'), layout };
-	page.widgets.push(copy);
-	return copy;
 }
 
 /** Removes a widget and the "new record" actions that pointed at it. */
@@ -643,15 +740,55 @@ function forEachAction(app: AppDef, change: (a: Action) => Action): void {
 		for (const w of page.widgets) {
 			if (w.type === 'button') w.action = change(w.action);
 			if (w.type === 'table' || w.type === 'query') w.rowAction = change(w.rowAction);
+			if (w.type === 'board') w.cardAction = change(w.cardAction);
 		}
 	}
 	for (const c of app.commands) c.action = change(c.action);
 }
 
+/** A widget on the clipboard, with what it needs from the app it was copied from. */
+export interface CopiedWidget {
+	widget: Widget;
+	sources: AppSource[];
+	variables: AppVariable[];
+}
+
+/**
+ * Makes a copied widget work in `app` (perhaps another app): its data is
+ * read from the same database, added to `app` when it isn't there yet; the
+ * variables it reads or sets are created when missing; and actions that go
+ * to a page or widget `app` doesn't have do nothing. Changes `app` and the
+ * widget, which should be a fresh copy.
+ */
+export function adaptPastedWidget(app: AppDef, copied: CopiedWidget): Widget {
+	const w = copied.widget;
+	const alias = (from: string): string => {
+		const database = copied.sources.find((s) => s.alias === from)?.database;
+		return database ? addSource(app, database).alias : from;
+	};
+	const rebind = (b: Binding | null) => b && { ...b, source: alias(b.source) };
+	if (w.type === 'filter') w.options.data = rebind(w.options.data);
+	else if (w.type === 'query') w.source = w.source && alias(w.source);
+	else if ('data' in w) w.data = rebind(w.data);
+
+	const used = [...variablesRead(w), ...(w.type === 'filter' && w.variable ? [w.variable] : []), ...actionsOf(w).flatMap(variablesSet)];
+	for (const name of new Set(used)) {
+		if (!name || app.variables.some((v) => v.name === name)) continue;
+		addVariable(app, name, jsonClone(copied.variables.find((v) => v.name === name)?.default ?? null));
+	}
+
+	const fix = (a: Action): Action =>
+		(a.do === 'navigate' && !findPage(app, a.page)) || (a.do === 'new-record' && !findWidget(app, a.widget)) ? { do: 'none' } : a;
+	if (w.type === 'button') w.action = fix(w.action);
+	if (w.type === 'table' || w.type === 'query') w.rowAction = fix(w.rowAction);
+	if (w.type === 'board') w.cardAction = fix(w.cardAction);
+	return w;
+}
+
 // ----- Pages -----
 
 export function addPage(app: AppDef, title: string, icon = 'file', group = ''): Page {
-	const page: Page = { id: newId('page'), title, icon, group, hidden: false, widgets: [] };
+	const page: Page = { id: newId('page'), title, icon, group, hidden: false, widgets: [], origin: null };
 	app.pages.push(page);
 	return page;
 }
@@ -716,7 +853,8 @@ export function addPageOfKind(
 export function duplicatePage(app: AppDef, pageId: string, title: string): Page | undefined {
 	const index = app.pages.findIndex((p) => p.id === pageId);
 	if (index < 0) return undefined;
-	const copy: Page = { ...jsonClone(app.pages[index]), id: newId('page'), title };
+	// A copy is the user's own page: automatic updates leave it alone.
+	const copy: Page = { ...jsonClone(app.pages[index]), id: newId('page'), title, origin: null };
 	const ids = new Map<string, string>();
 	for (const w of copy.widgets) {
 		const id = newId('w');
@@ -724,7 +862,7 @@ export function duplicatePage(app: AppDef, pageId: string, title: string): Page 
 		w.id = id;
 	}
 	for (const w of copy.widgets) {
-		for (const key of ['action', 'rowAction'] as const) {
+		for (const key of ['action', 'rowAction', 'cardAction'] as const) {
 			const a = (w as unknown as Record<string, Action | undefined>)[key];
 			if (a?.do === 'new-record' && ids.has(a.widget)) (w as unknown as Record<string, Action>)[key] = { ...a, widget: ids.get(a.widget)! };
 		}
@@ -756,12 +894,18 @@ export function dropPage(app: AppDef, pageId: string, beforeId: string | null, g
 	app.pages.splice(to < 0 ? app.pages.length : to, 0, page);
 }
 
-/** Removes a page (never the last one); buttons that went there do nothing instead. */
+/**
+ * Removes a page (never the last one); buttons that went there, or added
+ * records to one of its widgets, do nothing instead.
+ */
 export function removePage(app: AppDef, pageId: string): void {
 	if (app.pages.length <= 1) return;
+	const widgets = new Set(findPage(app, pageId)?.widgets.map((w) => w.id) ?? []);
 	app.pages = app.pages.filter((p) => p.id !== pageId);
 	if (app.startPage === pageId) app.startPage = app.pages[0].id;
-	forEachAction(app, (a) => (a.do === 'navigate' && a.page === pageId ? { do: 'none' } : a));
+	forEachAction(app, (a) =>
+		(a.do === 'navigate' && a.page === pageId) || (a.do === 'new-record' && widgets.has(a.widget)) ? { do: 'none' } : a
+	);
 }
 
 export function movePage(app: AppDef, pageId: string, toIndex: number): void {
@@ -851,7 +995,7 @@ export function sqlParameters(sql: string): string[] {
 export function addSource(app: AppDef, database: string): AppSource {
 	const existing = app.sources.find((s) => s.database === database);
 	if (existing) return existing;
-	const source = { alias: aliasFor(database, app.sources.map((s) => s.alias)), database };
+	const source = { alias: aliasFor(database, app.sources.map((s) => s.alias)), database, auto: false };
 	app.sources.push(source);
 	return source;
 }
@@ -972,6 +1116,17 @@ export function renameTableInApp(app: AppDef, database: string, from: string, to
 			if (w.type === 'filter') fix(w.options.data);
 			else if ('data' in w) fix(w.data);
 		}
+		const o = page.origin;
+		if (o && aliases.has(o.source)) {
+			if (o.table === from) {
+				o.table = to;
+				// A page still named after its table follows the new name.
+				if (page.title === from) page.title = to;
+				else if (page.title === `${from} board`) page.title = `${to} board`;
+				changed = true;
+			}
+			o.children = o.children.map((c) => (c.startsWith(`${from}.`) ? `${to}${c.slice(from.length)}` : c));
+		}
 	}
 	return changed;
 }
@@ -993,6 +1148,11 @@ export function renameFieldInApp(app: AppDef, database: string, table: string, f
 		return a;
 	};
 	for (const page of app.pages) {
+		const o = page.origin;
+		if (o && aliases.has(o.source)) {
+			if (o.table === table) o.fields = o.fields.map(name);
+			o.children = o.children.map((c) => (c === `${table}.${from}` ? `${table}.${to}` : c));
+		}
 		for (const w of page.widgets) {
 			if (w.type === 'filter') {
 				if (on(w.options.data)) {
@@ -1006,9 +1166,16 @@ export function renameFieldInApp(app: AppDef, database: string, table: string, f
 			switch (w.type) {
 				case 'table':
 					w.columns = w.columns.map(name);
+					w.badges = w.badges.map(name);
 					if (w.sort) w.sort.column = name(w.sort.column);
 					// Column values passed on by a row click come from this table.
 					w.rowAction = action(w.rowAction);
+					break;
+				case 'board':
+					w.groupBy = name(w.groupBy);
+					w.cardTitle = name(w.cardTitle);
+					w.cardFields = w.cardFields.map(name);
+					w.cardAction = action(w.cardAction);
 					break;
 				case 'form':
 					w.fields = w.fields.map(name);
@@ -1135,8 +1302,9 @@ export function widgetProblems(app: AppDef, w: Widget, schema: SchemaLookup): st
 		if (!w.sql.trim()) problems.push('Write the query.');
 	}
 	const binding = bindingOf(w);
-	const needsData = w.type === 'table' || w.type === 'form' || w.type === 'chart' || w.type === 'stat';
+	const needsData = w.type === 'table' || w.type === 'form' || w.type === 'board' || w.type === 'chart' || w.type === 'stat';
 	if (needsData && !binding) problems.push('Choose where the data comes from.');
+	if (w.type === 'board' && binding && !w.groupBy) problems.push('Choose the field the columns come from.');
 	if (w.type === 'filter' && w.control === 'select' && !binding) problems.push('Choose where the choices come from.');
 	if (binding) {
 		const source = sourceOf(app, binding.source);
@@ -1149,8 +1317,8 @@ export function widgetProblems(app: AppDef, w: Widget, schema: SchemaLookup): st
 			const object = objects?.find((o) => o.name === binding.table);
 			if (objects && !object) {
 				problems.push(`“${binding.table}” no longer exists in ${source.database}.`);
-			} else if (w.type === 'form' && object?.kind === 'view') {
-				problems.push(`“${binding.table}” is a saved query; forms need a table.`);
+			} else if ((w.type === 'form' || w.type === 'board') && object?.kind === 'view') {
+				problems.push(`“${binding.table}” is a saved query; ${w.type === 'form' ? 'forms' : 'boards'} need a table.`);
 			} else {
 				const columns = schema.columns(binding.source, binding.table);
 				if (columns) {
@@ -1193,18 +1361,24 @@ export function commandProblems(app: AppDef, c: AppCommand): string[] {
 	];
 }
 
+/** Columns of the clicked row an action passes on. */
+function columnRefs(a: Action): string[] {
+	const refs = a.do === 'set-variable' ? [a.value] : a.do === 'navigate' ? a.set.map((s) => s.value) : [];
+	return refs.flatMap((r) => (r.kind === 'column' ? [r.column] : []));
+}
+
 /** Columns of its bound table a widget refers to. */
 export function columnsUsed(w: Widget): string[] {
 	const cols: string[] = [];
 	if ('filters' in w) cols.push(...w.filters.map((f) => f.column).filter(Boolean));
 	switch (w.type) {
 		case 'table':
-			cols.push(...w.columns);
+			cols.push(...w.columns, ...w.badges);
 			if (w.sort) cols.push(w.sort.column);
-			for (const a of [w.rowAction]) {
-				const refs = a.do === 'set-variable' ? [a.value] : a.do === 'navigate' ? a.set.map((s) => s.value) : [];
-				for (const r of refs) if (r.kind === 'column') cols.push(r.column);
-			}
+			cols.push(...columnRefs(w.rowAction));
+			break;
+		case 'board':
+			cols.push(...[w.groupBy, w.cardTitle].filter(Boolean), ...w.cardFields, ...columnRefs(w.cardAction));
 			break;
 		case 'form':
 			cols.push(...w.fields);

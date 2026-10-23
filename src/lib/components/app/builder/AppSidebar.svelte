@@ -186,7 +186,7 @@
 	{/if}
 {/snippet}
 
-<aside
+<aside data-app-sidebar
 	class={cn('flex h-full shrink-0 flex-col border-e bg-sidebar text-sidebar-foreground print:hidden', collapsed ? 'w-12' : 'w-60')}
 	aria-label="Pages"
 >

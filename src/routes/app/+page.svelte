@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Utils
 	import { untrack } from 'svelte';
+	import { toast } from 'svelte-sonner';
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
@@ -78,6 +79,16 @@
 		return !!t && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName));
 	}
 
+	/**
+	 * Shortcuts for the selection (copy, arrows, Delete, Escape) only apply on
+	 * the canvas or the page sidebar, not while a menu, dropdown or the
+	 * properties panel has focus.
+	 */
+	function onCanvas(e: KeyboardEvent): boolean {
+		const t = e.target as HTMLElement | null;
+		return !e.defaultPrevented && (!t || t === document.body || !!t.closest('[data-canvas], [data-app-sidebar]'));
+	}
+
 	function onKey(e: KeyboardEvent) {
 		const mod = e.metaKey || e.ctrlKey;
 		if (mod && e.key.toLowerCase() === 'k') {
@@ -91,6 +102,32 @@
 			return;
 		}
 		if (!editing || inTextBox(e)) return;
+		const widgetId = onCanvas(e) ? appSession.selectedWidget?.id : undefined;
+		const key = e.key.toLowerCase();
+		if (mod && key === 'v' && appSession.clipboard && onCanvas(e)) {
+			e.preventDefault();
+			appSession.pasteWidget();
+			return;
+		}
+		if (widgetId && mod && (key === 'c' || key === 'x')) {
+			e.preventDefault();
+			appSession.copyWidget(widgetId);
+			if (key === 'x') appSession.deleteWidget(widgetId);
+			else toast.success('Widget copied', { description: 'Paste it on any page with ⌘V.' });
+			return;
+		}
+		if (widgetId && mod && key === 'd') {
+			e.preventDefault();
+			appSession.duplicateWidget(widgetId);
+			return;
+		}
+		const arrows: Record<string, [number, number]> = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
+		if (widgetId && !mod && e.key in arrows) {
+			e.preventDefault();
+			const [dx, dy] = arrows[e.key];
+			appSession.nudgeWidget(widgetId, dx, dy, e.shiftKey);
+			return;
+		}
 		if (mod && e.key.toLowerCase() === 'z') {
 			e.preventDefault();
 			if (e.shiftKey) appSession.redo();
@@ -98,9 +135,9 @@
 		} else if (mod && e.key.toLowerCase() === 'y') {
 			e.preventDefault();
 			appSession.redo();
-		} else if (e.key === 'Escape' && appSession.selected) {
+		} else if (e.key === 'Escape' && appSession.selected && onCanvas(e)) {
 			appSession.selected = null;
-		} else if ((e.key === 'Delete' || e.key === 'Backspace') && appSession.selected) {
+		} else if ((e.key === 'Delete' || e.key === 'Backspace') && appSession.selected && onCanvas(e)) {
 			// Undo brings it back.
 			e.preventDefault();
 			const id = appSession.selected;
@@ -239,7 +276,7 @@
 				</div>
 			{:else}
 				<AppSidebar {editing} onNewPage={() => (addingPage = true)} />
-				<div class="min-h-0 min-w-0 flex-1 overflow-auto bg-background">
+				<div class="min-h-0 min-w-0 flex-1 overflow-auto bg-background" data-canvas>
 					{#key appSession.page.id}
 						<AppCanvas page={appSession.page} {editing} />
 					{/key}

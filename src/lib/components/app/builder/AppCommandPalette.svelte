@@ -1,7 +1,7 @@
 <script lang="ts">
 	// Utils
 	import { toggleMode } from 'mode-watcher';
-	import { WIDGET_TYPES, type WidgetType } from '#lib/logic/app-def.js';
+	import { widgetLabel, WIDGET_TYPES, type WidgetType } from '#lib/logic/app-def.js';
 	import { appSession } from '#lib/state/app.svelte.js';
 
 	// Components
@@ -12,6 +12,7 @@
 	// Icons
 	import {
 		ArrowLeft as ArrowLeftIcon,
+		ClipboardPaste as ClipboardPasteIcon,
 		FilePlus as FilePlusIcon,
 		PanelLeft as PanelLeftIcon,
 		Settings as SettingsIcon,
@@ -76,6 +77,11 @@
 						<WidgetTypeIcon type={t.type} /> Add {t.label.toLowerCase()}
 					</Command.Item>
 				{/each}
+				{#if appSession.clipboard}
+					<Command.Item value="paste widget" onSelect={() => run(() => appSession.pasteWidget())}>
+						<ClipboardPasteIcon /> Paste “{appSession.clipboard.widget.title || widgetLabel(appSession.clipboard.widget.type)}”
+					</Command.Item>
+				{/if}
 			</Command.Group>
 		{/if}
 		<Command.Separator />

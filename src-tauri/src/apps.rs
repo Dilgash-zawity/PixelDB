@@ -237,14 +237,33 @@ pub fn duplicate_app(workspace: &Path, name: &str, new_name: &str) -> AppResult<
 }
 
 /// Rewrites every app that uses database `from` to use `to` instead, after
-/// the database file was renamed. Unreadable apps are left alone.
+/// the database file was renamed. Pages built from it ("origin" set) that
+/// are listed under its name in the sidebar follow the new name; headings
+/// the user typed on other pages are left alone. Unreadable apps are left
+/// alone.
 pub fn rename_database_in_apps(workspace: &Path, from: &str, to: &str) -> AppResult<()> {
     for app in list_apps(workspace)?.into_iter().filter(|a| a.valid && a.databases.iter().any(|d| d == from)) {
         let mut def = load_app(workspace, &app.name)?;
+        let mut aliases: Vec<String> = Vec::new();
         if let Some(sources) = def.get_mut("sources").and_then(JsonValue::as_array_mut) {
             for s in sources {
                 if s.get("database").and_then(JsonValue::as_str) == Some(from) {
                     s["database"] = JsonValue::String(to.to_string());
+                    if let Some(a) = s.get("alias").and_then(JsonValue::as_str) {
+                        aliases.push(a.to_string());
+                    }
+                }
+            }
+        }
+        if let Some(pages) = def.get_mut("pages").and_then(JsonValue::as_array_mut) {
+            for p in pages {
+                let built_here = p
+                    .get("origin")
+                    .and_then(|o| o.get("source"))
+                    .and_then(JsonValue::as_str)
+                    .is_some_and(|s| aliases.iter().any(|a| a == s));
+                if built_here && p.get("group").and_then(JsonValue::as_str) == Some(from) {
+                    p["group"] = JsonValue::String(to.to_string());
                 }
             }
         }
@@ -311,5 +330,26 @@ mod tests {
         rename_database_in_apps(w, "Sales", "Revenue").unwrap();
         assert_eq!(load_app(w, "Store copy").unwrap()["sources"][0]["database"], "Revenue");
         assert_eq!(load_app(w, "Other").unwrap()["sources"][0]["database"], "Stock");
+    }
+
+    #[test]
+    fn database_rename_moves_built_page_headings_only() {
+        let tmp = tempfile::tempdir().unwrap();
+        let w = tmp.path();
+        let app = json!({
+            "version": 1,
+            "sources": [{ "alias": "sales", "database": "Sales" }, { "alias": "stock", "database": "Stock" }],
+            "pages": [
+                { "title": "Orders", "group": "Sales", "origin": { "source": "sales", "table": "Orders" } },
+                { "title": "Notes", "group": "Sales", "origin": null },
+                { "title": "Items", "group": "Stock", "origin": { "source": "stock", "table": "Items" } }
+            ]
+        });
+        create_app(w, "Shop", &app).unwrap();
+        rename_database_in_apps(w, "Sales", "Revenue").unwrap();
+        let pages = load_app(w, "Shop").unwrap()["pages"].clone();
+        assert_eq!(pages[0]["group"], "Revenue");
+        assert_eq!(pages[1]["group"], "Sales");
+        assert_eq!(pages[2]["group"], "Stock");
     }
 }

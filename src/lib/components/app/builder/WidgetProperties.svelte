@@ -81,10 +81,18 @@
 			w.filters = [];
 			if (w.type === 'table') {
 				w.columns = [];
+				w.badges = [];
 				w.sort = null;
 				if (w.rowAction.do === 'set-variable' || w.rowAction.do === 'navigate') w.rowAction = { do: 'edit-record' };
 			}
 			if (w.type === 'form') w.fields = [];
+			if (w.type === 'board') {
+				w.groupBy = '';
+				w.lanes = [];
+				w.cardTitle = '';
+				w.cardFields = [];
+				if (w.cardAction.do === 'set-variable' || w.cardAction.do === 'navigate') w.cardAction = { do: 'edit-record' };
+			}
 			if (w.type === 'chart') {
 				w.groupBy = null;
 				w.series = [{ column: null, agg: 'count' }];
@@ -99,6 +107,12 @@
 	const aggOptions = Object.entries(AGGREGATE_LABELS).map(([value, label]) => ({ value, label }));
 	const seriesColumnOptions = $derived([{ value: '', label: '(records)' }, ...columnOptions]);
 	const typeOf = (c: string) => schema?.columns.find((x) => x.name === c)?.type ?? null;
+	/** Fields a board can make columns of: not long text, files or calculations. */
+	const laneColumnOptions = $derived(
+		(schema?.columns ?? [])
+			.filter((c) => !c.type || !['long_text', 'attachment', 'calculated', 'auto_number'].includes(c.type.type))
+			.map((c) => ({ value: c.name, label: c.name }))
+	);
 
 	function setSeries(s: ChartSeries, part: { agg?: string; column?: string }) {
 		if (part.agg !== undefined) s.agg = part.agg as Aggregate;
@@ -214,11 +228,11 @@
 					</Field.Field>
 				{/if}
 
-				{#if widget.type === 'table' || widget.type === 'form' || widget.type === 'chart' || widget.type === 'stat'}
+				{#if widget.type === 'table' || widget.type === 'form' || widget.type === 'board' || widget.type === 'chart' || widget.type === 'stat'}
 					<Field.Field>
 						<Field.Label for="{uid}-data">Data</Field.Label>
-						<BindingPicker id="{uid}-data" binding={widget.data} tablesOnly={widget.type === 'form'} onchange={rebind} />
-						{#if widget.type === 'form'}<Field.Description>Forms edit a table; saved queries are read-only.</Field.Description>{/if}
+						<BindingPicker id="{uid}-data" binding={widget.data} tablesOnly={widget.type === 'form' || widget.type === 'board'} onchange={rebind} />
+						{#if widget.type === 'form' || widget.type === 'board'}<Field.Description>{widget.type === 'form' ? 'Forms' : 'Boards'} edit a table; saved queries are read-only.</Field.Description>{/if}
 					</Field.Field>
 				{/if}
 			</Field.Group>
@@ -229,6 +243,11 @@
 				<Field.Set>
 					<Field.Legend variant="label">Columns</Field.Legend>
 					<ColumnPicker {columns} selected={w.columns} onchange={(next) => edit((x) => x.type === 'table' && (x.columns = next))} />
+				</Field.Set>
+				<Field.Set>
+					<Field.Legend variant="label">Colored labels</Field.Legend>
+					<Field.Description>Show values of these columns as colored labels, like a status.</Field.Description>
+					<ColumnPicker {columns} selected={w.badges} showAll={false} orderable={false} onchange={(next) => edit((x) => x.type === 'table' && (x.badges = next))} />
 				</Field.Set>
 				<Field.Set>
 					<Field.Legend variant="label">Only show records where</Field.Legend>
@@ -281,6 +300,10 @@
 						<Switch id="{uid}-new" checked={w.allowNew} onCheckedChange={(v) => edit((x) => x.type === 'table' && (x.allowNew = v))} />
 						<Field.Label for="{uid}-new" class="font-normal">“New” button</Field.Label>
 					</Field.Field>
+					<Field.Field orientation="horizontal">
+						<Switch id="{uid}-tdel" checked={w.allowDelete} onCheckedChange={(v) => edit((x) => x.type === 'table' && (x.allowDelete = v))} />
+						<Field.Label for="{uid}-tdel" class="font-normal">Delete records</Field.Label>
+					</Field.Field>
 				</Field.Group>
 				<Field.Set>
 					<Field.Legend variant="label">When a row is clicked</Field.Legend>
@@ -316,7 +339,92 @@
 						<Switch id="{uid}-fdel" checked={w.allowDelete} onCheckedChange={(v) => edit((x) => x.type === 'form' && (x.allowDelete = v))} />
 						<Field.Label for="{uid}-fdel" class="font-normal">Delete records</Field.Label>
 					</Field.Field>
+					<Field.Field orientation="horizontal">
+						<Switch
+							id="{uid}-fquick"
+							checked={w.quickEntry}
+							disabled={!w.allowNew}
+							onCheckedChange={(v) => edit((x) => x.type === 'form' && (x.quickEntry = v))}
+						/>
+						<Field.Content>
+							<Field.Label for="{uid}-fquick" class="font-normal">Quick entry</Field.Label>
+							<Field.Description>Starts blank; Enter adds the record and clears the form for the next one. Click a row in a linked table to edit it.</Field.Description>
+						</Field.Content>
+					</Field.Field>
 				</Field.Group>
+			{:else if widget.type === 'board'}
+				{@const w = widget}
+				{@const groupType = typeOf(w.groupBy)}
+				<Separator />
+				<Field.Group class="gap-4">
+					<Field.Field>
+						<Field.Label>Columns come from</Field.Label>
+						<PropSelect
+							label="Columns come from"
+							value={w.groupBy}
+							options={laneColumnOptions}
+							placeholder="Choose a field, like Status"
+							onchange={(v) => edit((x) => x.type === 'board' && (x.groupBy = v))}
+						/>
+						<Field.Description>Each value gets a column. Drag a card to another column to change it.</Field.Description>
+					</Field.Field>
+					{#if w.groupBy && groupType?.type !== 'lookup' && groupType?.type !== 'yes_no'}
+						<Field.Field>
+							<Field.Label for="{uid}-lanes">Columns to always show</Field.Label>
+							<Textarea
+								id="{uid}-lanes"
+								rows={4}
+								placeholder={'To do\nDoing\nDone'}
+								value={w.lanes.join('\n')}
+								oninput={(e) => {
+									const lanes = e.currentTarget.value.split('\n').map((l) => l.trim()).filter(Boolean);
+									edit((x) => x.type === 'board' && (x.lanes = lanes), 'lanes');
+								}}
+								onblur={() => appSession.seal()}
+							/>
+							<Field.Description>One per line, in order, even while empty. Other values get columns after them.</Field.Description>
+						</Field.Field>
+					{/if}
+					<Field.Field>
+						<Field.Label>Card heading</Field.Label>
+						<PropSelect
+							label="Card heading"
+							value={w.cardTitle}
+							options={[{ value: '', label: 'First text field' }, ...columnOptions]}
+							onchange={(v) => edit((x) => x.type === 'board' && (x.cardTitle = v))}
+						/>
+					</Field.Field>
+				</Field.Group>
+				<Field.Set>
+					<Field.Legend variant="label">Also show on cards</Field.Legend>
+					<ColumnPicker
+						columns={columns.filter((c) => c !== w.groupBy)}
+						selected={w.cardFields}
+						showAll={false}
+						onchange={(next) => edit((x) => x.type === 'board' && (x.cardFields = next))}
+					/>
+				</Field.Set>
+				<Field.Set>
+					<Field.Legend variant="label">Only show records where</Field.Legend>
+					<FiltersEditor filters={w.filters} {columns} onchange={editFilters} />
+				</Field.Set>
+				<Field.Field orientation="horizontal">
+					<Switch id="{uid}-bnew" checked={w.allowNew} onCheckedChange={(v) => edit((x) => x.type === 'board' && (x.allowNew = v))} />
+					<Field.Label for="{uid}-bnew" class="font-normal">Add records from each column</Field.Label>
+				</Field.Field>
+				<Field.Field orientation="horizontal">
+					<Switch id="{uid}-bdel" checked={w.allowDelete} onCheckedChange={(v) => edit((x) => x.type === 'board' && (x.allowDelete = v))} />
+					<Field.Label for="{uid}-bdel" class="font-normal">Delete records</Field.Label>
+				</Field.Field>
+				<Field.Set>
+					<Field.Legend variant="label">When a card is clicked</Field.Legend>
+					<ActionEditor
+						action={w.cardAction}
+						context="row"
+						{columns}
+						onchange={(next, group) => edit((x) => x.type === 'board' && (x.cardAction = next), group)}
+					/>
+				</Field.Set>
 			{:else if widget.type === 'chart'}
 				{@const w = widget}
 				<Separator />

@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Utils
-	import { DateFormatter, getLocalTimeZone, parseDate, type DateValue } from '@internationalized/date';
+	import { DateFormatter, getLocalTimeZone, parseDate, today, type DateValue } from '@internationalized/date';
 
 	// Components
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -46,9 +46,17 @@
 	function emit(d: string, t: string) {
 		onchange(d ? (t ? `${d}T${t}` : d) : null);
 	}
+
+	/** Today's date (where the user is), keeping a time already set. */
+	function setToday() {
+		emit(today(getLocalTimeZone()).toString(), timePart);
+		open = false;
+	}
+	const isToday = $derived(datePart === today(getLocalTimeZone()).toString());
 </script>
 
-<div class="flex gap-2">
+<!-- Wraps in narrow forms: the date takes its own line, Today, time and clear go under it. -->
+<div class={compact ? 'flex gap-2' : 'flex flex-wrap gap-2'}>
 	<Popover.Root bind:open>
 		<Popover.Trigger {id}>
 			{#snippet child({ props })}
@@ -57,7 +65,7 @@
 					{...rest}
 					variant="outline"
 					size={compact ? 'sm' : 'default'}
-					class="flex-1 justify-start font-normal"
+					class={compact ? 'flex-1 justify-start font-normal' : 'min-w-40 flex-1 justify-start font-normal'}
 					aria-invalid={invalid || undefined}
 				>
 					<CalendarIcon data-icon="inline-start" />
@@ -75,9 +83,13 @@
 					open = false;
 				}}
 			/>
+			<div class="border-t p-2">
+				<Button variant="ghost" size="sm" class="w-full" disabled={isToday} onclick={setToday}>Today</Button>
+			</div>
 		</Popover.Content>
 	</Popover.Root>
 	{#if !compact}
+	<Button variant="outline" disabled={isToday} onclick={setToday}>Today</Button>
 	<Input
 		type="time"
 		class="w-32"

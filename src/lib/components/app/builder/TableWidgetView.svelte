@@ -3,7 +3,7 @@
 	import { recordService } from '#lib/services/records.js';
 
 	// Types
-	import type { JsonValue, RecordPage, RecordRow } from '#lib/api/types.js';
+	import type { JsonValue, RecordPage, RecordRow, SortSpec } from '#lib/api/types.js';
 
 	// Utils
 	import { prefillFromFilters, resolveFilters, type TableWidget } from '#lib/logic/app-def.js';
@@ -19,9 +19,12 @@
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
 	import RecordDrawer from '../RecordDrawer.svelte';
+	import ValueBadge from './ValueBadge.svelte';
 
 	// Icons
 	import {
+		ArrowDown as ArrowDownIcon,
+		ArrowUp as ArrowUpIcon,
 		ChevronLeft as ChevronLeftIcon,
 		ChevronRight as ChevronRightIcon,
 		Plus as PlusIcon,
@@ -39,6 +42,9 @@
 	let lookups = $state<Record<string, LookupOption[]>>({});
 	let drawerOpen = $state(false);
 	let drawerRow = $state<RecordRow | null>(null);
+	/** Sort picked by clicking a column heading; undefined keeps the widget's own. */
+	let sortOverride = $state<SortSpec | null | undefined>(undefined);
+	const sort = $derived(sortOverride === undefined ? widget.sort : sortOverride);
 
 	const database = $derived(widget.data ? appSession.databaseOf(widget.data.source) : undefined);
 	const schema = $derived(widget.data ? appSession.knownSchema(widget.data.source, widget.data.table) : undefined);
@@ -64,7 +70,7 @@
 			query: {
 				offset,
 				limit: widget.pageSize,
-				sort: widget.sort ? [widget.sort] : [],
+				sort: sort ? [sort] : [],
 				filters: resolveFilters(widget.filters, appSession.vars),
 				search: widget.search ? searchTerm || null : null
 			}
@@ -74,7 +80,20 @@
 	const requestKey = $derived(JSON.stringify(build()));
 
 	// Changing what is shown starts again from the first page.
-	const filterKey = $derived(JSON.stringify([widget.data, resolveFilters(widget.filters, appSession.vars), searchTerm, widget.sort]));
+	const filterKey = $derived(JSON.stringify([widget.data, resolveFilters(widget.filters, appSession.vars), searchTerm, sort]));
+
+	// A new sort set while editing replaces whatever was clicked.
+	$effect(() => {
+		void widget.sort;
+		sortOverride = undefined;
+	});
+
+	/** Heading clicks go A → Z, Z → A, then back to record order. */
+	function sortBy(column: string) {
+		if (sort?.column !== column) sortOverride = { column, descending: false };
+		else if (!sort.descending) sortOverride = { column, descending: true };
+		else sortOverride = null;
+	}
 	$effect(() => {
 		void filterKey;
 		offset = 0;
@@ -198,7 +217,21 @@
 				<Table.Header class="sticky top-0 bg-background">
 					<Table.Row>
 						{#each shown as col (col.name)}
-							<Table.Head class={cn(numeric(col.type) && 'text-right')}>{col.name}</Table.Head>
+							{@const sorted = sort?.column === col.name ? sort : null}
+							<Table.Head class={cn(numeric(col.type) && 'text-right')} aria-sort={sorted ? (sorted.descending ? 'descending' : 'ascending') : undefined}>
+								{#if editing}
+									{col.name}
+								{:else}
+									<button
+										type="button"
+										class={cn('inline-flex max-w-full items-center gap-1 hover:text-foreground', numeric(col.type) && 'flex-row-reverse')}
+										onclick={() => sortBy(col.name)}
+									>
+										<span class="truncate">{col.name}</span>
+										{#if sorted?.descending}<ArrowDownIcon class="size-3.5 shrink-0" />{:else if sorted}<ArrowUpIcon class="size-3.5 shrink-0" />{/if}
+									</button>
+								{/if}
+							</Table.Head>
 						{/each}
 					</Table.Row>
 				</Table.Header>
@@ -211,7 +244,9 @@
 						>
 							{#each shown as col (col.name)}
 								<Table.Cell class={cn('max-w-64 truncate', numeric(col.type) && 'text-right tabular-nums')}>
-									{#if col.type?.type === 'yes_no'}
+									{#if widget.badges.includes(col.name)}
+										<ValueBadge text={col.type?.type === 'yes_no' ? displayValue(row.values[col.i], col.type) : cell(row.values[col.i], col)} />
+									{:else if col.type?.type === 'yes_no'}
 										{row.values[col.i] === 1 || row.values[col.i] === true ? 'Yes' : row.values[col.i] === null ? '' : 'No'}
 									{:else}
 										{cell(row.values[col.i], col)}
@@ -229,9 +264,11 @@
 		{/if}
 	</div>
 
-	{#if page && page.total > page.limit}
+	{#if page && page.total > 0 && page.total <= page.limit}
+		<p class="text-xs text-muted-foreground tabular-nums">{page.total} {page.total === 1 ? 'record' : 'records'}</p>
+	{:else if page && page.total > page.limit}
 		<div class="flex items-center justify-end gap-2 text-xs text-muted-foreground">
-			<span>{page.offset + 1}–{Math.min(page.total, page.offset + page.rows.length)} of {page.total}</span>
+			<span class="tabular-nums">{page.offset + 1}–{Math.min(page.total, page.offset + page.rows.length)} of {page.total}</span>
 			<Button size="icon-sm" variant="ghost" aria-label="Previous page" disabled={offset === 0} onclick={() => (offset = Math.max(0, offset - widget.pageSize))}>
 				<ChevronLeftIcon />
 			</Button>
@@ -251,6 +288,7 @@
 		row={drawerRow}
 		{lookups}
 		{database}
+		allowDelete={widget.allowDelete}
 		prefill={editorPrefill}
 		onSaved={() => appSession.dataRevision++}
 	/>

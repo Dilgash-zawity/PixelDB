@@ -757,3 +757,61 @@ fn aggregates_group_total_and_filter() {
     assert_eq!(r.rows, vec![vec![json!(2251)]]);
     assert_eq!(r.types, vec![Some(FieldType::Currency { scale: 2 })]);
 }
+
+#[test]
+fn search_ignores_case_in_every_alphabet() {
+    let (_dir, _path, db) = temp_db();
+    let c = &db.conn;
+    migrations::create_table(c, &customers_def()).unwrap();
+    for name in ["Élodie", "ÖZGÜR", "Ангелина", "bob"] {
+        records::insert_record(c, "Customers", &values(json!({ "name": name }))).unwrap();
+    }
+    let count = |term: &str| {
+        records::list_records(c, "Customers", &RecordQuery { search: Some(term.into()), ..Default::default() }).unwrap().total
+    };
+    assert_eq!(count("élo"), 1);
+    assert_eq!(count("özgür"), 1);
+    assert_eq!(count("АНГЕЛ"), 1);
+    assert_eq!(count("BOB"), 1);
+    let q = RecordQuery {
+        filters: vec![FilterSpec { column: "name".into(), op: FilterOp::StartsWith, value: json!("é") }],
+        ..Default::default()
+    };
+    assert_eq!(records::list_records(c, "Customers", &q).unwrap().total, 1);
+}
+
+#[test]
+fn sorting_a_relation_follows_the_shown_name() {
+    let (_dir, _path, db) = temp_db();
+    let c = &db.conn;
+    migrations::create_table(c, &customers_def()).unwrap();
+    let orders = TableDef {
+        name: "Orders".into(),
+        fields: vec![auto_id(), field("customer_id", FieldType::Lookup { value_type: LookupValueType::Integer, display_column: Some("name".into()) })],
+        foreign_keys: vec![ForeignKeyDef {
+            columns: vec!["customer_id".into()],
+            ref_table: "Customers".into(),
+            ref_columns: vec!["id".into()],
+            on_delete: FkAction::Restrict,
+            on_update: FkAction::Cascade,
+        }],
+        unique_constraints: vec![],
+        checks: vec![],
+        description: None,
+    };
+    migrations::create_table(c, &orders).unwrap();
+    // IDs 1, 2, 3 for Zoe, adam, Mia: by ID the names are out of order.
+    for name in ["Zoe", "adam", "Mia"] {
+        records::insert_record(c, "Customers", &values(json!({ "name": name }))).unwrap();
+    }
+    for id in [1, 2, 3] {
+        records::insert_record(c, "Orders", &values(json!({ "customer_id": id }))).unwrap();
+    }
+    let sorted = |descending: bool| -> Vec<Value> {
+        let q = RecordQuery { sort: vec![SortSpec { column: "customer_id".into(), descending }], ..Default::default() };
+        records::list_records(c, "Orders", &q).unwrap().rows.into_iter().map(|r| r.values[1].clone()).collect()
+    };
+    // adam (2), Mia (3), Zoe (1), ignoring case.
+    assert_eq!(sorted(false), vec![json!(2), json!(3), json!(1)]);
+    assert_eq!(sorted(true), vec![json!(1), json!(3), json!(2)]);
+}

@@ -39,6 +39,7 @@
 		/** Extra buttons just before the main button (e.g. "Save & add another"). */
 		secondary,
 		onkeydown,
+		nested = false,
 		children
 	}: {
 		open?: boolean;
@@ -57,10 +58,13 @@
 		actions?: Snippet;
 		secondary?: Snippet;
 		onkeydown?: (e: KeyboardEvent) => void;
+		/** Opens on top of another drawer, which it is rendered inside. */
+		nested?: boolean;
 		children: Snippet;
 	} = $props();
 
 	const last = $derived(step >= steps.length - 1);
+	const Root = $derived(nested ? Drawer.NestedRoot : Drawer.Root);
 
 	function submit(e: SubmitEvent) {
 		e.preventDefault();
@@ -71,7 +75,7 @@
 	}
 </script>
 
-<Drawer.Root bind:open>
+<Root bind:open>
 	<Drawer.Content
 		class="h-dvh data-[vaul-drawer-direction=bottom]:mt-0 data-[vaul-drawer-direction=bottom]:max-h-dvh"
 		{onkeydown}
@@ -117,4 +121,4 @@
 		</form>
 		{#if scope}<ConfirmHost {scope} />{/if}
 	</Drawer.Content>
-</Drawer.Root>
+</Root>

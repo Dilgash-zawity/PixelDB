@@ -11,6 +11,7 @@
 		Code as CodeIcon,
 		MousePointerClick as MousePointerClickIcon,
 		Table2 as TableIcon,
+		SquareKanban as SquareKanbanIcon,
 		Type as TypeIcon,
 	} from '@lucide/svelte';
 
@@ -20,6 +21,7 @@
 	const icons = {
 		table: TableIcon,
 		form: FileTextIcon,
+		board: SquareKanbanIcon,
 		chart: ChartColumnIcon,
 		stat: HashIcon,
 		filter: FunnelIcon,

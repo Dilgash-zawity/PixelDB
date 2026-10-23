@@ -8,7 +8,7 @@ describe('templates', () => {
 	for (const t of TEMPLATES) {
 		test(`${t.name}: every widget is bound to something that exists`, () => {
 			const app = t.app('My DB');
-			expect(app.sources).toEqual([{ alias: 'my_db', database: 'My DB' }]);
+			expect(app.sources).toEqual([{ alias: 'my_db', database: 'My DB', auto: false }]);
 			const schema: SchemaLookup = {
 				databases: ['My DB'],
 				objects: () => t.tables.map((x) => ({ name: x.name, kind: 'table' as const })),

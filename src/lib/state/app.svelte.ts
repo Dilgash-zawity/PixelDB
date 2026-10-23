@@ -8,7 +8,9 @@ import {
 	findWidget,
 	newWidget,
 	removeWidget,
+	adaptPastedWidget,
 	initialVariables,
+	newId,
 	readApp,
 	resolveValue,
 	sourceOf,
@@ -16,13 +18,15 @@ import {
 	type Action,
 	type AppCommand,
 	type AppDef,
+	type CopiedWidget,
 	type SchemaLookup,
 	type Binding,
 	type Variables,
 	type Widget,
 	type WidgetType
 } from '../logic/app-def';
-import { compact, findSpot } from '../logic/app-layout';
+import { generatePages, syncGeneratedPages } from '../logic/app-generate';
+import { compact, findSpot, place } from '../logic/app-layout';
 import { History } from '../logic/history';
 import { jsonClone } from '../logic/values';
 import { appService } from '../services/apps';
@@ -84,14 +88,16 @@ class AppSession {
 	databases = $state<string[]>([]);
 	objects = $state<Record<string, ObjectSummary[]>>({});
 	schemas = $state<Record<string, ObjectSchema>>({});
+	/** Widget copied with ⌘C, pasted with ⌘V on any page (of any app). */
+	clipboard = $state<CopiedWidget | null>(null);
 	/** One-shot "start a new record" requests for form and table widgets. */
 	intent = $state<{ widget: string; n: number }>({ widget: '', n: 0 });
 
 	private history = new History<AppDef>();
 	private saveTimer: ReturnType<typeof setTimeout> | null = null;
 	private pendingSchema = new Map<string, Promise<ObjectSchema | null>>();
-	/** Forms with unsaved edits, asked before leaving the page. */
-	private guards = new Map<string, () => Promise<boolean>>();
+	/** Forms with unsaved edits, asked before leaving the page or changing a variable they read. */
+	private guards = new Map<string, { check: () => Promise<boolean>; reads: string[] }>();
 
 	page = $derived(this.def ? (findPage(this.def, this.pageId) ?? this.def.pages[0]) : null);
 	selectedWidget = $derived(this.def && this.selected ? (findWidget(this.def, this.selected)?.widget ?? null) : null);
@@ -135,10 +141,56 @@ class AppSession {
 			this.vars = initialVariables(def);
 			this.mode = def.pages.some((p) => p.widgets.length) ? 'run' : 'edit';
 			this.saveState = 'saved';
+			await this.syncAuto();
 			await this.loadSchema();
 		} catch (e) {
 			this.loadError = e instanceof Error ? e.message : String(e);
 		}
+	}
+
+	/**
+	 * Catches up pages that update automatically with tables changed while
+	 * the app was closed. Not an undo step: it is how the app should look.
+	 */
+	private async syncAuto() {
+		const def = this.def;
+		if (!def) return;
+		let changed = false;
+		for (const s of def.sources.filter((x) => x.auto)) {
+			try {
+				const { tables, views } = await tableService.listSchema(s.database);
+				const group = def.sources.length > 1 ? s.database : '';
+				changed = syncGeneratedPages(def, s.alias, s.database, tables, views, group) || changed;
+			} catch {
+				// A missing or unreadable database shows up as widget problems instead.
+			}
+		}
+		if (!changed) return;
+		if (!findPage(def, this.pageId)) this.pageId = def.startPage;
+		this.scheduleSave();
+	}
+
+	/** Turns automatic page updates for a database on or off; on also catches up now. */
+	async setAutoUpdate(alias: string, on: boolean) {
+		const database = this.databaseOf(alias);
+		if (!database) return;
+		if (!on) {
+			this.change((d) => {
+				const s = sourceOf(d, alias);
+				if (s) s.auto = false;
+			});
+			return;
+		}
+		const schema = await attempt(() => tableService.listSchema(database));
+		if (!schema) return;
+		const group = (this.def?.sources.length ?? 0) > 1 ? database : '';
+		this.change((d) => {
+			const s = sourceOf(d, alias);
+			if (s) s.auto = true;
+			syncGeneratedPages(d, alias, database, schema.tables, schema.views, group);
+		});
+		await this.loadSchema();
+		toast.success('Pages update automatically', { description: `Changes to the tables of ${database} now show up in this app.` });
 	}
 
 	/** Saves pending edits and closes the databases the app opened. */
@@ -248,7 +300,7 @@ class AppSession {
 
 	/** A starting table for a new data widget: the first table of the first database. */
 	private firstBinding(type: WidgetType): Binding | null {
-		if (!this.def || !['table', 'form', 'chart', 'stat', 'query'].includes(type)) return null;
+		if (!this.def || !['table', 'form', 'board', 'chart', 'stat', 'query'].includes(type)) return null;
 		for (const s of this.def.sources) {
 			const t = (this.objects[s.alias] ?? []).find((o) => o.kind === 'table');
 			if (t) return { source: s.alias, table: t.name };
@@ -266,6 +318,118 @@ class AppSession {
 		this.change((d) => findPage(d, page.id)?.widgets.push(widget));
 		this.selected = widget.id;
 		this.loadWidgetSchema(widget);
+	}
+
+	/** The widget `id` with what it needs from this app, as the clipboard holds it. */
+	private copied(id: string): CopiedWidget | null {
+		const found = this.def ? findWidget(this.def, id) : undefined;
+		if (!found || !this.def) return null;
+		return jsonClone({ widget: found.widget, sources: this.def.sources, variables: this.def.variables });
+	}
+
+	/** Puts a copy of `source` in the first free spot of the current page and selects it. */
+	private async placeCopy(source: CopiedWidget) {
+		const page = this.page;
+		if (!page) return;
+		const sourcesBefore = this.def?.sources.length ?? 0;
+		const spot = findSpot(page.widgets.map((x) => ({ id: x.id, layout: x.layout })), source.widget.layout.w, source.widget.layout.h);
+		const copied = jsonClone(source);
+		copied.widget = { ...copied.widget, id: newId('w'), layout: spot };
+		const out: { widget?: Widget } = {};
+		this.change((d) => {
+			out.widget = adaptPastedWidget(d, copied);
+			findPage(d, page.id)?.widgets.push(out.widget);
+		});
+		const placed = out.widget;
+		if (!placed) return;
+		this.selected = placed.id;
+		for (const v of this.def?.variables ?? []) if (!(v.name in this.vars)) this.vars[v.name] = jsonClone(v.default);
+		// A database the widget needed was added to this app.
+		if ((this.def?.sources.length ?? 0) > sourcesBefore) await this.loadSchema();
+		else this.loadWidgetSchema(placed);
+	}
+
+	duplicateWidget(id: string) {
+		const c = this.copied(id);
+		if (c) this.placeCopy(c);
+	}
+
+	copyWidget(id: string): boolean {
+		const c = this.copied(id);
+		if (c) this.clipboard = c;
+		return !!c;
+	}
+
+	pasteWidget() {
+		if (this.clipboard) this.placeCopy(this.clipboard);
+	}
+
+	/**
+	 * Moves a widget one cell (or resizes it by one cell) with the arrow keys.
+	 * A move that the grid would undo by floating it back is stretched until
+	 * it lands somewhere new, so a widget can hop over its neighbours.
+	 */
+	nudgeWidget(id: string, dx: number, dy: number, resize: boolean) {
+		const found = this.def ? findWidget(this.def, id) : undefined;
+		if (!found) return;
+		const pageId = found.page.id;
+		const items = found.page.widgets.map((w) => ({ id: w.id, layout: { ...w.layout } }));
+		const o = found.widget.layout;
+		let final: ReturnType<typeof compact> | null = null;
+		if (resize) {
+			final = compact(place(items, id, { ...o, w: Math.min(Math.max(1, o.w + dx), 12 - o.x), h: Math.max(1, o.h + dy) }));
+		} else {
+			const limit = items.reduce((m, i) => Math.max(m, i.layout.y + i.layout.h), 0) + 1;
+			for (let step = 1; step <= limit; step++) {
+				const next = compact(place(items, id, { ...o, x: o.x + dx * step, y: o.y + dy * step }));
+				const l = next.find((n) => n.id === id)?.layout;
+				if (l && (l.x !== o.x || l.y !== o.y)) {
+					final = next;
+					break;
+				}
+				if (dx) break;
+			}
+		}
+		if (!final) return;
+		const layouts = final;
+		this.change((d) => {
+			const p = findPage(d, pageId);
+			if (!p) return;
+			for (const w of p.widgets) w.layout = layouts.find((f) => f.id === w.id)?.layout ?? w.layout;
+		}, `nudge:${id}`);
+	}
+
+	/**
+	 * Adds a page for each table of source `alias` that has none yet (and an
+	 * overview on an empty start page), then shows the first one.
+	 */
+	async buildPages(alias: string) {
+		const database = this.databaseOf(alias);
+		if (!database || !this.def) return;
+		const tables = await attempt(() => tableService.listDefinitions(database));
+		if (!tables) return;
+		if (!tables.length) {
+			toast.info(`${database} has no tables yet`, { description: 'Add tables on its Diagram, then build pages.' });
+			return;
+		}
+		const group = this.def.sources.length > 1 ? database : '';
+		let added: string[] = [];
+		const filledStart = !findPage(this.def, this.def.startPage)?.widgets.length;
+		this.change((d) => {
+			added = generatePages(d, alias, database, tables, group).map((p) => p.id);
+			const s = sourceOf(d, alias);
+			if (s) s.auto = true;
+		});
+		if (!added.length && !filledStart) {
+			toast.info('Every table already has a page');
+			return;
+		}
+		await this.loadSchema();
+		this.selected = null;
+		await this.showPage(filledStart ? this.def.startPage : added[0]);
+		toast.success(added.length ? `Added ${added.length} ${added.length === 1 ? 'page' : 'pages'}` : 'Filled in the start page', {
+			description: 'Undo brings back the app as it was.'
+		});
 	}
 
 	/** Removes a widget and closes the gap it leaves. */
@@ -348,14 +512,25 @@ class AppSession {
 
 	// ----- Running -----
 
-	/** Registers a check run before leaving the page (forms with unsaved edits). */
-	guard(widgetId: string, check: (() => Promise<boolean>) | null) {
-		if (check) this.guards.set(widgetId, check);
+	/**
+	 * Registers a check run before leaving the page (forms with unsaved
+	 * edits), and before an action changes one of the variables in `reads`.
+	 */
+	guard(widgetId: string, check: (() => Promise<boolean>) | null, reads: string[] = []) {
+		if (check) this.guards.set(widgetId, { check, reads });
 		else this.guards.delete(widgetId);
 	}
 
 	private async leavePage(): Promise<boolean> {
-		for (const check of [...this.guards.values()]) if (!(await check())) return false;
+		for (const g of [...this.guards.values()]) if (!(await g.check())) return false;
+		return true;
+	}
+
+	/** Asks the forms that read any of `names` whether their unsaved edits may go. */
+	private async allowChange(names: string[]): Promise<boolean> {
+		for (const g of [...this.guards.values()]) {
+			if (g.reads.some((r) => names.includes(r)) && !(await g.check())) return false;
+		}
 		return true;
 	}
 
@@ -379,7 +554,9 @@ class AppSession {
 				return;
 			case 'set-variable': {
 				const v = resolveValue(action.value, this.vars, row);
-				if (v !== undefined) this.setVariable(action.name, v);
+				if (v === undefined || JSON.stringify(v) === JSON.stringify(this.vars[action.name] ?? null)) return;
+				if (!(await this.allowChange([action.name]))) return;
+				this.setVariable(action.name, v);
 				return;
 			}
 			case 'navigate': {
@@ -388,6 +565,8 @@ class AppSession {
 					return;
 				}
 				const values = action.set.map((s) => [s.name, resolveValue(s.value, this.vars, row)] as const);
+				// Leaving the page asks anyway; staying on it, only forms reading these variables need to.
+				if (action.page === this.pageId && !(await this.allowChange(action.set.map((s) => s.name)))) return;
 				if (!(await this.showPage(action.page))) return;
 				for (const [name, v] of values) if (v !== undefined) this.setVariable(name, v);
 				return;

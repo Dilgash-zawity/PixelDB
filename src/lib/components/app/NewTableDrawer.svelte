@@ -1,14 +1,13 @@
 <script lang="ts">
 	// Types
-	import type { FieldDef, FieldTypeName } from '#lib/api/types.js';
+	import type { FieldDef } from '#lib/api/types.js';
 
 	// Utils
 	import { tick } from 'svelte';
-	import { fieldTypeLabel, makeFieldType } from '#lib/logic/field-types.js';
+	import { fieldTypeLabel } from '#lib/logic/field-types.js';
 	import { nextFreeName } from '#lib/logic/table-draft.js';
 	import {
 		QUICK_FIELDS,
-		WIZARD_EXCLUDED_TYPES,
 		fieldNameProblems,
 		fieldOptionBadges,
 		wizardField,
@@ -22,17 +21,16 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import FieldProperties from './FieldProperties.svelte';
+	import DraftFieldDrawer from './DraftFieldDrawer.svelte';
 	import FieldTypeIcon from './FieldTypeIcon.svelte';
-	import FieldTypeSelect from './FieldTypeSelect.svelte';
 	import StepDrawer from './StepDrawer.svelte';
 
 	// Icons
 	import {
 		KeyRound as KeyRoundIcon,
+		ChevronRight as ChevronRightIcon,
 		ListPlus as ListPlusIcon,
 		Plus as PlusIcon,
-		SlidersHorizontal as SlidersHorizontalIcon,
 		Sparkles as SparklesIcon,
 		Table2 as Table2Icon,
 		X as XIcon,
@@ -60,8 +58,9 @@
 	let step = $state(0);
 	let name = $state('');
 	let fields = $state<FieldDef[]>([]);
-	/** The field whose options are showing; one at a time keeps the list short. */
-	let expanded = $state<number | null>(null);
+	/** The field being set up in its own drawer: an index into `fields`, or null for a new one. */
+	let editing = $state<{ index: number | null; field: FieldDef }>({ index: null, field: wizardField({ name: '', type: 'short_text' }) });
+	let fieldOpen = $state(false);
 	let touched = $state(false);
 	let busy = $state(false);
 	let nameInput = $state<HTMLInputElement | null>(null);
@@ -72,7 +71,7 @@
 			step = 0;
 			name = initial;
 			fields = [];
-			expanded = null;
+			fieldOpen = false;
 			touched = false;
 			tick().then(() => nameInput?.select());
 		}
@@ -83,23 +82,31 @@
 	const fieldsOk = $derived(problems.every((p) => p === null));
 	const unused = $derived(QUICK_FIELDS.filter((q) => !fields.some((f) => f.name.trim().toLowerCase() === q.name.toLowerCase())));
 
-	async function addField(f?: WizardField) {
-		fields.push(wizardField(f ?? { name: nextFreeName('Field', ['ID', ...fields.map((x) => x.name)]), type: 'short_text' }));
-		if (f) return;
-		await tick();
-		document.querySelector<HTMLInputElement>(`#nt-field-${fields.length - 1}`)?.select();
+	/** Quick add puts a ready-made field straight in; "Add field" walks through its steps first. */
+	function addField(f?: WizardField) {
+		if (f) {
+			fields.push(wizardField(f));
+			return;
+		}
+		editing = { index: null, field: wizardField({ name: nextFreeName('Field', ['ID', ...fields.map((x) => x.name)]), type: 'short_text' }) };
+		fieldOpen = true;
 	}
 
-	function setType(f: FieldDef, v: FieldTypeName) {
-		if (f.field_type.type === v) return;
-		f.field_type = makeFieldType(v);
-		f.default = null;
+	function editField(i: number) {
+		editing = { index: i, field: fields[i] };
+		fieldOpen = true;
 	}
+
+	function saveField(f: FieldDef) {
+		if (editing.index === null) fields.push(f);
+		else fields[editing.index] = f;
+	}
+
+	/** Names a field can't take: the ID and every other field. */
+	const takenNames = $derived(['ID', ...fields.filter((_, i) => i !== editing.index).map((f) => f.name)]);
 
 	function removeField(i: number) {
 		fields.splice(i, 1);
-		if (expanded === i) expanded = null;
-		else if (expanded !== null && expanded > i) expanded--;
 	}
 
 	function next(at: number) {
@@ -160,47 +167,31 @@
 					<Badge variant="secondary">Auto ID</Badge>
 				</div>
 				{#each fields as f, i (i)}
-					{@const problem = touched || f.name.trim() ? problems[i] : null}
-					{@const open = expanded === i}
+					{@const problem = problems[i]}
 					{@const badges = fieldOptionBadges(f)}
-					<!-- The name box and message show the problem; the type and options stay their normal color. -->
-					<Field.Field class="gap-1.5 rounded-md border p-2">
-						<div class="flex items-center gap-2">
-							<Input
-								id="nt-field-{i}"
-								class="flex-1"
-								bind:value={f.name}
-								aria-label="Field name"
-								aria-invalid={!!problem}
-								autocomplete="off"
-							/>
-							<div class="w-44 shrink-0">
-								<FieldTypeSelect value={f.field_type.type} exclude={WIZARD_EXCLUDED_TYPES} onChange={(v) => setType(f, v)} />
-							</div>
-							<Button
-								variant={open ? 'secondary' : 'ghost'}
-								size="sm"
-								aria-expanded={open}
-								aria-controls="nt-options-{i}"
-								onclick={() => (expanded = open ? null : i)}
-							>
-								<SlidersHorizontalIcon data-icon="inline-start" /> Options
-							</Button>
-							<Button variant="ghost" size="icon-sm" aria-label="Remove {f.name || 'field'}" onclick={() => removeField(i)}>
-								<XIcon />
-							</Button>
-						</div>
-						{#if problem}<Field.Error>{problem}</Field.Error>{/if}
-						{#if open}
-							<div id="nt-options-{i}" class="rounded-md bg-muted/40 p-3">
-								<FieldProperties field={f} />
-							</div>
-						{:else if badges.length}
-							<div class="flex flex-wrap gap-1">
-								{#each badges as b (b)}<Badge variant="secondary">{b}</Badge>{/each}
-							</div>
-						{/if}
-					</Field.Field>
+					<div class="flex items-center gap-1 rounded-md border pe-1 has-[button.field-card:hover]:border-ring/60" data-invalid={problem ? true : undefined}>
+						<button type="button" class="field-card flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-start" onclick={() => editField(i)}>
+							<span class="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground vivid:bg-tone-blue/15 vivid:text-tone-blue">
+								<FieldTypeIcon type={f.field_type.type} class="size-4" />
+							</span>
+							<span class="flex min-w-0 flex-1 flex-col gap-1">
+								<span class="flex min-w-0 items-baseline gap-2">
+									<span class="truncate text-sm font-medium">{f.name.trim() || 'Untitled'}</span>
+									<span class="shrink-0 text-xs text-muted-foreground">{fieldTypeLabel(f.field_type)}</span>
+								</span>
+								{#if problem}
+									<span class="text-xs text-destructive">{problem}</span>
+								{:else if badges.length}
+									<span class="flex flex-wrap gap-1">{#each badges as b (b)}<Badge variant="secondary">{b}</Badge>{/each}</span>
+								{/if}
+							</span>
+							<span class="hidden shrink-0 text-xs text-muted-foreground sm:inline">Edit</span>
+							<ChevronRightIcon class="size-4 shrink-0 text-muted-foreground" />
+						</button>
+						<Button variant="ghost" size="icon-sm" aria-label="Remove {f.name || 'field'}" onclick={() => removeField(i)}>
+							<XIcon />
+						</Button>
+					</div>
 				{/each}
 				<Button variant="outline" class="self-start" onclick={() => addField()}>
 					<PlusIcon data-icon="inline-start" /> Add field
@@ -219,7 +210,7 @@
 					</div>
 				</div>
 			{/if}
-			<p class="text-xs text-muted-foreground">Use Options for a maximum length, required, no duplicates and more. You can add fields and links later on the Diagram.</p>
+			<p class="text-xs text-muted-foreground">Click a field to change its name, type and rules, step by step. You can add fields and links later on the Diagram.</p>
 		</div>
 	{:else}
 		<div class="flex flex-col gap-3">
@@ -247,4 +238,13 @@
 			</ul>
 		</div>
 	{/if}
+
+	<DraftFieldDrawer
+		bind:open={fieldOpen}
+		field={editing.field}
+		table={name}
+		taken={takenNames}
+		isNew={editing.index === null}
+		onSave={saveField}
+	/>
 </StepDrawer>
