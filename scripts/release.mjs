@@ -10,7 +10,7 @@ export function releaseVersion(root = '.') {
 	const pkg = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
 	const cargo = readFileSync(join(root, 'src-tauri/Cargo.toml'), 'utf8');
 	const cargoVersion = cargo.match(/\[package\][\s\S]*?^version\s*=\s*"([^"]+)"/m)?.[1];
-	const lock = readFileSync(join(root, 'src-tauri/Cargo.lock'), 'utf8');
+	const lock = readFileSync(join(root, 'src-tauri/Cargo.lock'), 'utf8').replace(/\r\n/g, '\n');
 	const lockVersion = lock.match(/\[\[package\]\]\nname = "SlateDB"\nversion = "([^"]+)"/)?.[1];
 	if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(config.version)) throw new Error('Use a stable x.y.z release version.');
 	if (pkg.version !== config.version || cargoVersion !== config.version || lockVersion !== config.version) throw new Error('package.json, Cargo.toml, Cargo.lock and tauri.conf.json versions must match.');

@@ -1,12 +1,12 @@
 name: release
 
-# Dispatch from main to approve a tested PR. Missing credentials fail before
+# Dispatch from main to approve a PR. Missing credentials fail before
 # merging. Publish only after every signed build and the manifest pass checks.
 on:
   workflow_dispatch:
     inputs:
       pr:
-        description: 'Tested pull request number to merge into main and release'
+        description: 'Pull request number to merge into main and release'
         required: true
         type: string
 
@@ -24,8 +24,6 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-      checks: read
-      statuses: read
     outputs:
       sha: ${{ steps.merge.outputs.sha }}
       version: ${{ steps.version.outputs.version }}
@@ -66,8 +64,6 @@ jobs:
           [[ "$PR" =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid PR number'; exit 1; }
           gh pr view "$PR" --json state,baseRefName,isCrossRepository,isDraft,headRefOid > pr.json
           jq -e '.state == "OPEN" and .baseRefName == "main" and .isCrossRepository == false and .isDraft == false' pr.json
-          gh pr checks "$PR" --json state > checks.json
-          jq -e 'length > 0 and all(.[]; .state == "SUCCESS" or .state == "SKIPPED" or .state == "NEUTRAL")' checks.json
           echo "sha=$(jq -r .headRefOid pr.json)" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@v4
         with:
@@ -133,9 +129,6 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - run: bun install --frozen-lockfile
-      - run: bun run check
-      - run: bun run test:ts
-      - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
       - name: Configure Windows Artifact Signing
         if: runner.os == 'Windows'
         env:

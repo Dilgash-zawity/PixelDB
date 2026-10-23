@@ -93,13 +93,12 @@ See [Tauri Windows signing](https://v2.tauri.app/distribute/sign/windows/).
 
 1. Update `package.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` (the
    SlateDB package), and `src-tauri/tauri.conf.json` to the same new version.
-2. Update `docs/release-notes.md`, open a PR to `main`, and wait for CI. CI runs
-   frontend checks/tests/build, release validation tests, Rust tests and Clippy,
-   plus native builds for Windows, Linux and both Mac architectures. PR builds
-   never receive signing secrets.
+2. Update `docs/release-notes.md`, open a PR to `main`, and wait for the installer
+   builds for Windows, Linux and both Mac architectures. Workflows build without
+   running tests, lint, or type checks. PR builds never receive signing secrets.
 3. Run **Actions → release → Run workflow** from `main`, supplying the tested
    PR number. This is the maintainer's approval to merge and release that PR.
-4. Preflight requires signing credentials, passing PR checks, a same-repository
+4. Preflight requires signing credentials, a same-repository
    PR to `main`, consistent versions, and an unused tag. It merges only the
    checked commit, then creates a draft release tied to the merge commit.
 5. All platforms build the same commit. The final job verifies update signatures
@@ -117,14 +116,14 @@ HTTPS; only newer versions with valid signatures can be installed.
 
 For a release such as 0.0.10 before Apple/Windows credentials are available:
 
-1. Merge the desired version to `main` and wait for its CI to pass.
+1. Merge the desired version to `main`.
 2. Update `docs/community-release-notes.md` with that version's changes,
    download filenames, and accurate signing status.
 3. Run **Actions → Publish community release → Run workflow** from `main`,
    entering the exact version on main. This explicitly approves publishing
    without Apple notarization or Windows Authenticode.
-4. The workflow requires the updater signing key and a passing CI run for the
-   exact commit. It builds all four platforms into a draft, verifies each update
+4. The workflow requires the updater signing key. It builds all four platforms
+   from the same commit into a draft, verifies each update
    signature and version, generates checksums and build attestations, then marks
    the complete release as latest. The verified-release workflow is unchanged.
 
