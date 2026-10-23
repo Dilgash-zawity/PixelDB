@@ -47,9 +47,16 @@ jobs:
           [ "$REQUESTED_VERSION" = "$VERSION" ] || { echo 'Requested version must match main'; exit 1; }
           status=$(gh api "repos/$GH_REPO/git/ref/tags/v$VERSION" --include 2>&1) && { echo 'Tag already exists'; exit 1; }
           [[ "$status" == *'HTTP 404'* ]] || { echo 'Unable to verify tag availability'; exit 1; }
-          gh release create "v$VERSION" --target "$RELEASE_SHA" --draft --title "SlateDB v$VERSION" --notes-file docs/community-release-notes.md
+          if gh release view "v$VERSION" --json isDraft,assets > existing-release.json 2>/dev/null; then
+            jq -e '.isDraft == true and (.assets | length) == 0' existing-release.json
+            gh release edit "v$VERSION" --target "$RELEASE_SHA" --title "SlateDB v$VERSION" --notes-file docs/community-release-notes.md
+          else
+            gh release create "v$VERSION" --target "$RELEASE_SHA" --draft --title "SlateDB v$VERSION" --notes-file docs/community-release-notes.md
+          fi
+          RELEASE_ID=$(gh release view "v$VERSION" --json databaseId --jq .databaseId)
+          [[ "$RELEASE_ID" =~ ^[1-9][0-9]*$ ]] || { echo 'Missing draft release ID'; exit 1; }
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "release_id=$(gh api "repos/$GH_REPO/releases/tags/v$VERSION" --jq .id)" >> "$GITHUB_OUTPUT"
+          echo "release_id=$RELEASE_ID" >> "$GITHUB_OUTPUT"
 
   build:
     needs: prepare
