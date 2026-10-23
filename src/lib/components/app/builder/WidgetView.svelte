@@ -3,6 +3,7 @@
 	import type { Widget } from '#lib/logic/app-def.js';
 
 	// Components
+	import BoardWidgetView from './BoardWidgetView.svelte';
 	import ButtonWidgetView from './ButtonWidgetView.svelte';
 	import ChartWidgetView from './ChartWidgetView.svelte';
 	import FilterWidgetView from './FilterWidgetView.svelte';
@@ -20,6 +21,8 @@
 	<TableWidgetView {widget} {editing} />
 {:else if widget.type === 'form'}
 	<FormWidgetView {widget} {editing} />
+{:else if widget.type === 'board'}
+	<BoardWidgetView {widget} {editing} />
 {:else if widget.type === 'chart'}
 	<ChartWidgetView {widget} />
 {:else if widget.type === 'stat'}

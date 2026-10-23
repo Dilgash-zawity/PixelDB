@@ -1,16 +1,17 @@
 <script lang="ts">
 	// Utils
-	import { duplicateWidget, findPage, type Layout, type Page } from '#lib/logic/app-def.js';
-	import { cellsMoved, compact, findSpot, gridHeight, place, type Placed } from '#lib/logic/app-layout.js';
+	import { findPage, type Layout, type Page } from '#lib/logic/app-def.js';
+	import { cellsMoved, compact, gridHeight, place, type Placed } from '#lib/logic/app-layout.js';
 	import { appSession } from '#lib/state/app.svelte.js';
 	import { confirm } from '#lib/state/feedback.svelte.js';
 
 	// Components
+	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import WidgetFrame from './WidgetFrame.svelte';
 
 	// Icons
-	import { LayoutDashboard as LayoutDashboardIcon } from '@lucide/svelte';
+	import { LayoutDashboard as LayoutDashboardIcon, WandSparkles as WandSparklesIcon } from '@lucide/svelte';
 
 	// Script
 	let { page, editing }: { page: Page; editing: boolean } = $props();
@@ -21,6 +22,22 @@
 	let width = $state(0);
 	let drag = $state<{ id: string; mode: 'move' | 'resize'; x: number; y: number; origin: Layout; moved: boolean } | null>(null);
 	let preview = $state<Placed[] | null>(null);
+	let building = $state(false);
+	/** Databases that could fill an empty start page (and get pages of their own). */
+	const buildable = $derived(
+		editing && appSession.def?.startPage === page.id
+			? appSession.def.sources.filter((s) => appSession.databases.includes(s.database))
+			: []
+	);
+
+	async function build(alias: string) {
+		building = true;
+		try {
+			await appSession.buildPages(alias);
+		} finally {
+			building = false;
+		}
+	}
 
 	const items = $derived(preview ?? page.widgets.map((w) => ({ id: w.id, layout: w.layout })));
 	const layouts = $derived(new Map(items.map((i) => [i.id, i.layout])));
@@ -66,19 +83,6 @@
 		preview = null;
 	}
 
-	function duplicate(id: string) {
-		const w = page.widgets.find((x) => x.id === id);
-		if (!w) return;
-		const spot = findSpot(items, w.layout.w, w.layout.h);
-		const pageId = page.id;
-		let copyId: string | undefined;
-		appSession.change((def) => {
-			const p = findPage(def, pageId);
-			if (p) copyId = duplicateWidget(p, id, spot)?.id;
-		});
-		if (copyId) appSession.selected = copyId;
-	}
-
 	async function remove(id: string) {
 		const w = page.widgets.find((x) => x.id === id);
 		if (!w) return;
@@ -110,10 +114,22 @@
 				<Empty.Title>{editing ? 'Add your first widget' : 'This page is empty'}</Empty.Title>
 				<Empty.Description>
 					{editing
-						? 'Pick a table, form, chart or another widget from the panel on the left.'
+						? 'Pick a table, form, board, chart or another widget from the panel on the right.'
 						: 'Switch to Edit to add tables, forms and charts.'}
 				</Empty.Description>
 			</Empty.Header>
+			{#if buildable.length}
+				<Empty.Content>
+					<div class="flex flex-wrap justify-center gap-2">
+						{#each buildable as s (s.alias)}
+							<Button disabled={building} onclick={() => build(s.alias)}>
+								<WandSparklesIcon data-icon="inline-start" /> Build pages from {s.database}
+							</Button>
+						{/each}
+					</div>
+					<p class="text-xs text-muted-foreground">A page for each table, with a list, a form and related records.</p>
+				</Empty.Content>
+			{/if}
 		</Empty.Root>
 	{:else}
 		<div
@@ -138,7 +154,8 @@
 						onselect={() => (appSession.selected = w.id)}
 						ondragstart={(e) => start(e, w.id, 'move')}
 						onresizestart={(e) => start(e, w.id, 'resize')}
-						onduplicate={() => duplicate(w.id)}
+						onduplicate={() => appSession.duplicateWidget(w.id)}
+						oncopy={() => appSession.copyWidget(w.id)}
 						onremove={() => remove(w.id)}
 					/>
 				</div>

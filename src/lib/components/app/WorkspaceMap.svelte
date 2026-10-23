@@ -42,7 +42,7 @@
 	import { Kbd } from '#lib/components/ui/kbd/index.js';
 	import FocusModeSwitch from './FocusModeSwitch.svelte';
 	import NameDialog from './NameDialog.svelte';
-	import NewAppDialog from './NewAppDialog.svelte';
+	import NewAppDrawer from './NewAppDrawer.svelte';
 
 	// Icons
 	import {
@@ -769,7 +769,7 @@
 	onSubmit={createDatabase}
 />
 
-<NewAppDialog bind:open={creatingApp} onCreated={(name) => placeCreated('app', name)} />
+<NewAppDrawer bind:open={creatingApp} onCreated={(name) => placeCreated('app', name)} />
 
 <NameDialog
 	bind:open={() => renaming !== null, (o) => !o && (renaming = null)}

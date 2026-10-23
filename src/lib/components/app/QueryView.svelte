@@ -158,16 +158,25 @@
 		draft.mode = mode;
 	}
 
-	/** Runs the current query, or `text` (a saved query's SQL, before the designer's tables have loaded). */
+	/** Number of the latest run; results of an earlier one that finishes later are dropped. */
+	let runId = 0;
+
+	/**
+	 * Runs the current query, or `text` (a saved query's SQL, before the
+	 * designer's tables have loaded). Opening a saved query runs it even while
+	 * another query is still running; only the latest results are shown.
+	 */
 	async function run(text?: string) {
 		const sql = (text ?? currentSql).trim();
-		if (!sql || running) return;
+		if (!sql || (running && text === undefined)) return;
+		const id = ++runId;
 		if (text === undefined && draft.mode === 'visual' && built.problems.length) {
 			toast.warning('Some criteria were skipped', { description: built.problems.join('. ') });
 		}
 		running = true;
 		const designed = text === undefined && draft.mode === 'visual' ? built.types : [];
 		const result = await attempt(() => queryService.run(sql));
+		if (id !== runId) return;
 		running = false;
 		if (result) {
 			draft.result = {

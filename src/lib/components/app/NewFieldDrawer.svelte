@@ -15,12 +15,12 @@
 	import { jsonClone } from '#lib/logic/values.js';
 	import { attempt } from '#lib/state/feedback.svelte.js';
 	import { session } from '#lib/state/session.svelte.js';
+	import { cn } from '#lib/utils.js';
 
 	// Components
 	import * as Alert from '#lib/components/ui/alert/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import * as Select from '#lib/components/ui/select/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import FieldProperties from './FieldProperties.svelte';
@@ -29,7 +29,12 @@
 
 	// Icons
 	import {
+		ArrowRight as ArrowRightIcon,
+		ArrowRightLeft as ArrowRightLeftIcon,
 		Link as LinkIcon,
+		Rows3 as Rows3Icon,
+		Square as SquareIcon,
+		Table2 as Table2Icon,
 		Shapes as ShapesIcon,
 		ShieldCheck as ShieldCheckIcon,
 		TextCursorInput as TextCursorInputIcon,
@@ -50,9 +55,17 @@
 
 	// A relationship is offered here too: its last step picks the table instead of the rules.
 	const EXCLUDED = WIZARD_EXCLUDED_TYPES.filter((t) => t !== 'lookup');
-	const KINDS: { value: Cardinality; label: string }[] = [
-		{ value: 'one_to_many', label: 'Many can point to the same one' },
-		{ value: 'one_to_one', label: 'Each one at most once' }
+	const KINDS: { value: Cardinality; label: string; hint: (child: string, parent: string) => string }[] = [
+		{
+			value: 'one_to_many',
+			label: 'Many to one',
+			hint: (child, parent) => `Many ${child} records can pick the same ${parent} record — like many orders for one customer.`
+		},
+		{
+			value: 'one_to_one',
+			label: 'One to one',
+			hint: (child, parent) => `Each ${parent} record can be picked by at most one ${child} record — like one passport per person.`
+		}
 	];
 
 	let step = $state(0);
@@ -69,9 +82,13 @@
 	const steps = $derived([
 		{ label: 'Name', icon: TextCursorInputIcon },
 		{ label: 'Type', icon: ShapesIcon },
-		isLink ? { label: 'Link', icon: LinkIcon } : { label: 'Rules', icon: ShieldCheckIcon }
+		...(isLink
+			? [
+					{ label: 'Table', icon: Table2Icon },
+					{ label: 'Link', icon: LinkIcon }
+				]
+			: [{ label: 'Rules', icon: ShieldCheckIcon }])
 	]);
-	const tableItems = $derived(session.tables.map((t) => ({ value: t.name, label: t.name })));
 	const parentKey = $derived(parentDef ? keyColumns(parentDef)[0] : undefined);
 	const linkProblem = $derived.by(() => {
 		if (!link.parent) return 'Choose the table this field points to';
@@ -132,6 +149,12 @@
 			const other = session.tables.find((t) => t.name !== table) ?? session.tables[0];
 			if (other) setParent(other.name);
 		}
+		if (at === 2 && isLink && (linkProblem || !parentDef)) return false;
+	}
+
+	function pickTable(name: string, andGo = false) {
+		if (name !== link.parent) setParent(name);
+		if (andGo) step = 3;
 	}
 
 	async function save(design: ReturnType<typeof fieldDesign>, name: string, message: string) {
@@ -185,7 +208,7 @@
 	finishLabel={isLink ? 'Link' : 'Add field'}
 	finishIcon={isLink ? LinkIcon : undefined}
 	{busy}
-	disabled={!edit || !!blocked || (step === 2 && isLink && (!!linkProblem || !parentDef))}
+	disabled={!edit || !!blocked || (step >= 2 && isLink && (!!linkProblem || !parentDef))}
 	onNext={next}
 	onFinish={submit}
 >
@@ -214,46 +237,81 @@
 			onChange={setType}
 			onPick={() => next(1) !== false && (step = 2)}
 		/>
+	{:else if isLink && step === 2}
+		<Field.Set>
+			<Field.Legend>Which table does “{edit.name.trim()}” point to?</Field.Legend>
+			<Field.Description>Each {table} record picks one record from it. Double-click a table to choose it and go on.</Field.Description>
+			<div class="grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Table to point to">
+				{#each session.tables as t (t.name)}
+					{@const selected = link.parent === t.name}
+					<button
+						type="button"
+						role="radio"
+						aria-checked={selected}
+						class={cn(
+							'flex items-center gap-2.5 rounded-lg border bg-card p-3 text-start outline-none transition-colors hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/40',
+							selected && 'border-primary bg-primary/5 ring-1 ring-primary'
+						)}
+						onclick={() => pickTable(t.name)}
+						ondblclick={() => pickTable(t.name, true)}
+					>
+						<span class={cn('flex size-8 shrink-0 items-center justify-center rounded-md bg-muted', selected && 'bg-primary text-primary-foreground')}>
+							<Table2Icon class="size-4" />
+						</span>
+						<span class="flex min-w-0 flex-col">
+							<span class="truncate text-sm font-medium">{t.name}</span>
+							{#if t.name === table}<span class="text-xs text-muted-foreground">This table</span>{/if}
+						</span>
+					</button>
+				{/each}
+			</div>
+			{#if link.parent && linkProblem}
+				<Field.Error>{linkProblem}</Field.Error>
+			{/if}
+		</Field.Set>
 	{:else if isLink}
-		<Field.Group class="gap-5">
-			<Field.Field data-invalid={!!link.parent && !!linkProblem}>
-				<Field.Label for="nf-parent">Which table does “{edit.name.trim()}” point to?</Field.Label>
-				<Select.Root type="single" items={tableItems} value={link.parent} onValueChange={setParent}>
-					<Select.Trigger id="nf-parent" class="w-full"><Select.Value placeholder="Choose a table" /></Select.Trigger>
-					<Select.Content>
-						<Select.Group>
-							{#each tableItems as item (item.value)}<Select.Item value={item.value} label={item.label}>{item.label}</Select.Item>{/each}
-						</Select.Group>
-					</Select.Content>
-				</Select.Root>
-				{#if link.parent && linkProblem}
-					<Field.Error>{linkProblem}</Field.Error>
-				{:else}
-					<Field.Description>Each {table} record picks one record from it in a dropdown.</Field.Description>
-				{/if}
-			</Field.Field>
-			<Field.Field>
-				<Field.Label for="nf-kind">How many {table} records can pick the same one?</Field.Label>
-				<Select.Root type="single" items={KINDS} value={link.kind} onValueChange={(v) => (link.kind = v as Cardinality)}>
-					<Select.Trigger id="nf-kind" class="w-full"><Select.Value /></Select.Trigger>
-					<Select.Content>
-						<Select.Group>
-							{#each KINDS as k (k.value)}<Select.Item value={k.value} label={k.label}>{k.label}</Select.Item>{/each}
-						</Select.Group>
-					</Select.Content>
-				</Select.Root>
-				{#if link.parent}
-					<Field.Description>{describeRelationship({ parent: link.parent, child: table, cardinality: link.kind })}</Field.Description>
-				{/if}
-			</Field.Field>
-			<Field.Field orientation="horizontal">
+		<div class="flex flex-col gap-5">
+			<Field.Set>
+				<Field.Legend>How many {table} records can pick the same {link.parent} record?</Field.Legend>
+				<div class="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Kind of link">
+					{#each KINDS as k (k.value)}
+						{@const selected = link.kind === k.value}
+						<button
+							type="button"
+							role="radio"
+							aria-checked={selected}
+							class={cn(
+								'flex flex-col items-start gap-2 rounded-lg border bg-card p-3 text-start outline-none transition-colors hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/40',
+								selected && 'border-primary bg-primary/5 ring-1 ring-primary'
+							)}
+							onclick={() => (link.kind = k.value)}
+						>
+							<!-- A small picture of the link: many boxes to one, or one to one. -->
+							<span class={cn('flex items-center gap-1.5 rounded-md bg-muted px-2 py-1.5 text-muted-foreground', selected && 'bg-primary text-primary-foreground')} aria-hidden="true">
+								{#if k.value === 'one_to_many'}
+									<Rows3Icon class="size-4" /><ArrowRightIcon class="size-3.5" /><SquareIcon class="size-4" />
+								{:else}
+									<SquareIcon class="size-4" /><ArrowRightLeftIcon class="size-3.5" /><SquareIcon class="size-4" />
+								{/if}
+							</span>
+							<span class="text-sm font-medium">{k.label}</span>
+							<span class="text-xs text-muted-foreground">{k.hint(table, link.parent)}</span>
+						</button>
+					{/each}
+				</div>
+			</Field.Set>
+			<Field.Field orientation="horizontal" class="rounded-lg border p-3">
 				<Field.Content>
 					<Field.Label for="nf-required">Required</Field.Label>
 					<Field.Description>Every {table} record must pick one.</Field.Description>
 				</Field.Content>
 				<Switch id="nf-required" checked={link.required} onCheckedChange={(v) => (link.required = v)} />
 			</Field.Field>
-		</Field.Group>
+			<p class="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
+				<LinkIcon class="mt-0.5 size-4 shrink-0" />
+				{describeRelationship({ parent: link.parent, child: table, cardinality: link.kind })}
+			</p>
+		</div>
 	{:else}
 		<div class="flex flex-col gap-4">
 			<p class="text-sm text-muted-foreground">All optional — click “Add field” to keep the defaults.</p>

@@ -1,6 +1,7 @@
 /// <reference types="bun" />
 import { describe, expect, test } from 'bun:test';
 import {
+	adaptPastedWidget,
 	addPage,
 	addSource,
 	addVariable,
@@ -169,5 +170,110 @@ describe('apps', () => {
 		expect(widgetProblems(app, newWidget('chart', { x: 0, y: 0, w: 1, h: 1 }), schema)).toEqual([
 			'Choose where the data comes from.'
 		]);
+	});
+});
+
+describe('board widgets', () => {
+	function boardApp() {
+		const app = newApp(['Work']);
+		const board = newWidget('board', { x: 0, y: 0, w: 12, h: 9 }, { source: 'work', table: 'Tasks' });
+		if (board.type !== 'board') throw new Error();
+		board.id = 'board';
+		board.groupBy = 'Status';
+		board.cardTitle = 'Title';
+		board.cardFields = ['Owner', 'Due'];
+		board.cardAction = { do: 'navigate', page: app.pages[0].id, set: [] };
+		app.pages[0].widgets.push(board);
+		return { app, board };
+	}
+
+	test('fills defaults for a board saved without them', () => {
+		const { app } = boardApp();
+		const raw = jsonClone(app) as unknown as { pages: { widgets: Record<string, unknown>[] }[] };
+		const w = raw.pages[0].widgets[0];
+		delete w.lanes;
+		delete w.cardAction;
+		const read = readApp(raw).pages[0].widgets[0];
+		expect(read.type === 'board' && read.lanes).toEqual([]);
+		expect(read.type === 'board' && read.cardAction).toEqual({ do: 'edit-record' });
+	});
+
+	test('field renames reach the lanes field, heading and card fields', () => {
+		const { app, board } = boardApp();
+		expect(renameFieldInApp(app, 'Work', 'Tasks', 'Status', 'Stage')).toBe(true);
+		expect(renameFieldInApp(app, 'Work', 'Tasks', 'Owner', 'Assignee')).toBe(true);
+		expect(board.groupBy).toBe('Stage');
+		expect(board.cardFields).toEqual(['Assignee', 'Due']);
+	});
+
+	test('needs a field to make columns of, and a table rather than a saved query', () => {
+		const { app, board } = boardApp();
+		const schema: SchemaLookup = {
+			databases: ['Work'],
+			objects: () => [{ name: 'Tasks', kind: 'view' }],
+			columns: () => ['Status', 'Title', 'Owner', 'Due']
+		};
+		expect(widgetProblems(app, board, schema)).toEqual(['“Tasks” is a saved query; boards need a table.']);
+		board.groupBy = '';
+		expect(widgetProblems(app, board, schema)).toContain('Choose the field the columns come from.');
+	});
+
+	test('removing a page clears a card click that went there', () => {
+		const { app, board } = boardApp();
+		const other = addPage(app, 'Other');
+		board.cardAction = { do: 'navigate', page: other.id, set: [] };
+		removePage(app, other.id);
+		expect<unknown>(board.cardAction).toEqual({ do: 'none' });
+	});
+});
+
+test('table label columns follow field renames', () => {
+	const app = newApp(['Sales']);
+	const t = newWidget('table', { x: 0, y: 0, w: 12, h: 8 }, { source: 'sales', table: 'Orders' });
+	if (t.type !== 'table') throw new Error();
+	t.badges = ['status'];
+	app.pages[0].widgets.push(t);
+	renameFieldInApp(app, 'Sales', 'Orders', 'status', 'state');
+	expect(t.badges).toEqual(['state']);
+});
+
+test('forms use quick entry unless they were saved with it off', () => {
+	const app = newApp(['Sales']);
+	app.pages[0].widgets.push(newWidget('form', { x: 0, y: 0, w: 6, h: 9 }, { source: 'sales', table: 'Orders' }));
+	const raw = jsonClone(app) as unknown as { pages: { widgets: Record<string, unknown>[] }[] };
+	delete raw.pages[0].widgets[0].quickEntry;
+	const read = readApp(raw).pages[0].widgets[0];
+	expect(read.type === 'form' && read.quickEntry).toBe(true);
+	raw.pages[0].widgets[0].quickEntry = false;
+	const off = readApp(raw).pages[0].widgets[0];
+	expect(off.type === 'form' && off.quickEntry).toBe(false);
+});
+
+describe('adaptPastedWidget', () => {
+	function copiedFrom() {
+		const from = newApp(['Sales']);
+		addVariable(from, 'customer', 7);
+		const t = newWidget('table', { x: 0, y: 0, w: 12, h: 8 }, { source: 'sales', table: 'Orders' });
+		if (t.type !== 'table') throw new Error();
+		t.filters = [{ column: 'customer_id', op: 'eq', value: { kind: 'variable', name: 'customer' } }];
+		t.rowAction = { do: 'navigate', page: from.pages[0].id, set: [] };
+		return { widget: jsonClone(t), sources: from.sources, variables: from.variables };
+	}
+
+	test('in another app it reads the same database, brings its variables and drops dead links', () => {
+		const to = newApp(['Stock']);
+		const w = adaptPastedWidget(to, copiedFrom());
+		expect(to.sources.map((s) => s.database)).toEqual(['Stock', 'Sales']);
+		expect(w.type === 'table' && w.data).toEqual({ source: 'sales', table: 'Orders' });
+		expect(to.variables).toEqual([{ name: 'customer', default: 7 }]);
+		expect(w.type === 'table' && w.rowAction).toEqual({ do: 'none' });
+	});
+
+	test('uses the alias the other app already has for that database', () => {
+		const to = newApp([]);
+		addSource(to, 'Sales').alias = 'shop';
+		const w = adaptPastedWidget(to, copiedFrom());
+		expect(w.type === 'table' && w.data?.source).toBe('shop');
+		expect(to.sources).toHaveLength(1);
 	});
 });

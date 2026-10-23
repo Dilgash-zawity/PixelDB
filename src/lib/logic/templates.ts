@@ -81,19 +81,23 @@ const contacts: Template = {
 		const app = newApp([database]);
 		const s = app.sources[0].alias;
 		addVariable(app, 'company', null);
+		addVariable(app, 'person', null);
 		const people = app.pages[0];
 		people.title = 'People';
 		people.icon = 'users';
 		const peopleTable = widget('table', { x: 0, y: 2, w: 7, h: 10 }, s, 'People', (w) => {
 			w.columns = ['Name', 'Email', 'Phone', 'Company'];
 			w.sort = { column: 'Name', descending: false };
+			w.allowNew = false;
+			w.rowAction = { do: 'set-variable', name: 'person', value: { kind: 'column', column: 'ID' } };
 		});
 		const personForm = widget('form', { x: 7, y: 2, w: 5, h: 10 }, s, 'People', (w) => {
 			w.title = 'Person';
 			w.allowDelete = true;
+			w.filters = [{ column: 'ID', op: 'eq', value: { kind: 'variable', name: 'person' } }];
 		});
 		people.widgets.push(
-			widget('text', { x: 0, y: 0, w: 8, h: 2 }, null, null, (w) => (w.markdown = '# People\nEveryone you keep in touch with. Click a row to edit it.')),
+			widget('text', { x: 0, y: 0, w: 8, h: 2 }, null, null, (w) => (w.markdown = '# People\nEveryone you keep in touch with. Fill in the form and press Enter to add someone; click a row to edit it.')),
 			widget('stat', { x: 8, y: 0, w: 2, h: 2 }, s, 'People', (w) => (w.title = w.caption = 'People')),
 			widget('stat', { x: 10, y: 0, w: 2, h: 2 }, s, 'Companies', (w) => (w.title = w.caption = 'Companies')),
 			peopleTable,
@@ -148,7 +152,8 @@ const shop: Template = {
 				link('Product', 'Products', 'Name'),
 				f('Quantity', { type: 'number' }, { required: true }),
 				f('Total', { type: 'currency', scale: 2 }),
-				f('Placed', { type: 'date_time' }, { default: { kind: 'current_date' } })
+				f('Placed', { type: 'date_time' }, { default: { kind: 'current_date' } }),
+				f('Status', { type: 'short_text', max_length: 20 }, { default: { kind: 'literal', value: 'New' } })
 			],
 			foreign_keys: [fk('Product', 'Products')]
 		}
@@ -161,18 +166,19 @@ const shop: Template = {
 			{ Name: 'Sketchbook', Category: 'Paper', Price: '8.90', 'In stock': 40 }
 		],
 		Orders: [
-			{ Product: 1, Quantity: 4, Total: '14.00', Placed: '2026-07-03' },
-			{ Product: 2, Quantity: 10, Total: '12.00', Placed: '2026-07-21' },
-			{ Product: 3, Quantity: 1, Total: '24.00', Placed: '2026-08-09' },
-			{ Product: 4, Quantity: 2, Total: '17.80', Placed: '2026-08-15' },
-			{ Product: 1, Quantity: 6, Total: '21.00', Placed: '2026-09-02' },
-			{ Product: 3, Quantity: 2, Total: '48.00', Placed: '2026-09-28' }
+			{ Product: 1, Quantity: 4, Total: '14.00', Placed: '2026-07-03', Status: 'Delivered' },
+			{ Product: 2, Quantity: 10, Total: '12.00', Placed: '2026-07-21', Status: 'Delivered' },
+			{ Product: 3, Quantity: 1, Total: '24.00', Placed: '2026-08-09', Status: 'Shipped' },
+			{ Product: 4, Quantity: 2, Total: '17.80', Placed: '2026-08-15', Status: 'Packed' },
+			{ Product: 1, Quantity: 6, Total: '21.00', Placed: '2026-09-02', Status: 'New' },
+			{ Product: 3, Quantity: 2, Total: '48.00', Placed: '2026-09-28', Status: 'New' }
 		]
 	},
 	app(database) {
 		const app = newApp([database]);
 		const s = app.sources[0].alias;
 		addVariable(app, 'category', null);
+		addVariable(app, 'order', null);
 		const dash = app.pages[0];
 		dash.title = 'Dashboard';
 		dash.icon = 'layout-dashboard';
@@ -215,11 +221,26 @@ const shop: Template = {
 		orders.widgets.push(
 			widget('form', { x: 0, y: 0, w: 4, h: 9 }, s, 'Orders', (w) => {
 				w.title = 'Order';
-				w.fields = ['Product', 'Quantity', 'Total', 'Placed'];
+				w.fields = ['Product', 'Quantity', 'Total', 'Placed', 'Status'];
+				w.filters = [{ column: 'ID', op: 'eq', value: { kind: 'variable', name: 'order' } }];
 			}),
 			widget('table', { x: 4, y: 0, w: 8, h: 9 }, s, 'Orders', (w) => {
+				w.allowNew = false;
+				w.rowAction = { do: 'set-variable', name: 'order', value: { kind: 'column', column: 'ID' } };
 				w.sort = { column: 'Placed', descending: true };
-				w.columns = ['Placed', 'Product', 'Quantity', 'Total'];
+				w.columns = ['Placed', 'Product', 'Quantity', 'Total', 'Status'];
+				w.badges = ['Status'];
+			})
+		);
+		const fulfilment = addPage(app, 'Fulfilment', 'truck', 'Shop');
+		fulfilment.widgets.push(
+			widget('text', { x: 0, y: 0, w: 12, h: 1 }, null, null, (w) => (w.markdown = 'Drag an order to the next column as it moves along.')),
+			widget('board', { x: 0, y: 1, w: 12, h: 10 }, s, 'Orders', (w) => {
+				w.title = 'Orders';
+				w.groupBy = 'Status';
+				w.lanes = ['New', 'Packed', 'Shipped', 'Delivered'];
+				w.cardTitle = 'Product';
+				w.cardFields = ['Quantity', 'Total', 'Placed'];
 			})
 		);
 		const print = addCommand(app, 'Print');

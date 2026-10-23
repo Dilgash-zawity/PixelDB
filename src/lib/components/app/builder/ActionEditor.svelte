@@ -44,7 +44,7 @@
 	const targets = $derived(
 		(def?.pages ?? []).flatMap((p) =>
 			p.widgets
-				.filter((w) => w.type === 'form' || w.type === 'table')
+				.filter((w) => w.type === 'form' || w.type === 'table' || w.type === 'board')
 				.map((w) => ({ value: w.id, label: w.title || widgetLabel(w.type), group: p.title }))
 		)
 	);
@@ -136,7 +136,7 @@
 			<PropSelect
 				value={a.widget}
 				options={targets}
-				placeholder={targets.length ? 'Choose a form or table' : 'Add a form or table first'}
+				placeholder={targets.length ? 'Choose a form, table or board' : 'Add a form, table or board first'}
 				onchange={(v) => onchange({ ...a, widget: v })}
 			/>
 		</Field.Field>

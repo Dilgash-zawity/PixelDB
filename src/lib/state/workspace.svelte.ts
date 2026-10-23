@@ -1,5 +1,6 @@
 import type { AppFile, DatabaseFile, WorkspaceInfo } from '../api/types';
 import { addSource, newApp, readApp, removeSource, widgetsUsingSource } from '../logic/app-def';
+import { generatePages } from '../logic/app-generate';
 import type { Template } from '../logic/templates';
 import { appService } from '../services/apps';
 import { databaseService } from '../services/database';
@@ -98,8 +99,24 @@ class WorkspaceState {
 	}
 
 	/** Creates an app over `databases`; returns true on success. */
-	async createApp(name: string, databases: string[]): Promise<boolean> {
-		const ok = (await attempt(() => appService.create(name, newApp(databases)))) !== undefined;
+	/** Creates an app over `databases`; with `build`, with a page for each of their tables. */
+	async createApp(name: string, databases: string[], build = false): Promise<boolean> {
+		const ok = !!(await attempt(async () => {
+			const app = newApp(databases);
+			if (build) {
+				try {
+					for (const s of app.sources) {
+						const group = app.sources.length > 1 ? s.database : '';
+						generatePages(app, s.alias, s.database, await tableService.listDefinitions(s.database), group);
+						s.auto = true;
+					}
+				} finally {
+					await databaseService.release();
+				}
+			}
+			await appService.create(name, app);
+			return true;
+		}));
 		await this.refresh();
 		return ok;
 	}

@@ -13,6 +13,8 @@
 		columns,
 		selected,
 		allLabel = 'Show every field',
+		showAll = true,
+		orderable = true,
 		onchange
 	}: {
 		/** Every available column, in table order. */
@@ -20,11 +22,14 @@
 		/** Chosen columns in display order; empty means all. */
 		selected: string[];
 		allLabel?: string;
+		/** Offer the "every field" switch; without it, nothing chosen means none. */
+		showAll?: boolean;
+		orderable?: boolean;
 		onchange: (next: string[]) => void;
 	} = $props();
 
 	const id = $props.id();
-	const all = $derived(selected.length === 0);
+	const all = $derived(showAll && selected.length === 0);
 	// Chosen columns first (in their order), then the rest.
 	const ordered = $derived([...selected.filter((c) => columns.includes(c)), ...columns.filter((c) => !selected.includes(c))]);
 
@@ -43,10 +48,12 @@
 </script>
 
 <div class="flex flex-col gap-2">
-	<div class="flex items-center gap-2">
-		<Switch id="{id}-all" checked={all} onCheckedChange={(v) => onchange(v ? [] : [...columns])} />
-		<Label for="{id}-all" class="font-normal">{allLabel}</Label>
-	</div>
+	{#if showAll}
+		<div class="flex items-center gap-2">
+			<Switch id="{id}-all" checked={all} onCheckedChange={(v) => onchange(v ? [] : [...columns])} />
+			<Label for="{id}-all" class="font-normal">{allLabel}</Label>
+		</div>
+	{/if}
 	{#if !all}
 		<div class="flex flex-col border">
 			{#each ordered as c (c)}
@@ -54,7 +61,7 @@
 				<div class="flex items-center gap-2 px-2 py-1 text-sm">
 					<Checkbox id="{id}-{c}" checked={on} onCheckedChange={(v) => toggle(c, !!v)} />
 					<Label for="{id}-{c}" class="min-w-0 flex-1 truncate font-normal">{c}</Label>
-					{#if on}
+					{#if on && orderable}
 						<Button size="icon-xs" variant="ghost" aria-label="Move {c} up" disabled={selected.indexOf(c) === 0} onclick={() => shift(c, -1)}><ArrowUpIcon /></Button>
 						<Button size="icon-xs" variant="ghost" aria-label="Move {c} down" disabled={selected.indexOf(c) === selected.length - 1} onclick={() => shift(c, 1)}><ArrowDownIcon /></Button>
 					{/if}

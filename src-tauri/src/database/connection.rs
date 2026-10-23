@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard};
 use std::time::Duration;
 
+use rusqlite::functions::FunctionFlags;
 use rusqlite::{Connection, OpenFlags};
 
 use crate::errors::{AppError, AppResult};
@@ -103,7 +104,32 @@ fn open_connection(path: &PathBuf) -> AppResult<Connection> {
     if !fk {
         return Err(AppError::Internal("could not enable foreign key enforcement".into()));
     }
+    register_functions(&conn)?;
     Ok(conn)
+}
+
+/// Name of the Unicode lower-casing function search and text filters use.
+/// SQLite's own `lower()` and `LIKE` only fold ASCII letters, so "é" would
+/// not find "É". Only used in queries the app builds, never stored in the
+/// schema, so the file still opens in other SQLite tools.
+pub const FOLD_FUNCTION: &str = "slatedb_fold";
+
+pub fn register_functions(conn: &Connection) -> rusqlite::Result<()> {
+    conn.create_scalar_function(
+        FOLD_FUNCTION,
+        1,
+        FunctionFlags::SQLITE_UTF8 | FunctionFlags::SQLITE_DETERMINISTIC | FunctionFlags::SQLITE_INNOCUOUS,
+        |ctx| {
+            use rusqlite::types::ValueRef;
+            let text = match ctx.get_raw(0) {
+                ValueRef::Null => return Ok(None),
+                ValueRef::Integer(i) => i.to_string(),
+                ValueRef::Real(f) => f.to_string(),
+                ValueRef::Text(t) | ValueRef::Blob(t) => String::from_utf8_lossy(t).into_owned(),
+            };
+            Ok(Some(text.to_lowercase()))
+        },
+    )
 }
 
 type Shared = Arc<Mutex<OpenDatabase>>;

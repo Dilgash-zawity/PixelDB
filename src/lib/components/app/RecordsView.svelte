@@ -126,11 +126,24 @@
 
 	// ----- loading -----
 
-	async function load() {
+	/** Number of the latest load; an earlier one finishing later is ignored. */
+	let loadId = 0;
+
+	/**
+	 * Loads the shown page of records. `full` also reloads the table's design
+	 * and the choices of its relation fields, which only change when fields
+	 * do (or on Refresh), not on every saved row.
+	 */
+	async function load(full = false) {
+		const id = ++loadId;
+		const stale = () => id !== loadId;
 		await attempt(async () => {
-			if (!isView) {
-				def = (await tableService.get(table)).definition;
-				lookups = await loadLookups(def);
+			if (!isView && (full || !def)) {
+				const d = (await tableService.get(table)).definition;
+				const l = await loadLookups(d);
+				if (stale()) return;
+				def = d;
+				lookups = l;
 			}
 			const query = () => ({
 				offset,
@@ -139,12 +152,16 @@
 				filters,
 				search: appliedSearch || null
 			});
-			data = await recordService.list(table, query());
-			if (data.rows.length === 0 && data.total > 0 && offset > 0) {
-				offset = Math.floor((data.total - 1) / PAGE_SIZE) * PAGE_SIZE;
-				data = await recordService.list(table, query());
+			let page = await recordService.list(table, query());
+			if (stale()) return;
+			if (page.rows.length === 0 && page.total > 0 && offset > 0) {
+				offset = Math.floor((page.total - 1) / PAGE_SIZE) * PAGE_SIZE;
+				page = await recordService.list(table, query());
+				if (stale()) return;
 			}
+			data = page;
 		});
+		if (stale()) return;
 		selected = {};
 		if (typeof current === 'number' && data && current >= data.rows.length) current = data.rows.length ? data.rows.length - 1 : null;
 		loading = false;
@@ -402,7 +419,7 @@
 	}
 
 	async function refresh() {
-		if (await commitRow()) await load();
+		if (await commitRow()) await load(true);
 	}
 
 	// ----- fields -----
@@ -419,7 +436,7 @@
 		const type = addType;
 		const result = await attempt(() => tableService.addField(table, { name, field_type: makeFieldType(type) }));
 		if (!result) return false;
-		await load();
+		await load(true);
 		return true;
 	}
 
@@ -431,7 +448,7 @@
 		session.renamedField(table, from, name);
 		if (sort?.column === from) sort = { ...sort, column: name };
 		filterRows = filterRows.map((f) => (f.column === from ? { ...f, column: name } : f));
-		await load();
+		await load(true);
 		return true;
 	}
 
@@ -448,7 +465,7 @@
 		if (!result) return;
 		if (sort?.column === col) sort = null;
 		filterRows = filterRows.filter((f) => f.column !== col);
-		await load();
+		await load(true);
 		toast.success(`Deleted “${col}”`, { description: result.warnings.join(' ') || undefined });
 	}
 
@@ -489,7 +506,7 @@
 		}
 	}
 
-	load();
+	load(true);
 </script>
 
 <svelte:window onkeydown={onWindowKey} />
@@ -831,8 +848,8 @@
 {/snippet}
 
 {#if def && !isView}
-	<FieldDrawer bind:open={fieldDrawer.open} {table} field={fieldDrawer.field} onSaved={load} />
-	<RecordDrawer bind:open={sheetOpen} {table} {def} columns={columns} row={sheetRow} {lookups} onSaved={load} />
+	<FieldDrawer bind:open={fieldDrawer.open} {table} field={fieldDrawer.field} onSaved={() => load(true)} />
+	<RecordDrawer bind:open={sheetOpen} {table} {def} columns={columns} row={sheetRow} {lookups} onSaved={() => load()} />
 {/if}
 
 <NameDialog

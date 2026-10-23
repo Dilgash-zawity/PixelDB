@@ -14,6 +14,7 @@ use crate::models::{
 use crate::validation::identifiers::quote_ident;
 use crate::validation::values::{coerce_value, sql_to_json, untyped_value};
 
+use super::connection::FOLD_FUNCTION;
 use super::schema::{load_table, require_object, result_types, rowid_alias, rowid_name};
 use super::transactions::with_transaction;
 
@@ -128,9 +129,16 @@ fn display_text(qc: &str, t: Option<&FieldType>) -> String {
     }
 }
 
+/// A LIKE pattern for `s`, lower-cased to match `folded` columns.
 fn like_pattern(s: &str, prefix: bool, suffix: bool) -> String {
+    let s = s.to_lowercase();
     let escaped = s.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_");
     format!("{}{escaped}{}", if prefix { "%" } else { "" }, if suffix { "%" } else { "" })
+}
+
+/// `text` lower-cased in full Unicode, so matching ignores case for every alphabet.
+fn folded(text: &str) -> String {
+    format!("{FOLD_FUNCTION}({text})")
 }
 
 fn build_where(src: &Source, q: &RecordQuery) -> AppResult<(String, Vec<Value>)> {
@@ -151,7 +159,7 @@ fn build_where(src: &Source, q: &RecordQuery) -> AppResult<(String, Vec<Value>)>
                     FilterOp::StartsWith => like_pattern(s, false, true),
                     _ => like_pattern(s, true, false),
                 };
-                clauses.push(format!("{} LIKE ? ESCAPE '\\'", display_text(&qc, src.column_type(&col))));
+                clauses.push(format!("{} LIKE ? ESCAPE '\\'", folded(&display_text(&qc, src.column_type(&col)))));
                 params.push(Value::Text(pattern));
             }
             FilterOp::In => {
@@ -203,7 +211,7 @@ fn build_where(src: &Source, q: &RecordQuery) -> AppResult<(String, Vec<Value>)>
             let pattern = like_pattern(term, true, true);
             let ors: Vec<String> = searchable
                 .iter()
-                .map(|c| format!("{} LIKE ? ESCAPE '\\'", display_text(&quote_ident(c), src.column_type(c))))
+                .map(|c| format!("{} LIKE ? ESCAPE '\\'", folded(&display_text(&quote_ident(c), src.column_type(c)))))
                 .collect();
             params.extend(std::iter::repeat_n(Value::Text(pattern), ors.len()));
             clauses.push(format!("({})", ors.join(" OR ")));
@@ -246,13 +254,48 @@ fn read_row(src: &Source, row: &rusqlite::Row<'_>) -> rusqlite::Result<RecordRow
     Ok(RecordRow { key: row_key(src, rowid, &values), values })
 }
 
+/// For a relation field shown by another column of the table it links to,
+/// an expression giving that shown value, so sorting follows the names the
+/// user sees rather than the stored IDs. None for any other column, or when
+/// the linked table or its columns can't be found.
+fn display_sort(conn: &Connection, src: &Source, col: &str) -> Option<String> {
+    let def = src.def.as_ref()?;
+    let Some(FieldType::Lookup { display_column: Some(shown), .. }) = src.column_type(col) else { return None };
+    let fk = def.foreign_keys.iter().find(|k| k.columns.len() == 1 && k.columns[0].eq_ignore_ascii_case(col))?;
+    let parent = load_table(conn, &fk.ref_table).ok()?.definition;
+    let has = |name: &str| parent.fields.iter().any(|f| f.name.eq_ignore_ascii_case(name));
+    let key = match fk.ref_columns.as_slice() {
+        [c] => c.clone(),
+        [] => match parent.primary_key().as_slice() {
+            [k] => k.name.clone(),
+            _ => return None,
+        },
+        _ => return None,
+    };
+    if !has(shown) || !has(&key) || shown.eq_ignore_ascii_case(&key) {
+        return None;
+    }
+    Some(format!(
+        "(SELECT {FOLD_FUNCTION}(CAST(__shown.{} AS TEXT)) FROM {} AS __shown WHERE __shown.{} = {}.{})",
+        quote_ident(shown),
+        quote_ident(&parent.name),
+        quote_ident(&key),
+        quote_ident(&src.name),
+        quote_ident(col)
+    ))
+}
+
 pub fn list_records(conn: &Connection, table: &str, q: &RecordQuery) -> AppResult<RecordPage> {
     let src = Source::load(conn, table)?;
     let (where_sql, params) = build_where(&src, q)?;
     let mut order: Vec<String> = Vec::new();
     for s in &q.sort {
         let col = src.column(&s.column)?;
-        order.push(format!("{} {}", quote_ident(&col), if s.descending { "DESC" } else { "ASC" }));
+        let dir = if s.descending { "DESC" } else { "ASC" };
+        if let Some(shown) = display_sort(conn, &src, &col) {
+            order.push(format!("{shown} {dir}"));
+        }
+        order.push(format!("{} {dir}", quote_ident(&col)));
     }
     match &src.key {
         KeyKind::RowId(r) => order.push(r.to_string()),

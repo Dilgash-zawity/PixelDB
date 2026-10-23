@@ -38,6 +38,7 @@
 
 	// Components
 	import { Button } from '#lib/components/ui/button/index.js';
+	import * as ButtonGroup from '#lib/components/ui/button-group/index.js';
 	import * as ContextMenu from '#lib/components/ui/context-menu/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import { Kbd } from '#lib/components/ui/kbd/index.js';
@@ -244,7 +245,7 @@
 
 	function startPan(e: PointerEvent) {
 		if (e.button !== 0 && e.button !== 1) return;
-		if ((e.target as Element).closest('[data-card], [data-edge]')) return;
+		if ((e.target as Element).closest('[data-card], [data-edge], [data-toolbar]')) return;
 		const origin = { ...pan };
 		drag(
 			e,
@@ -611,6 +612,15 @@
 							/>
 						{/if}
 					{/each}
+				</div>
+				<div data-toolbar class="absolute right-3 bottom-3">
+					<ButtonGroup.Root>
+						<Button size="icon-sm" variant="outline" class="bg-background" aria-label="Zoom out" onclick={() => zoomTo(zoom / 1.2)}><MinusIcon /></Button>
+						<Button size="sm" variant="outline" class="w-14 bg-background tabular-nums" aria-label="Fit to screen" title="Fit to screen" onclick={fit}>
+							{Math.round(zoom * 100)}%
+						</Button>
+						<Button size="icon-sm" variant="outline" class="bg-background" aria-label="Zoom in" onclick={() => zoomTo(zoom * 1.2)}><PlusIcon /></Button>
+					</ButtonGroup.Root>
 				</div>
 				{#if settings.current.canvasHints}
 					<p class="pointer-events-none absolute bottom-3 left-4 flex items-center gap-1.5 text-xs text-muted-foreground">

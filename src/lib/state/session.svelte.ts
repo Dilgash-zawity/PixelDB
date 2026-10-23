@@ -14,7 +14,7 @@ import { identifierProblem } from '../logic/values';
 import { databaseService } from '../services/database';
 import { tableService } from '../services/tables';
 import { workspaceService } from '../services/workspace';
-import { renameFieldInApps, renameTableInApps } from './app-sync';
+import { renameFieldInApps, renameTableInApps, syncAutoApps } from './app-sync';
 import { attempt, confirm } from './feedback.svelte';
 
 /** The tabs of the database page. */
@@ -192,3 +192,16 @@ class Session {
 }
 
 export const session = new Session();
+
+// Apps that update automatically follow structure changes made here.
+// Several changes in a row (a table and its links) make one update.
+let syncTimer: ReturnType<typeof setTimeout> | null = null;
+tableService.onStructureChange(() => {
+	const database = session.name;
+	if (!database) return;
+	if (syncTimer) clearTimeout(syncTimer);
+	syncTimer = setTimeout(async () => {
+		const n = await syncAutoApps(database);
+		if (n) toast.success(n === 1 ? 'Updated 1 app' : `Updated ${n} apps`, { description: 'Their pages now match the tables.' });
+	}, 400);
+});
