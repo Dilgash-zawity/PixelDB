@@ -1,12 +1,16 @@
 <script lang="ts">
 	// Types
 	import type { LayoutProps } from './$types';
+	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { toast } from 'svelte-sonner';
 
 	// Utils
 	import '../app.css';
 	import { ModeWatcher } from 'mode-watcher';
 	import logo from '#lib/assets/logo.svg';
 	import { settings } from '#lib/state/settings.svelte.js';
+	import { updates } from '#lib/state/updates.svelte.js';
 
 	// Components
 	import ConfirmHost from '#lib/components/app/ConfirmHost.svelte';
@@ -15,6 +19,18 @@
 
 	// Script
 	let { children }: LayoutProps = $props();
+	onMount(() => updates.start());
+	let announcedVersion: string | null = null;
+	$effect(() => {
+		const update = updates.current;
+		if (update.status === 'available' && update.version !== announcedVersion) {
+			announcedVersion = update.version;
+			toast.info(`SlateDB ${update.version} is available`, {
+				description: 'Open Settings to install when you’re ready.',
+				action: { label: 'View update', onClick: () => { void goto('/settings#updates'); } }
+			});
+		}
+	});
 
 	$effect(() => {
 		void settings.current;

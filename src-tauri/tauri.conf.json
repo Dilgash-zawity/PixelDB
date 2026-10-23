@@ -1,7 +1,7 @@
 {
   "$schema": "../node_modules/@tauri-apps/cli/config.schema.json",
   "productName": "SlateDB",
-  "version": "0.0.9",
+  "version": "0.0.10",
   "identifier": "io.github.dilgash.databasebuilder",
   "build": {
     "frontendDist": "../build",
@@ -53,6 +53,22 @@
     },
     "android": {
       "debugApplicationIdSuffix": ".debug"
+    },
+    "createUpdaterArtifacts": true,
+    "publisher": "Dilgash",
+    "shortDescription": "An offline desktop database builder",
+    "category": "Productivity"
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJCNTZCQjVDODEyMUI4QjQKUldTMHVDR0JYTHRXdTAreVRUajVSbTRQU0RMUnNDNEFPamJ5ckllRHVLbE4wZWpPWmkydlhWalMK",
+      "endpoints": [
+        "https://github.com/Dilgash-zawity/SlateDB/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      },
+      "requireSignedVersion": true
     }
   }
 }

@@ -1,7 +1,7 @@
 {
   "name": "slatedb",
   "private": true,
-  "version": "0.0.9",
+  "version": "0.0.10",
   "type": "module",
   "scripts": {
     "dev": "vite dev",
@@ -12,8 +12,8 @@
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "tauri": "tauri",
-    "test": "bun test src && cargo test --manifest-path src-tauri/Cargo.toml",
-    "test:ts": "bun test src",
+    "test": "bun test src scripts && cargo test --manifest-path src-tauri/Cargo.toml",
+    "test:ts": "bun test src scripts",
     "test:rust": "cargo test --manifest-path src-tauri/Cargo.toml"
   },
   "devDependencies": {
@@ -48,6 +48,9 @@
   "dependencies": {
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2",
-    "@tauri-apps/plugin-opener": "^2"
-  }
+    "@tauri-apps/plugin-opener": "^2",
+    "@tauri-apps/plugin-process": "^2",
+    "@tauri-apps/plugin-updater": "^2"
+  },
+  "license": "MIT"
 }

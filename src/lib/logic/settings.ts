@@ -16,6 +16,8 @@ export interface Settings {
 	reduceMotion: boolean;
 	/** The hint line at the bottom of the home map and the diagram. */
 	canvasHints: boolean;
+	/** Check GitHub for signed releases on launch and periodically while open. */
+	automaticUpdates: boolean;
 }
 
 /** Also read by the inline script in app.html, which applies these before first paint. */
@@ -27,7 +29,8 @@ export const DEFAULT_SETTINGS: Settings = {
 	radius: 'auto',
 	textSize: 'default',
 	reduceMotion: false,
-	canvasHints: true
+	canvasHints: true,
+	automaticUpdates: true
 };
 
 const pick = <T extends string>(options: readonly T[], value: unknown, fallback: T): T =>
@@ -45,7 +48,8 @@ export function readSettings(raw: unknown): Settings {
 		radius: pick(RADII, radius, d.radius),
 		textSize: pick(TEXT_SIZES, r.textSize, d.textSize),
 		reduceMotion: typeof r.reduceMotion === 'boolean' ? r.reduceMotion : d.reduceMotion,
-		canvasHints: typeof r.canvasHints === 'boolean' ? r.canvasHints : d.canvasHints
+		canvasHints: typeof r.canvasHints === 'boolean' ? r.canvasHints : d.canvasHints,
+		automaticUpdates: typeof r.automaticUpdates === 'boolean' ? r.automaticUpdates : d.automaticUpdates
 	};
 }
 
