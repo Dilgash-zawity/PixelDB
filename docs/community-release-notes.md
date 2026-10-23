@@ -18,11 +18,11 @@ Choose the matching file in the release assets:
 
 | Platform | File |
 | --- | --- |
-| Windows 64-bit | `SlateDB_0.0.10_x64-setup.exe` |
-| macOS Apple Silicon | `SlateDB_0.0.10_aarch64.dmg` |
-| macOS Intel | `SlateDB_0.0.10_x64.dmg` |
-| Ubuntu / Debian 64-bit | `SlateDB_0.0.10_amd64.deb` |
-| Linux 64-bit | `SlateDB_0.0.10_amd64.AppImage` |
+| Windows 64-bit | [Download installer](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.10/SlateDB_0.0.10_x64-setup.exe) |
+| macOS Apple Silicon | [Download installer](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.10/SlateDB_0.0.10_aarch64.dmg) |
+| macOS Intel | [Download installer](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.10/SlateDB_0.0.10_x64.dmg) |
+| Ubuntu / Debian 64-bit | [Download installer](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.10/SlateDB_0.0.10_amd64.deb) |
+| Linux 64-bit | [Download installer](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.10/SlateDB_0.0.10_amd64.AppImage) |
 
 If you are using 0.0.8 or an earlier version, install this version manually once.
 It can then check for future updates from **Settings → Updates**. Installation
