@@ -1,127 +1,221 @@
 name: release
 
-# Two modes:
-# - pull_request into main: build every platform and stop. Nothing is published.
-# - workflow_dispatch with a PR number (started only after the build is approved):
-#   merge that PR into main, build main again, and publish the GitHub release
-#   for the version in src-tauri/tauri.conf.json (tag v<version>).
-
+# Dispatch from main to approve a tested PR. Missing credentials fail before
+# merging. Publish only after every signed build and the manifest pass checks.
 on:
-  pull_request:
-    branches: [main]
   workflow_dispatch:
     inputs:
       pr:
-        description: 'Pull request number to merge into main and publish'
+        description: 'Tested pull request number to merge into main and release'
         required: true
         type: string
 
+permissions:
+  contents: read
+
+concurrency:
+  group: signed-release
+  cancel-in-progress: false
+
 jobs:
-  merge:
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: ubuntu-latest
+  prepare:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-22.04
     permissions:
       contents: write
       pull-requests: write
+      checks: read
+      statuses: read
+    outputs:
+      sha: ${{ steps.merge.outputs.sha }}
+      version: ${{ steps.version.outputs.version }}
+      release_id: ${{ steps.draft.outputs.release_id }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
       PR: ${{ inputs.pr }}
-      REPO: ${{ github.repository }}
     steps:
-      - name: check the version has no release yet
+      - name: Require release signing credentials
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZURE_CERTIFICATE_PROFILE: ${{ vars.AZURE_CERTIFICATE_PROFILE }}
         run: |
-          HEAD_REF=$(gh pr view "$PR" --json headRefName --jq .headRefName)
-          VERSION=$(gh api "repos/$REPO/contents/src-tauri/tauri.conf.json?ref=$HEAD_REF" --jq .content \
-            | base64 -d | grep -m1 '"version"' | sed 's/.*"\([0-9.]*\)".*/\1/')
-          echo "Publishing version $VERSION from $HEAD_REF"
-          if gh api "repos/$REPO/git/ref/tags/v$VERSION" > /dev/null 2>&1; then
-            echo "tag v$VERSION already exists; bump the version in the PR first"
-            exit 1
-          fi
+          missing=0
+          for name in TAURI_SIGNING_PRIVATE_KEY TAURI_SIGNING_PRIVATE_KEY_PASSWORD APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_TENANT_ID AZURE_SIGNING_ENDPOINT AZURE_SIGNING_ACCOUNT AZURE_CERTIFICATE_PROFILE; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing $name. See docs/RELEASING.md."
+              missing=1
+            fi
+          done
+          exit "$missing"
+      - name: Verify the approved pull request
+        id: pr
+        run: |
+          [[ "$PR" =~ ^[1-9][0-9]*$ ]] || { echo 'Invalid PR number'; exit 1; }
+          gh pr view "$PR" --json state,baseRefName,isCrossRepository,isDraft,headRefOid > pr.json
+          jq -e '.state == "OPEN" and .baseRefName == "main" and .isCrossRepository == false and .isDraft == false' pr.json
+          gh pr checks "$PR" --json state > checks.json
+          jq -e 'length > 0 and all(.[]; .state == "SUCCESS" or .state == "SKIPPED" or .state == "NEUTRAL")' checks.json
+          echo "sha=$(jq -r .headRefOid pr.json)" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.pr.outputs.sha }}
+      - name: Verify a new, consistent version
+        id: version
+        run: |
+          VERSION=$(node scripts/release.mjs version)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          status=$(gh api "repos/$GH_REPO/git/ref/tags/v$VERSION" --include 2>&1) && { echo 'Tag already exists'; exit 1; }
+          [[ "$status" == *'HTTP 404'* ]] || { echo 'Unable to verify tag availability'; exit 1; }
+      - name: Merge exactly the approved commit
+        id: merge
+        env:
+          EXPECTED_SHA: ${{ steps.pr.outputs.sha }}
+        run: |
+          gh pr merge "$PR" --merge --match-head-commit "$EXPECTED_SHA"
+          SHA=$(gh pr view "$PR" --json mergeCommit --jq .mergeCommit.oid)
+          [[ "$SHA" =~ ^[0-9a-f]{40}$ ]] || exit 1
+          echo "sha=$SHA" >> "$GITHUB_OUTPUT"
+      - name: Create a draft release
+        id: draft
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+          RELEASE_SHA: ${{ steps.merge.outputs.sha }}
+        run: |
+          gh release create "v$VERSION" --target "$RELEASE_SHA" --draft --title "SlateDB v$VERSION" --notes-file docs/release-notes.md
+          echo "release_id=$(gh api "repos/$GH_REPO/releases/tags/v$VERSION" --jq .id)" >> "$GITHUB_OUTPUT"
 
-      - name: merge the pull request into main
-        run: gh pr merge "$PR" --merge
-
-  publish-tauri:
-    needs: merge
-    # Runs on PR builds (merge skipped) and on publish runs after a successful merge.
-    if: ${{ always() && needs.merge.result != 'failure' && needs.merge.result != 'cancelled' }}
+  build:
+    needs: prepare
     permissions:
       contents: write
-
     strategy:
       fail-fast: false
       matrix:
         include:
-          - platform: 'macos-latest'
-            args: '--target aarch64-apple-darwin --bundles dmg'
-
-          - platform: 'macos-latest'
-            args: '--target x86_64-apple-darwin --bundles dmg'
-
-          - platform: 'ubuntu-22.04'
-            args: '--bundles deb,appimage'
-
-          - platform: 'windows-latest'
-            args: '--bundles nsis'
-
+          - platform: macos-latest
+            args: --target aarch64-apple-darwin --bundles app,dmg
+          - platform: macos-latest
+            args: --target x86_64-apple-darwin --bundles app,dmg
+          - platform: ubuntu-22.04
+            args: --bundles deb,appimage
+          - platform: windows-latest
+            args: --bundles nsis
     runs-on: ${{ matrix.platform }}
-
     steps:
       - uses: actions/checkout@v4
         with:
-          # A publish run must build main after the merge, not the commit the run started on.
-          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.sha }}
-
-      - name: install dependencies (ubuntu only)
-        if: matrix.platform == 'ubuntu-22.04'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libwebkit2gtk-4.1-dev \
-            libappindicator3-dev \
-            librsvg2-dev \
-            patchelf
-
-      - name: setup bun
-        uses: oven-sh/setup-bun@v2
-
-      - name: install Rust stable
-        uses: dtolnay/rust-toolchain@stable
+          ref: ${{ needs.prepare.outputs.sha }}
+      - uses: oven-sh/setup-bun@v2
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
-
-      - name: rust cache
-        uses: swatinem/rust-cache@v2
+          bun-version: '1.4.2'
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ runner.os == 'macOS' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+      - uses: swatinem/rust-cache@v2
         with:
           workspaces: './src-tauri -> target'
-
-      - name: install frontend dependencies
-        run: bun install
-
-      - name: build (pull request check)
-        if: github.event_name == 'pull_request'
-        run: bun run tauri build ${{ matrix.args }}
-
-      - name: build and publish release
-        if: github.event_name == 'workflow_dispatch'
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run test:ts
+      - run: cargo test --manifest-path src-tauri/Cargo.toml --locked
+      - name: Configure Windows Artifact Signing
+        if: runner.os == 'Windows'
+        env:
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZURE_CERTIFICATE_PROFILE: ${{ vars.AZURE_CERTIFICATE_PROFILE }}
+        shell: bash
+        run: |
+          cargo install artifact-signing-cli --locked
+          node scripts/release.mjs windows-config
+      - name: Build signed installers and upload to the draft
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          APPLE_CERTIFICATE: ${{ runner.os == 'macOS' && secrets.APPLE_CERTIFICATE || '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && secrets.APPLE_SIGNING_IDENTITY || '' }}
+          APPLE_ID: ${{ runner.os == 'macOS' && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ runner.os == 'macOS' && secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ runner.os == 'macOS' && secrets.APPLE_TEAM_ID || '' }}
+          AZURE_CLIENT_ID: ${{ runner.os == 'Windows' && secrets.AZURE_CLIENT_ID || '' }}
+          AZURE_CLIENT_SECRET: ${{ runner.os == 'Windows' && secrets.AZURE_CLIENT_SECRET || '' }}
+          AZURE_TENANT_ID: ${{ runner.os == 'Windows' && secrets.AZURE_TENANT_ID || '' }}
         with:
-          tagName: 'v__VERSION__'
-          releaseName: 'SlateDB v__VERSION__'
-          releaseBody: |
-            ## Download SlateDB
+          releaseId: ${{ needs.prepare.outputs.release_id }}
+          args: ${{ matrix.args }} ${{ runner.os == 'Windows' && '--config tauri-signing.windows.json' || '' }}
+          tauriScript: bun run tauri
+          # Build the manifest once in the publish job to avoid concurrent writes.
+          includeUpdaterJson: false
+      - name: Verify macOS signature and notarization
+        if: runner.os == 'macOS'
+        shell: bash
+        run: |
+          count=0
+          while IFS= read -r -d '' app; do
+            codesign --verify --deep --strict --verbose=2 "$app"
+            spctl --assess --type execute --verbose=2 "$app"
+            xcrun stapler validate "$app"
+            count=$((count + 1))
+          done < <(find src-tauri/target -path '*/bundle/macos/SlateDB.app' -type d -prune -print0)
+          [ "$count" -gt 0 ]
+      - name: Verify Windows Authenticode signatures
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $files = @(Get-Item src-tauri/target/release/SlateDB.exe) + @(Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe)
+          if ($files.Count -lt 2) { throw 'Expected the app and installer' }
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature $file.FullName
+            if ($signature.Status -ne 'Valid') { throw "Invalid signature: $($file.Name)" }
+          }
 
-            | Platform | Installer |
-            |----------|-----------|
-            | Windows | [Download EXE](https://github.com/${{ github.repository }}/releases/download/v__VERSION__/SlateDB___VERSION___x64-setup.exe) |
-            | macOS (Apple Silicon) | [Download DMG](https://github.com/${{ github.repository }}/releases/download/v__VERSION__/SlateDB___VERSION___aarch64.dmg) |
-            | macOS (Intel) | [Download DMG](https://github.com/${{ github.repository }}/releases/download/v__VERSION__/SlateDB___VERSION___x64.dmg) |
-            | Ubuntu / Debian | [Download DEB](https://github.com/${{ github.repository }}/releases/download/v__VERSION__/SlateDB___VERSION___amd64.deb) |
-            | Linux (AppImage) | [Download AppImage](https://github.com/${{ github.repository }}/releases/download/v__VERSION__/SlateDB___VERSION___amd64.AppImage) |
-
-          releaseDraft: false
-          prerelease: false
-          args: ${{ matrix.args }}
+  publish:
+    needs: [prepare, build]
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      VERSION: ${{ needs.prepare.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.prepare.outputs.sha }}
+      - name: Validate all platforms and write checksums
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y minisign
+          mkdir release-assets
+          gh release download "v$VERSION" --dir release-assets
+          node scripts/release.mjs assets release-assets "$VERSION" "$GH_REPO"
+          gh release upload "v$VERSION" release-assets/latest.json release-assets/SHA256SUMS release-assets/updater.pub
+      - name: Attest the release assets
+        uses: actions/attest-build-provenance@v3
+        with:
+          subject-path: release-assets/*
+      - name: Publish the complete release
+        run: gh release edit "v$VERSION" --draft=false --latest

@@ -18,6 +18,13 @@ Thumbs.db
 !.env.example
 !.env.test
 
+# Release signing material (never commit private keys or certificates)
+/.release-keys/
+/tauri-signing.windows.json
+*.p12
+*.pfx
+*.p8
+
 # Vite
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*

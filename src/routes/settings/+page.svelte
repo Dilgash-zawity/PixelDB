@@ -1,6 +1,8 @@
 <script lang="ts">
 	// Utils
 	import { getVersion } from '@tauri-apps/api/app';
+	import { isTauri } from '@tauri-apps/api/core';
+	import { onMount } from 'svelte';
 	import { openUrl } from '@tauri-apps/plugin-opener';
 	import { resetMode, setMode, userPrefersMode } from 'mode-watcher';
 	import { ACCENTS, RADII, TEXT_SIZES, type Settings } from '#lib/logic/settings.js';
@@ -8,6 +10,7 @@
 	import { attempt, confirm } from '#lib/state/feedback.svelte.js';
 	import { settings } from '#lib/state/settings.svelte.js';
 	import { workspace } from '#lib/state/workspace.svelte.js';
+	import { updates } from '#lib/state/updates.svelte.js';
 	import { cn } from '#lib/utils.js';
 	import { toast } from 'svelte-sonner';
 
@@ -32,12 +35,28 @@
 		Moon as MoonIcon,
 		Palette as PaletteIcon,
 		RotateCcw as RotateCcwIcon,
+		RefreshCw as RefreshCwIcon,
 		SlidersHorizontal as SlidersHorizontalIcon,
 		Sun as SunIcon,
 	} from '@lucide/svelte';
 
 	// Script
 	const WEBSITE = 'https://dilgash.com';
+	const RELEASES = 'https://github.com/Dilgash-zawity/SlateDB/releases/latest';
+	const native = isTauri();
+	const updateBusy = $derived(['checking', 'confirming', 'downloading', 'installing'].includes(updates.current.status));
+
+	onMount(() => {
+		if (location.hash === '#updates') jump('updates');
+	});
+
+	async function installUpdate() {
+		await updates.manager.install(() => confirm({
+			title: `Install SlateDB ${updates.current.version}?`,
+			description: 'Finish and save your work first. SlateDB will verify the download before installing. Windows closes and restarts during installation; on Mac and Linux you can restart when installation finishes.',
+			action: 'Download and install'
+		}));
+	}
 
 	let version = $state<string | null>(null);
 	// Read from the running binary, so it always matches the installed build.
@@ -49,6 +68,7 @@
 		{ id: 'workspace', label: 'Workspace', icon: FolderOpenIcon, tone: 'vivid:text-tone-blue' },
 		{ id: 'appearance', label: 'Appearance', icon: PaletteIcon, tone: 'vivid:text-tone-pink' },
 		{ id: 'behaviour', label: 'Behaviour', icon: SlidersHorizontalIcon, tone: 'vivid:text-tone-green' },
+		{ id: 'updates', label: 'Updates', icon: RefreshCwIcon, tone: 'vivid:text-tone-blue' },
 		{ id: 'about', label: 'About', icon: InfoIcon, tone: 'vivid:text-tone-amber' }
 	];
 	let active = $state('workspace');
@@ -360,6 +380,50 @@
 							<Button variant="outline" onclick={resetAll}><RotateCcwIcon data-icon="inline-start" /> Reset</Button>
 						</Field.Field>
 					</Field.Group>
+				</section>
+
+				<section id="updates" class="flex scroll-mt-6 flex-col gap-6">
+					{@render sectionHeading('Updates', 'Get new features and fixes from the official SlateDB releases.')}
+					<Field.Group>
+						<Field.Field orientation="horizontal">
+							<Field.Content>
+								<Field.Label for="automatic-updates">Check for updates automatically</Field.Label>
+								<Field.Description>Check on launch and every six hours while SlateDB is open. You choose when to install. Database contents are never sent.</Field.Description>
+							</Field.Content>
+							<Switch id="automatic-updates" checked={settings.current.automaticUpdates} onCheckedChange={(value) => settings.update({ automaticUpdates: value })} />
+						</Field.Field>
+						<Field.Separator />
+						<Field.Field orientation="responsive">
+							<Field.Content>
+								<Field.Title>SlateDB {version ?? '—'}</Field.Title>
+								<Field.Description>
+									<span role="status" aria-live="polite">
+										{#if !native}Update checks are available in the desktop app.
+										{:else if updates.current.status === 'checking'}Checking for updates…
+										{:else if updates.current.status === 'downloading'}Downloading update{updates.current.progress === null ? '…' : `… ${updates.current.progress}%`}
+										{:else}{updates.current.message || 'Updates are downloaded securely and verified before installation.'}{/if}
+									</span>
+								</Field.Description>
+							</Field.Content>
+							<div class="flex flex-wrap gap-2">
+								{#if updates.current.status === 'ready'}
+									<Button onclick={() => updates.manager.restart()}>Restart SlateDB</Button>
+								{:else}
+									<Button variant="outline" disabled={!native || updateBusy} onclick={() => updates.manager.check()}>Check for updates</Button>
+									{#if updates.current.version}
+										<Button disabled={updateBusy} onclick={installUpdate}>Install {updates.current.version}</Button>
+									{/if}
+								{/if}
+							</div>
+						</Field.Field>
+					</Field.Group>
+					{#if updates.current.notes}
+						<details class="rounded-lg border p-4">
+							<summary class="cursor-pointer text-sm font-medium">Release notes</summary>
+							<p class="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{updates.current.notes}</p>
+						</details>
+					{/if}
+					<Button variant="link" class="self-start" disabled={!native} onclick={() => attempt(() => openUrl(RELEASES))}>View official downloads</Button>
 				</section>
 
 				<!-- About -->

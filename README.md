@@ -4,6 +4,23 @@ A free, open-source, offline-first desktop database application inspired by
 Microsoft Access, built with Tauri v2, Rust, SQLite (rusqlite, bundled),
 SvelteKit + Svelte 5, Bun, Tailwind CSS and shadcn-svelte.
 
+## Download and updates
+
+SlateDB is free to use, modify and share under the [MIT license](LICENSE).
+[Download releases for Windows, macOS and Linux](https://github.com/Dilgash-zawity/SlateDB/releases).
+Older releases are unsigned and can trigger operating-system warnings. Signed,
+notarized releases require the maintainer's platform signing credentials; the
+new release workflow will not publish installers until those are configured.
+
+The updater checks for new releases on launch and every six hours while the app
+is open. Use **Settings → Updates** to turn automatic checks off, check manually,
+read release notes, and choose when to install. Downloads are verified with a
+public key embedded in the app and must match the version they were signed for.
+Database contents are never uploaded. Installing this updater-enabled version
+once is required before older installations can receive automatic updates.
+
+For release setup and download verification, see [RELEASING.md](docs/RELEASING.md).
+
 ## Using it
 
 1. On first launch, choose a folder. Every database is one SQLite file in it,

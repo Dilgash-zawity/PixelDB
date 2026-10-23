@@ -3,6 +3,11 @@ import { describe, expect, test } from 'bun:test';
 import { DEFAULT_SETTINGS, readSettings, settingsAttributes } from './settings';
 
 describe('settings', () => {
+	test('automatic update checks default on and preserve an explicit opt-out', () => {
+		expect(readSettings({ version: 2 }).automaticUpdates).toBe(true);
+		expect(readSettings({ automaticUpdates: false }).automaticUpdates).toBe(false);
+		expect(readSettings({ automaticUpdates: 'no' }).automaticUpdates).toBe(true);
+	});
 	test('fills defaults and ignores unknown values', () => {
 		expect(readSettings(null)).toEqual(DEFAULT_SETTINGS);
 		expect(readSettings({ accent: 'pink', radius: 'large', reduceMotion: 'yes', extra: 1 })).toEqual({
