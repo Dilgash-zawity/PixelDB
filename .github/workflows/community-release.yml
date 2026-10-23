@@ -120,8 +120,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Verify all update payloads and generate the manifest
         run: |
-          sudo apt-get update
-          sudo apt-get install -y minisign
+          bash scripts/install-minisign.sh
           mkdir release-assets
           gh release download "v$VERSION" --dir release-assets
           node scripts/release.mjs assets release-assets "$VERSION" "$GH_REPO" docs/community-release-notes.md

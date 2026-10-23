@@ -28,5 +28,4 @@ If you are using 0.0.8 or an earlier version, install this version manually once
 It can then check for future updates from **Settings → Updates**. Installation
 is your choice; the app does not silently restart while you work.
 
-Checksums are in `SHA256SUMS`. Release assets have GitHub build attestations:
-`gh attestation verify <downloaded-file> --repo Dilgash-zawity/SlateDB`.
+Checksums are in `SHA256SUMS`. Update payloads are signed with SlateDB's update key.
