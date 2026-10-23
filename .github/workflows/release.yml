@@ -1,13 +1,51 @@
 name: release
 
+# Two modes:
+# - pull_request into main: build every platform and stop. Nothing is published.
+# - workflow_dispatch with a PR number (started only after the build is approved):
+#   merge that PR into main, build main again, and publish the GitHub release
+#   for the version in src-tauri/tauri.conf.json (tag v<version>).
+
 on:
-  push:
-    tags:
-      - 'v*'
+  pull_request:
+    branches: [main]
   workflow_dispatch:
+    inputs:
+      pr:
+        description: 'Pull request number to merge into main and publish'
+        required: true
+        type: string
 
 jobs:
+  merge:
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      PR: ${{ inputs.pr }}
+      REPO: ${{ github.repository }}
+    steps:
+      - name: check the version has no release yet
+        run: |
+          HEAD_REF=$(gh pr view "$PR" --json headRefName --jq .headRefName)
+          VERSION=$(gh api "repos/$REPO/contents/src-tauri/tauri.conf.json?ref=$HEAD_REF" --jq .content \
+            | base64 -d | grep -m1 '"version"' | sed 's/.*"\([0-9.]*\)".*/\1/')
+          echo "Publishing version $VERSION from $HEAD_REF"
+          if gh api "repos/$REPO/git/ref/tags/v$VERSION" > /dev/null 2>&1; then
+            echo "tag v$VERSION already exists; bump the version in the PR first"
+            exit 1
+          fi
+
+      - name: merge the pull request into main
+        run: gh pr merge "$PR" --merge
+
   publish-tauri:
+    needs: merge
+    # Runs on PR builds (merge skipped) and on publish runs after a successful merge.
+    if: ${{ always() && needs.merge.result != 'failure' && needs.merge.result != 'cancelled' }}
     permissions:
       contents: write
 
@@ -31,6 +69,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          # A publish run must build main after the merge, not the commit the run started on.
+          ref: ${{ github.event_name == 'workflow_dispatch' && 'main' || github.sha }}
 
       - name: install dependencies (ubuntu only)
         if: matrix.platform == 'ubuntu-22.04'
@@ -58,7 +99,12 @@ jobs:
       - name: install frontend dependencies
         run: bun install
 
-      - name: build and release
+      - name: build (pull request check)
+        if: github.event_name == 'pull_request'
+        run: bun run tauri build ${{ matrix.args }}
+
+      - name: build and publish release
+        if: github.event_name == 'workflow_dispatch'
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -70,11 +116,11 @@ jobs:
 
             | Platform | Installer |
             |----------|-----------|
-            | Windows | [Download EXE](https://github.com/Dilgash-zawity/Base/releases/download/v__VERSION__/SlateDB___VERSION___x64-setup.exe) |
-            | macOS (Apple Silicon) | [Download DMG](https://github.com/Dilgash-zawity/Base/releases/download/v__VERSION__/SlateDB___VERSION___aarch64.dmg) |
-            | macOS (Intel) | [Download DMG](https://github.com/Dilgash-zawity/Base/releases/download/v__VERSION__/SlateDB___VERSION___x64.dmg) |
-            | Ubuntu / Debian | [Download DEB](https://github.com/Dilgash-zawity/Base/releases/download/v__VERSION__/SlateDB___VERSION___amd64.deb) |
-            | Linux (AppImage) | [Download AppImage](https://github.com/Dilgash-zawity/Base/releases/download/v__VERSION__/SlateDB___VERSION___amd64.AppImage) |
+            | Windows | [Download EXE](https://github.com/${{ github.repository }}/releases/download/v__VERSION__/SlateDB___VERSION___x64-setup.exe) |
+            | macOS (Apple Silicon) | [Download DMG](https://github.com/${{ github.repository }}/releases/download/v__VERSION__/SlateDB___VERSION___aarch64.dmg) |
+            | macOS (Intel) | [Download DMG](https://github.com/${{ github.repository }}/releases/download/v__VERSION__/SlateDB___VERSION___x64.dmg) |
+            | Ubuntu / Debian | [Download DEB](https://github.com/${{ github.repository }}/releases/download/v__VERSION__/SlateDB___VERSION___amd64.deb) |
+            | Linux (AppImage) | [Download AppImage](https://github.com/${{ github.repository }}/releases/download/v__VERSION__/SlateDB___VERSION___amd64.AppImage) |
 
           releaseDraft: false
           prerelease: false
