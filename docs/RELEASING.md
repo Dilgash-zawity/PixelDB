@@ -134,10 +134,20 @@ later changes to published artifacts.
 
 ## Download verification
 
+Version 0.0.10 was finalized from the GitHub Actions installer builds after the
+publishing job could not install Minisign. Its update signatures were verified
+before publication, and it includes checksums but no GitHub build attestations.
+The workflows now install the pinned official Minisign binary for future releases.
+
 On Linux, in the downloaded release directory:
 
 ```sh
 sha256sum -c SHA256SUMS --ignore-missing
+```
+
+For releases with GitHub build attestations:
+
+```sh
 gh attestation verify SlateDB_VERSION_amd64.AppImage --repo Dilgash-zawity/SlateDB
 ```
 

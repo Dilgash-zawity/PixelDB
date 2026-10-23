@@ -202,8 +202,7 @@ jobs:
           ref: ${{ needs.prepare.outputs.sha }}
       - name: Validate all platforms and write checksums
         run: |
-          sudo apt-get update
-          sudo apt-get install -y minisign
+          bash scripts/install-minisign.sh
           mkdir release-assets
           gh release download "v$VERSION" --dir release-assets
           node scripts/release.mjs assets release-assets "$VERSION" "$GH_REPO"
