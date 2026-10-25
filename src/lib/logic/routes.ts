@@ -7,3 +7,8 @@ export function databaseHref(base: string, name: string): string {
 export function appHref(base: string, name: string): string {
 	return `${base}?name=${encodeURIComponent(name)}`;
 }
+
+/** URL of an online database's page. */
+export function onlineHref(base: string, name: string): string {
+	return `${base}?name=${encodeURIComponent(name)}`;
+}

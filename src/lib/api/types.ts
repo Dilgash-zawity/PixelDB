@@ -206,7 +206,61 @@ export type ErrorKind =
 	| 'confirmation_required'
 	| 'sqlite'
 	| 'io'
+	| 'remote'
 	| 'internal';
+
+// ----- Online databases (src-tauri/src/models/connection.rs) -----
+
+export type Provider = 'postgres' | 'mysql' | 'sql_server' | 'sqlite' | 'supabase' | 'neon' | 'turso';
+export type TlsMode = 'disable' | 'prefer' | 'require';
+
+/** A saved connection as listed: everything but its password and token. */
+export interface ConnectionInfo {
+	name: string;
+	provider: Provider;
+	host: string;
+	port: number | null;
+	database: string;
+	user: string;
+	url: string;
+	tls: TlsMode;
+	trust_certificate: boolean;
+	has_password: boolean;
+	has_token: boolean;
+}
+
+/** A connection as entered. An empty password or token keeps the saved one when editing. */
+export interface ConnectionInput {
+	name: string;
+	provider: Provider;
+	host: string;
+	port: number | null;
+	database: string;
+	user: string;
+	password: string;
+	url: string;
+	token: string;
+	tls: TlsMode;
+	trust_certificate: boolean;
+}
+
+export interface ServerInfo {
+	version: string;
+}
+
+export interface RemoteTable {
+	/** Schema (Postgres, SQL Server) or null where there is only one. */
+	schema: string | null;
+	name: string;
+	kind: 'table' | 'view';
+}
+
+export interface RemoteResult {
+	columns: string[];
+	rows: JsonValue[][];
+	truncated: boolean;
+	elapsed_ms: number;
+}
 
 export interface WorkspaceInfo {
 	path: string;

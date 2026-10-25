@@ -3,8 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { databaseHref } from '#lib/logic/routes.js';
-	import { databaseNameProblem } from '#lib/logic/values.js';
+	import { databaseHref, onlineHref } from '#lib/logic/routes.js';
 	import { session, type Tab } from '#lib/state/session.svelte.js';
 	import { workspace } from '#lib/state/workspace.svelte.js';
 
@@ -12,7 +11,8 @@
 	import CommandPalette from '#lib/components/app/CommandPalette.svelte';
 	import Logo from '#lib/components/app/Logo.svelte';
 	import NewTableDrawer from '#lib/components/app/NewTableDrawer.svelte';
-	import NameDialog from '#lib/components/app/NameDialog.svelte';
+	import NewDatabaseDrawer from '#lib/components/app/NewDatabaseDrawer.svelte';
+	import ProviderIcon from '#lib/components/app/ProviderIcon.svelte';
 	import QueryView from '#lib/components/app/QueryView.svelte';
 	import RecordsView from '#lib/components/app/RecordsView.svelte';
 	import RelationshipsView from '#lib/components/app/RelationshipsView.svelte';
@@ -69,6 +69,10 @@
 
 
 
+	async function openOnline(db: string) {
+		if (await session.close()) goto(onlineHref(resolve('/online'), db));
+	}
+
 	function suggestedTableName(): string {
 		let n = 1;
 		while (session.objects.some((o) => o.name.toLowerCase() === `table ${n}`)) n++;
@@ -121,6 +125,17 @@
 							</DropdownMenu.Item>
 						{/each}
 					</DropdownMenu.Group>
+					{#if workspace.connections.length}
+						<DropdownMenu.Group>
+							<DropdownMenu.Label>Online</DropdownMenu.Label>
+							{#each workspace.connections as c (c.name)}
+								<DropdownMenu.Item onclick={() => openOnline(c.name)}>
+									<ProviderIcon provider={c.provider} />
+									<span class="truncate">{c.name}</span>
+								</DropdownMenu.Item>
+							{/each}
+						</DropdownMenu.Group>
+					{/if}
 					<DropdownMenu.Separator />
 					<DropdownMenu.Group>
 						<DropdownMenu.Item onclick={() => (creatingDatabase = true)}><PlusIcon /> New database…</DropdownMenu.Item>
@@ -198,19 +213,14 @@
 
 <CommandPalette bind:open={paletteOpen} onNewTable={() => (creatingTable = true)} onBack={back} onSettings={openSettings} />
 
-<NameDialog
+<NewDatabaseDrawer
 	bind:open={creatingDatabase}
-	title="New database"
-	description="It is saved as a single file in your databases folder."
-	initial=""
-	placeholder="e.g. Shop"
-	submitLabel="Create database"
-	validate={(v) => databaseNameProblem(v) ?? (workspace.nameTaken(v) ? 'A database with this name already exists' : null)}
-	onSubmit={async (db) => {
+	onLocal={async (db) => {
 		if (!(await workspace.create(db))) return false;
 		switchTo(db);
 		return true;
 	}}
+	onOnline={openOnline}
 />
 
 <NewTableDrawer bind:open={creatingTable} initial={suggestedTableName()} onCreate={(t, fields) => session.createTable(t, true, fields)} />

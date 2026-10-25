@@ -1,8 +1,9 @@
-import type { AppFile, DatabaseFile, WorkspaceInfo } from '../api/types';
+import type { AppFile, ConnectionInfo, ConnectionInput, DatabaseFile, WorkspaceInfo } from '../api/types';
 import { addSource, newApp, readApp, removeSource, widgetsUsingSource } from '../logic/app-def';
 import { generatePages } from '../logic/app-generate';
 import type { Template } from '../logic/templates';
 import { appService } from '../services/apps';
+import { connectionService } from '../services/connections';
 import { databaseService } from '../services/database';
 import { recordService } from '../services/records';
 import { tableService } from '../services/tables';
@@ -15,6 +16,8 @@ class WorkspaceState {
 	info = $state<WorkspaceInfo | null>(null);
 	databases = $state<DatabaseFile[]>([]);
 	apps = $state<AppFile[]>([]);
+	/** Online databases; saved in the app's settings, so the same in every folder. */
+	connections = $state<ConnectionInfo[]>([]);
 	loaded = $state(false);
 
 	async load() {
@@ -22,6 +25,7 @@ class WorkspaceState {
 			this.info = await workspaceService.get();
 			this.databases = this.info ? await workspaceService.listDatabases() : [];
 			this.apps = this.info ? await appService.list() : [];
+			this.connections = await connectionService.list();
 		});
 		this.loaded = true;
 	}
@@ -41,6 +45,7 @@ class WorkspaceState {
 		await attempt(async () => {
 			this.databases = await workspaceService.listDatabases();
 			this.apps = await appService.list();
+			this.connections = await connectionService.list();
 		});
 	}
 
@@ -79,9 +84,43 @@ class WorkspaceState {
 		await this.refresh();
 	}
 
-	/** True when another database already uses `name` (case-insensitively). */
+	/** True when another database, local or online, already uses `name` (case-insensitively). */
 	nameTaken(name: string, except?: string): boolean {
-		return this.databases.some((d) => d.name !== except && d.name.toLowerCase() === name.toLowerCase());
+		const lower = name.toLowerCase();
+		return [...this.databases, ...this.connections].some((d) => d.name !== except && d.name.toLowerCase() === lower);
+	}
+
+	// ----- Online databases -----
+
+	connection(name: string): ConnectionInfo | undefined {
+		return this.connections.find((c) => c.name === name);
+	}
+
+	/** Saves a new online database, or the edited `previous`; returns the saved one. */
+	async saveConnection(connection: ConnectionInput, previous?: string): Promise<ConnectionInfo | undefined> {
+		const saved = await attempt(() => connectionService.save(connection, previous));
+		await this.refresh();
+		return saved;
+	}
+
+	/** Renames an online database (only the name SlateDB shows; nothing changes on the server). */
+	async renameConnection(name: string, newName: string): Promise<boolean> {
+		const c = this.connection(name);
+		if (!c || name === newName) return !!c;
+		const { has_password: _p, has_token: _t, ...rest } = c;
+		return !!(await this.saveConnection({ ...rest, name: newName, password: '', token: '' }, name));
+	}
+
+	async removeConnection(name: string) {
+		const ok = await confirm({
+			title: `Remove “${name}”?`,
+			description: 'SlateDB forgets how to connect to it. The database on the server and its data are not touched.',
+			action: 'Remove',
+			destructive: true
+		});
+		if (!ok) return;
+		await attempt(() => connectionService.delete(name, true));
+		await this.refresh();
 	}
 
 	/** First free "<name> copy", "<name> copy 2", … */

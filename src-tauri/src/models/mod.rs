@@ -1,11 +1,13 @@
 //! Serializable data types shared between the backend and the frontend.
 
+pub mod connection;
 pub mod database;
 pub mod field;
 pub mod query;
 pub mod record;
 pub mod table;
 
+pub use connection::*;
 pub use database::*;
 pub use field::*;
 pub use query::*;
@@ -51,6 +53,11 @@ mod wire_format_tests {
         assert_eq!(a.group_by.unwrap().bucket, Some(DateBucket::Month));
         assert_eq!(a.series[1].agg, Aggregate::CountDistinct);
         assert_eq!(a.order, AggregateOrder::ValueDesc);
+        let c: Connection = serde_json::from_value(json!({"name": "n", "provider": "sql_server", "tls": "require"})).unwrap();
+        assert_eq!((c.provider, c.tls, c.port), (Provider::SqlServer, TlsMode::Require, None));
+        let info = serde_json::to_value(ConnectionInfo::from(&c)).unwrap();
+        assert_eq!(info["has_password"], json!(false));
+        assert!(info.get("password").is_none());
         let e = serde_json::to_value(crate::errors::AppError::NoDatabase).unwrap();
         assert_eq!(e, json!({"kind": "no_database", "message": "no database is open"}));
     }

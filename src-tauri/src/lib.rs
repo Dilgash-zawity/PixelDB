@@ -1,11 +1,14 @@
 pub mod apps;
 pub mod commands;
+pub mod connections;
 pub mod database;
 pub mod errors;
 pub mod models;
+pub mod remote;
 pub mod validation;
 pub mod workspace;
 
+use connections::ConnectionStore;
 use database::DbManager;
 use tauri::Manager;
 use workspace::WorkspaceStore;
@@ -24,6 +27,7 @@ pub fn run() {
       }
       let config_dir = app.path().app_config_dir()?;
       app.manage(WorkspaceStore::load(config_dir.join("settings.json")));
+      app.manage(ConnectionStore::load(config_dir.join("connections.json")));
       if cfg!(debug_assertions) {
         app.handle().plugin(
           tauri_plugin_log::Builder::default()
@@ -42,6 +46,13 @@ pub fn run() {
       commands::workspace::rename_workspace_database,
       commands::workspace::delete_workspace_database,
       commands::workspace::duplicate_workspace_database,
+      commands::connections::list_connections,
+      commands::connections::test_connection,
+      commands::connections::save_connection,
+      commands::connections::delete_connection,
+      commands::connections::remote_tables,
+      commands::connections::remote_preview,
+      commands::connections::remote_query,
       commands::apps::list_apps,
       commands::apps::create_app,
       commands::apps::load_app,

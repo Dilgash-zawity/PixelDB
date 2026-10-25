@@ -29,6 +29,8 @@ pub enum AppError {
     ConfirmationRequired(String),
     #[error("database error: {0}")]
     Sqlite(String),
+    #[error("{0}")]
+    Remote(String),
     #[error("i/o error: {0}")]
     Io(String),
     #[error("internal error: {0}")]
@@ -49,6 +51,7 @@ impl AppError {
             AppError::Unsupported(_) => "unsupported",
             AppError::ConfirmationRequired(_) => "confirmation_required",
             AppError::Sqlite(_) => "sqlite",
+            AppError::Remote(_) => "remote",
             AppError::Io(_) => "io",
             AppError::Internal(_) => "internal",
         }
@@ -112,6 +115,7 @@ impl AppError {
             AppError::Unsupported(m) => AppError::Unsupported(wrap(m)),
             AppError::ConfirmationRequired(m) => AppError::ConfirmationRequired(wrap(m)),
             AppError::Sqlite(m) => AppError::Sqlite(wrap(m)),
+            AppError::Remote(m) => AppError::Remote(wrap(m)),
             AppError::Io(m) => AppError::Io(wrap(m)),
             AppError::Internal(m) => AppError::Internal(wrap(m)),
             AppError::NoDatabase => AppError::NoDatabase,

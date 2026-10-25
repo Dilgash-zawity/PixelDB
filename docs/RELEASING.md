@@ -7,10 +7,10 @@ account. Never embed a GitHub token in the application.
 
 ## Current prerequisite
 
-Apple and Windows signing credentials have not been provisioned. The verified
-release workflow stops before merging or publishing when credentials are missing.
-The maintainer can explicitly publish a community release with signed update
-payloads using the separate workflow described below.
+Apple and Windows signing credentials have not been provisioned, so releases are
+community releases: all four platforms are built and update-signed, but the
+installers are not notarized or Authenticode-signed. Never claim publisher
+verification for them.
 An update signature alone does **not** remove macOS Gatekeeper or Windows
 SmartScreen warnings. Existing unsigned downloads are not repaired retroactively.
 
@@ -66,8 +66,9 @@ completed by the account owner.
 
 ## Windows: Authenticode
 
-The workflow uses Azure Artifact Signing through the `artifact-signing-cli`
-integration documented by Tauri. Provision a public-trust signing account and
+The current release workflow does not sign Windows installers. When credentials exist,
+restore the Azure Artifact Signing steps (`artifact-signing-cli`, as documented by Tauri)
+from the history of `release.yml`. Provision a public-trust signing account and
 certificate profile and authorize an Azure application to sign with that profile.
 Service availability depends on the identity and region; if unavailable, use a
 trusted code-signing provider with a compatible custom Tauri `signCommand`.
@@ -84,60 +85,47 @@ Add Actions secrets `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, and
 The release script validates these variables and generates an ephemeral signing
 configuration. Tauri signs the app executable and the NSIS installer before
 generating update signatures. CI verifies Authenticode on both outputs.
-The verified workflow never silently falls back to unsigned installers. SmartScreen reputation may still
+SmartScreen reputation may still
 cause warnings for a newly signed app; signing cannot guarantee none appear.
 
 See [Tauri Windows signing](https://v2.tauri.app/distribute/sign/windows/).
 
 ## Publish a version
 
+One workflow, **Build and release** (`.github/workflows/release.yml`), does both:
+
+- Every pull request builds unsigned installers for Windows, Linux and both Mac
+  architectures, without secrets. Use this to check a PR builds.
+- A manual run from `main` builds the same four platforms with update signatures
+  into a draft release, verifies every update signature and version, writes the
+  complete `latest.json` and `SHA256SUMS`, records build attestations, and only
+  then publishes the release as latest.
+
+To publish:
+
 1. Update `package.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` (the
    SlateDB package), and `src-tauri/tauri.conf.json` to the same new version.
-2. Update `docs/release-notes.md`, open a PR to `main`, and wait for the installer
-   builds for Windows, Linux and both Mac architectures. Workflows build without
-   running tests, lint, or type checks. PR builds never receive signing secrets.
-3. Run **Actions → release → Run workflow** from `main`, supplying the tested
-   PR number. This is the maintainer's approval to merge and release that PR.
-4. Preflight requires signing credentials, a same-repository
-   PR to `main`, consistent versions, and an unused tag. It merges only the
-   checked commit, then creates a draft release tied to the merge commit.
-5. All platforms build the same commit. The final job verifies update signatures
-   with Minisign, enforces the version in each signed comment, generates the
-   complete `latest.json` once, writes checksums, records build attestations,
-   and publishes the release only after every build and verification succeeds.
+2. Update `docs/community-release-notes.md` with that version's changes, download
+   filenames, and accurate signing status. Merge to `main`.
+3. Run **Actions → Build and release → Run workflow** from `main`, entering the
+   exact version on main.
 
-If any build fails after the draft is created, it stays unpublished. Diagnose
-the failed job and rerun failed jobs for that same release. Do not manually
-publish a partial draft or replace artifacts of a published version. Use a new
-version for fixes. Older installations check the stable `latest.json` URL over
-HTTPS; only newer versions with valid signatures can be installed.
-
-## Publish a community release without platform credentials
-
-For a release such as 0.0.10 before Apple/Windows credentials are available:
-
-1. Merge the desired version to `main`.
-2. Update `docs/community-release-notes.md` with that version's changes,
-   download filenames, and accurate signing status.
-3. Run **Actions → Publish community release → Run workflow** from `main`,
-   entering the exact version on main. This explicitly approves publishing
-   without Apple notarization or Windows Authenticode.
-4. The workflow requires the updater signing key. It builds all four platforms
-   from the same commit into a draft, verifies each update
-   signature and version, generates checksums and build attestations, then marks
-   the complete release as latest. The verified-release workflow is unchanged.
+The run requires the updater signing key and refuses a version that does not
+match `main` or a tag that already exists. A failed build leaves the draft
+unpublished; rerun the failed jobs for that same release. Do not manually publish
+a partial draft or replace artifacts of a published version. Use a new version
+for fixes. Older installations check the stable `latest.json` URL over HTTPS;
+only newer versions with valid signatures can be installed.
 
 Mac bundles are ad-hoc signed for integrity. Gatekeeper and SmartScreen warnings
-may remain. Community releases must never claim publisher verification or
-notarization. All update signatures remain mandatory. Use a new version for any
-later changes to published artifacts.
+may remain. Update signatures remain mandatory on every platform.
 
 ## Download verification
 
 Version 0.0.10 was finalized from the GitHub Actions installer builds after the
 publishing job could not install Minisign. Its update signatures were verified
 before publication, and it includes checksums but no GitHub build attestations.
-The workflows now install the pinned official Minisign binary for future releases.
+The workflow installs the pinned official Minisign binary.
 
 On Linux, in the downloaded release directory:
 
