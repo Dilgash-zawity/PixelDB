@@ -1,6 +1,6 @@
 [package]
 name = "SlateDB"
-version = "0.0.12"
+version = "0.0.13"
 description = "SlateDB — an offline desktop database builder"
 authors = ["Dilgash"]
 license = "MIT"

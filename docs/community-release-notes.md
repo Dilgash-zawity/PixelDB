@@ -20,16 +20,16 @@ These warnings are not resolved by the updater signature.
 
 Choose the matching file in the release assets:
 
-| Platform | File |
+| Platform | Download |
 | --- | --- |
-| Windows 64-bit | `SlateDB_0.0.12_x64-setup.exe` |
-| macOS Apple Silicon | `SlateDB_0.0.12_aarch64.dmg` |
-| macOS Intel | `SlateDB_0.0.12_x64.dmg` |
-| Ubuntu / Debian 64-bit | `SlateDB_0.0.12_amd64.deb` |
-| Linux 64-bit | `SlateDB_0.0.12_amd64.AppImage` |
+| Windows 64-bit | [`SlateDB_0.0.13_x64-setup.exe`](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.13/SlateDB_0.0.13_x64-setup.exe) |
+| macOS Apple Silicon | [`SlateDB_0.0.13_aarch64.dmg`](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.13/SlateDB_0.0.13_aarch64.dmg) |
+| macOS Intel | [`SlateDB_0.0.13_x64.dmg`](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.13/SlateDB_0.0.13_x64.dmg) |
+| Ubuntu / Debian 64-bit | [`SlateDB_0.0.13_amd64.deb`](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.13/SlateDB_0.0.13_amd64.deb) |
+| Linux 64-bit | [`SlateDB_0.0.13_amd64.AppImage`](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.13/SlateDB_0.0.13_amd64.AppImage) |
 
 If you are using 0.0.8 or an earlier version, install this version manually once.
 It can then check for future updates from **Settings → Updates**. Installation
 is your choice; the app does not silently restart while you work.
 
-Checksums are in `SHA256SUMS`. Update payloads are signed with SlateDB's update key.
+Checksums are in [`SHA256SUMS`](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.13/SHA256SUMS). Update payloads are signed with SlateDB's update key.
