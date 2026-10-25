@@ -12,13 +12,14 @@ const ERROR_TITLES: Record<string, string> = {
 	invalid_database: 'Not a valid database',
 	unsupported: 'Not supported',
 	confirmation_required: 'Confirmation required',
-	no_database: 'No database open'
+	no_database: 'No database open',
+	connection: "Couldn't connect"
 };
 
 /** Removes the generic "kind: " prefix the backend adds to messages. */
 export function cleanMessage(message: string): string {
 	return message.replace(
-		/^(validation failed|constraint violation|not found|already exists|invalid identifier|unsupported operation|database error|invalid path|confirmation required): /i,
+		/^(validation failed|constraint violation|not found|already exists|invalid identifier|unsupported operation|database error|invalid path|confirmation required|could not connect): /i,
 		''
 	);
 }

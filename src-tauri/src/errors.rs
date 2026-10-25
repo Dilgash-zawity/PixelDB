@@ -31,6 +31,8 @@ pub enum AppError {
     Sqlite(String),
     #[error("i/o error: {0}")]
     Io(String),
+    #[error("could not connect: {0}")]
+    Connection(String),
     #[error("internal error: {0}")]
     Internal(String),
 }
@@ -50,6 +52,7 @@ impl AppError {
             AppError::ConfirmationRequired(_) => "confirmation_required",
             AppError::Sqlite(_) => "sqlite",
             AppError::Io(_) => "io",
+            AppError::Connection(_) => "connection",
             AppError::Internal(_) => "internal",
         }
     }
@@ -113,6 +116,7 @@ impl AppError {
             AppError::ConfirmationRequired(m) => AppError::ConfirmationRequired(wrap(m)),
             AppError::Sqlite(m) => AppError::Sqlite(wrap(m)),
             AppError::Io(m) => AppError::Io(wrap(m)),
+            AppError::Connection(m) => AppError::Connection(wrap(m)),
             AppError::Internal(m) => AppError::Internal(wrap(m)),
             AppError::NoDatabase => AppError::NoDatabase,
         }

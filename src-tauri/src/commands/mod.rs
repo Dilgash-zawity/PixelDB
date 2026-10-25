@@ -3,6 +3,7 @@
 
 pub mod apps;
 pub mod database;
+pub mod online;
 pub mod queries;
 pub mod records;
 pub mod tables;
@@ -16,5 +17,5 @@ use crate::workspace::WorkspaceStore;
 /// Which database a command acts on: the named workspace database when an
 /// app passes `database`, else the one open on the database page.
 pub(crate) fn target(store: &WorkspaceStore, database: Option<String>) -> AppResult<Option<(PathBuf, String)>> {
-    database.map(|name| Ok((store.require()?, name))).transpose()
+    database.map(|name| Ok((store.databases()?, name))).transpose()
 }
