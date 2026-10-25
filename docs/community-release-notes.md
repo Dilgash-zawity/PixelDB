@@ -2,12 +2,15 @@
 
 This free, MIT-licensed release adds **Settings → Updates**, automatic checks
 for new versions, release notes, download progress, and signed update installation.
-It also includes the newer app-builder, board, and query improvements added
-since version 0.0.8, and saved online database connections (PostgreSQL, MySQL,
-MariaDB, libSQL, and hosted providers such as Neon, Supabase and Turso) with a
-"Test connection" check. Online databases can be saved and tested but cannot be
-browsed or used by apps yet. Your local databases stay in your selected
-workspace folder.
+Saved online databases (PostgreSQL, MySQL, MariaDB, libSQL, and hosted providers
+such as Neon, Supabase, Turso, PlanetScale and CockroachDB) can now be browsed,
+edited, queried and used by apps like local databases, with server-side paging and
+search, a "Test connection" check, and an Overview, Data, Structure and Query view
+for each one. Structure changes on online databases are still made with the
+server's own tools. Your local databases stay in your selected workspace folder.
+
+This release also redraws the home map with provider logos for online databases,
+and adds a colorful default theme with a Focus mode for the original neutral look.
 
 **Signing status:** Update payloads are cryptographically signed with SlateDB's
 update key and verified before installation. The Mac apps use ad-hoc signatures
@@ -22,14 +25,14 @@ Choose the matching file in the release assets:
 
 | Platform | Download |
 | --- | --- |
-| Windows 64-bit | [`SlateDB_0.0.13_x64-setup.exe`](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.13/SlateDB_0.0.13_x64-setup.exe) |
-| macOS Apple Silicon | [`SlateDB_0.0.13_aarch64.dmg`](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.13/SlateDB_0.0.13_aarch64.dmg) |
-| macOS Intel | [`SlateDB_0.0.13_x64.dmg`](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.13/SlateDB_0.0.13_x64.dmg) |
-| Ubuntu / Debian 64-bit | [`SlateDB_0.0.13_amd64.deb`](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.13/SlateDB_0.0.13_amd64.deb) |
-| Linux 64-bit | [`SlateDB_0.0.13_amd64.AppImage`](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.13/SlateDB_0.0.13_amd64.AppImage) |
+| Windows 64-bit | [`SlateDB_0.0.14_x64-setup.exe`](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.14/SlateDB_0.0.14_x64-setup.exe) |
+| macOS Apple Silicon | [`SlateDB_0.0.14_aarch64.dmg`](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.14/SlateDB_0.0.14_aarch64.dmg) |
+| macOS Intel | [`SlateDB_0.0.14_x64.dmg`](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.14/SlateDB_0.0.14_x64.dmg) |
+| Ubuntu / Debian 64-bit | [`SlateDB_0.0.14_amd64.deb`](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.14/SlateDB_0.0.14_amd64.deb) |
+| Linux 64-bit | [`SlateDB_0.0.14_amd64.AppImage`](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.14/SlateDB_0.0.14_amd64.AppImage) |
 
 If you are using 0.0.8 or an earlier version, install this version manually once.
 It can then check for future updates from **Settings → Updates**. Installation
 is your choice; the app does not silently restart while you work.
 
-Checksums are in [`SHA256SUMS`](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.13/SHA256SUMS). Update payloads are signed with SlateDB's update key.
+Checksums are in [`SHA256SUMS`](https://github.com/Dilgash-zawity/SlateDB/releases/download/v0.0.14/SHA256SUMS). Update payloads are signed with SlateDB's update key.

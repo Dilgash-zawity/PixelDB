@@ -167,7 +167,7 @@
 	</Empty.Root>
 {:else}
 	<div class="flex h-svh flex-col" data-accent={def?.accent ?? 'neutral'}>
-		<header class="app-header flex h-12 shrink-0 items-center gap-2 border-b px-3 print:hidden">
+		<header data-bar class="app-header flex h-12 shrink-0 items-center gap-2 border-b px-3 print:hidden">
 			<Tooltip.Root>
 				<Tooltip.Trigger>
 					{#snippet child({ props })}

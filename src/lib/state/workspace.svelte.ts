@@ -137,8 +137,7 @@ class WorkspaceState {
 		return this.apps.some((a) => a.name !== except && a.name.toLowerCase() === name.toLowerCase());
 	}
 
-	/** Creates an app over `databases`; returns true on success. */
-	/** Creates an app over `databases`; with `build`, with a page for each of their tables. */
+	/** Creates an app over `databases`; with `build`, with a page for each of their tables. Returns true on success. */
 	async createApp(name: string, databases: string[], build = false): Promise<boolean> {
 		const ok = !!(await attempt(async () => {
 			const app = newApp(databases);

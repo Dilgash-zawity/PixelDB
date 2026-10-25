@@ -481,6 +481,8 @@ export interface EdgeRoute {
 	/** Which way the line leaves the parent and enters the child: 1 right, -1 left. */
 	startDir: 1 | -1;
 	endDir: 1 | -1;
+	/** A point halfway along the middle segment, on the line. */
+	mid: Point;
 }
 
 const GAP = 40;
@@ -491,16 +493,16 @@ const RADIUS = 10;
  * An orthogonal connector with rounded corners from the parent's key row to
  * the child's linking row. Cards side by side connect facing edges; cards
  * stacked in the same column (or a table linked to itself) loop round the
- * right-hand side.
+ * right-hand side. `width` is the cards' width (the diagram's by default).
  */
-export function edgeRoute(parent: Point, parentY: number, child: Point, childY: number): EdgeRoute {
+export function edgeRoute(parent: Point, parentY: number, child: Point, childY: number, width = CARD_WIDTH): EdgeRoute {
 	let x1: number, x2: number, startDir: 1 | -1, endDir: 1 | -1;
-	if (child.x >= parent.x + CARD_WIDTH + GAP) {
-		[x1, x2, startDir, endDir] = [parent.x + CARD_WIDTH, child.x, 1, -1];
-	} else if (child.x + CARD_WIDTH + GAP <= parent.x) {
-		[x1, x2, startDir, endDir] = [parent.x, child.x + CARD_WIDTH, -1, 1];
+	if (child.x >= parent.x + width + GAP) {
+		[x1, x2, startDir, endDir] = [parent.x + width, child.x, 1, -1];
+	} else if (child.x + width + GAP <= parent.x) {
+		[x1, x2, startDir, endDir] = [parent.x, child.x + width, -1, 1];
 	} else {
-		[x1, x2, startDir, endDir] = [parent.x + CARD_WIDTH, child.x + CARD_WIDTH, 1, 1];
+		[x1, x2, startDir, endDir] = [parent.x + width, child.x + width, 1, 1];
 	}
 	const y1 = parent.y + parentY;
 	const y2 = child.y + childY;
@@ -511,7 +513,7 @@ export function edgeRoute(parent: Point, parentY: number, child: Point, childY: 
 		{ x: turn, y: y2 },
 		{ x: x2, y: y2 }
 	];
-	return { path: roundedPath(points), start: points[0], end: points[3], startDir, endDir };
+	return { path: roundedPath(points), start: points[0], end: points[3], startDir, endDir, mid: { x: turn, y: (y1 + y2) / 2 } };
 }
 
 /** An SVG path through orthogonal points, with each corner rounded. */

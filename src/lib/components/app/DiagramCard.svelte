@@ -3,13 +3,14 @@
 	import type { TableDef, TablePosition } from '#lib/api/types.js';
 
 	// Utils
-	import { fieldTypeLabel, fieldTypeTone, type Tone } from '#lib/logic/field-types.js';
+	import { fieldTypeLabel } from '#lib/logic/field-types.js';
 	import { CARD_HEADER, CARD_PADDING, CARD_ROW, CARD_WIDTH } from '#lib/logic/relationships.js';
 	import { cn } from '#lib/utils.js';
 
 	// Components
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import PixelIcon from './PixelIcon.svelte';
 
 	// Icons
 	import {
@@ -18,7 +19,6 @@
 		Link as LinkIcon,
 		Plus as PlusIcon,
 		Pencil as PencilIcon,
-		Table2 as Table2Icon,
 		Rows3 as Rows3Icon,
 		Trash2 as TrashIcon,
 	} from '@lucide/svelte';
@@ -68,15 +68,6 @@
 	const linked = $derived(new Set((def.foreign_keys ?? []).flatMap((fk) => fk.columns.map((c) => c.toLowerCase()))));
 	const lit = $derived(new Set(highlight.map((c) => c.toLowerCase())));
 
-	const TONE_TEXT: Record<Tone, string> = {
-		blue: 'vivid:text-tone-blue',
-		green: 'vivid:text-tone-green',
-		amber: 'vivid:text-tone-amber',
-		pink: 'vivid:text-tone-pink',
-		violet: 'vivid:text-tone-violet',
-		cyan: 'vivid:text-tone-cyan',
-		none: ''
-	};
 </script>
 
 <div
@@ -84,9 +75,9 @@
 	role="group"
 	aria-label={`Table ${def.name}`}
 	class={cn(
-		'absolute flex flex-col rounded-lg border bg-card text-card-foreground shadow-md shadow-black/5 transition-[box-shadow,border-color] select-none',
-		selected && 'border-primary ring-2 ring-primary/30',
-		dropTarget === '' && 'border-primary ring-2 ring-primary/40'
+		'absolute flex flex-col rounded-lg border border-(--map-line)/25 bg-card text-card-foreground transition-[box-shadow,border-color] select-none',
+		selected && 'ring-2 ring-(--map-accent)',
+		dropTarget === '' && 'ring-4 ring-(--map-accent)'
 	)}
 	style:left="{position.x}px"
 	style:top="{position.y}px"
@@ -95,23 +86,26 @@
 	onpointerleave={() => onHover(false)}
 >
 	<div
-		class="flex shrink-0 cursor-grab items-center gap-2 rounded-t-[inherit] border-b ps-3 pe-1.5 active:cursor-grabbing vivid:bg-muted/50"
+		class={cn(
+			'-m-px flex shrink-0 cursor-grab items-center gap-2 rounded-t-[inherit] ps-3 pe-1.5 active:cursor-grabbing',
+			selected ? 'bg-(--map-accent) text-(--map-accent-fg)' : 'bg-(--map-app) text-(--map-tile-fg)'
+		)}
 		style:height="{CARD_HEADER}px"
 		role="presentation"
 		onpointerdown={onHeaderDown}
 		ondblclick={onOpen}
 	>
-		<Table2Icon class="size-4 shrink-0 text-muted-foreground vivid:text-tone-blue" />
-		<span class="truncate text-sm font-semibold">{def.name}</span>
+		<PixelIcon name="table" class="size-4 shrink-0" />
+		<span class="truncate text-sm font-medium">{def.name}</span>
 		{#if rows !== null}
-			<span class="shrink-0 text-xs text-muted-foreground tabular-nums vivid:rounded-full vivid:bg-tone-blue/12 vivid:px-1.5 vivid:text-tone-blue">{rows.toLocaleString()}</span>
+			<span class="shrink-0 rounded-sm border border-current/30 px-1 text-[11px] tabular-nums opacity-80">{rows.toLocaleString()}</span>
 		{/if}
 		<span class="flex-1"></span>
 		<span role="presentation" onpointerdown={(e) => e.stopPropagation()}>
 			<DropdownMenu.Root>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
-						<Button {...props} variant="ghost" size="icon-sm" aria-label={`${def.name} options`}>
+						<Button {...props} variant="ghost" size="icon-sm" class="text-current hover:bg-white/15 hover:text-current" aria-label={`${def.name} options`}>
 							<EllipsisVerticalIcon />
 						</Button>
 					{/snippet}
@@ -143,10 +137,10 @@
 				data-field={f.name}
 				class={cn(
 					'group/row relative flex cursor-pointer items-center gap-2 px-3 text-sm hover:bg-accent',
-					isLit && 'bg-primary/10',
+					isLit && 'bg-(--map-accent)/15',
 					selectedField === f.name && 'bg-accent font-medium',
-					dropTarget === f.name && 'bg-primary/20',
-					connecting && 'hover:bg-primary/15'
+					dropTarget === f.name && 'bg-(--map-accent)/30',
+					connecting && 'hover:bg-(--map-accent)/20'
 				)}
 				style:height="{CARD_ROW}px"
 				onclick={() => onFieldClick(f.name)}
@@ -156,11 +150,11 @@
 					{#if f.primary_key}
 						<KeyRoundIcon class="size-3.5 text-warning" aria-label="Primary key" />
 					{:else if linked.has(f.name.toLowerCase())}
-						<LinkIcon class="size-3.5 text-muted-foreground vivid:text-tone-cyan" aria-label="Links to another table" />
+						<LinkIcon class="size-3.5 text-muted-foreground" aria-label="Links to another table" />
 					{/if}
 				</span>
 				<span class={cn('truncate', isLit && 'font-semibold')}>{f.name}</span>
-				<span class={cn('ms-auto shrink-0 text-xs text-muted-foreground', TONE_TEXT[fieldTypeTone(f.field_type)])}>{fieldTypeLabel(f.field_type)}</span>
+				<span class="ms-auto shrink-0 text-xs text-muted-foreground">{fieldTypeLabel(f.field_type)}</span>
 				{#each [-1, 1] as const as side (side)}
 					<button
 						type="button"
@@ -168,7 +162,7 @@
 						aria-label={`Link ${def.name}.${f.name} to another table`}
 						title="Drag onto another table to link"
 						class={cn(
-							'absolute top-1/2 size-3 -translate-y-1/2 cursor-crosshair rounded-full border-2 border-primary bg-background opacity-0 transition-opacity group-hover/row:opacity-100 hover:scale-125',
+							'absolute top-1/2 size-3 -translate-y-1/2 cursor-crosshair rounded-[2px] border-2 border-(--map-line) bg-(--map-paper) opacity-0 transition-opacity group-hover/row:opacity-100 hover:scale-125',
 							side === 1 ? '-end-1.5' : '-start-1.5'
 						)}
 						onpointerdown={(e) => onConnectStart(e, f.name, side)}

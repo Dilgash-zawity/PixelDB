@@ -1,6 +1,9 @@
 use tauri::State;
 
-use super::target;
+use super::{on_online, target};
+use crate::online::SecretStore;
+use crate::online_data::OnlinePools;
+use crate::online_records;
 use crate::database::{DbManager, metadata, schema};
 use crate::errors::AppResult;
 use crate::models::{DatabaseInfo, DiagramLayout, ObjectSummary};
@@ -28,8 +31,11 @@ pub async fn get_database_info(state: State<'_, DbManager>) -> AppResult<Option<
 pub async fn list_objects(
     state: State<'_, DbManager>,
     store: State<'_, WorkspaceStore>,
+    secrets: State<'_, SecretStore>,
+    pools: State<'_, OnlinePools>,
     database: Option<String>,
 ) -> AppResult<Vec<ObjectSummary>> {
+    on_online!(store, secrets, pools, database, |o| online_records::list_objects(&o));
     state.run_on(target(&store, database)?, |db| schema::list_objects(&db.conn)).await
 }
 

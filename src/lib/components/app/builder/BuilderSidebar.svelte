@@ -37,6 +37,7 @@
 
 	// Icons
 	import {
+		Cloud as CloudIcon,
 		Database as DatabaseIcon,
 		Pencil as PencilIcon,
 		Plus as PlusIcon,
@@ -103,7 +104,9 @@
 	// ----- Databases -----
 
 	const addableDatabases = $derived(
-		appSession.databases.filter((d) => !def.sources.some((s) => s.database === d)).map((d) => ({ value: d, label: d }))
+		appSession.databases
+			.filter((d) => !def.sources.some((s) => s.database === d))
+			.map((d) => ({ value: d, label: appSession.online.includes(d) ? `${d} (online)` : d }))
 	);
 
 	async function addDatabase(database: string) {
@@ -308,7 +311,7 @@
 						{#each def.sources as s (s.alias)}
 							{@const missing = !appSession.databases.includes(s.database)}
 							<div class="flex items-center gap-2 px-1 py-1 text-sm">
-								{#if missing}<TriangleAlertIcon class="size-4 shrink-0 text-warning" />{:else}<DatabaseIcon class="size-4 shrink-0 text-muted-foreground" />{/if}
+								{#if missing}<TriangleAlertIcon class="size-4 shrink-0 text-warning" />{:else if appSession.online.includes(s.database)}<CloudIcon class="size-4 shrink-0 text-muted-foreground" />{:else}<DatabaseIcon class="size-4 shrink-0 text-muted-foreground" />{/if}
 								<span class="min-w-0 flex-1 truncate" title={missing ? 'This database is missing from the folder' : s.database}>{s.database}</span>
 								{#if !missing}
 									<Tooltip.Root>

@@ -1,7 +1,6 @@
 <script lang="ts">
 	// Utils
 	import { goto } from '$app/navigation';
-	import { toast } from 'svelte-sonner';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { databaseHref } from '#lib/logic/routes.js';
@@ -13,6 +12,7 @@
 	import Logo from '#lib/components/app/Logo.svelte';
 	import NewTableDrawer from '#lib/components/app/NewTableDrawer.svelte';
 	import NewDatabaseDrawer from '#lib/components/app/NewDatabaseDrawer.svelte';
+	import ProviderIcon from '#lib/components/app/ProviderIcon.svelte';
 	import QueryView from '#lib/components/app/QueryView.svelte';
 	import RecordsView from '#lib/components/app/RecordsView.svelte';
 	import RelationshipsView from '#lib/components/app/RelationshipsView.svelte';
@@ -63,6 +63,10 @@
 		if (await session.close()) goto(resolve('/settings'));
 	}
 
+	async function openOnline(db: string) {
+		if (await session.close()) goto(databaseHref(resolve('/online'), db));
+	}
+
 	async function switchTo(db: string) {
 		if (!session.leaveGuard || (await session.leaveGuard())) goto(databaseHref(resolve('/db'), db));
 	}
@@ -99,7 +103,7 @@
 	</Empty.Root>
 {:else}
 	<div class="flex h-svh flex-col">
-		<header class="app-header flex h-12 shrink-0 items-center gap-2 border-b px-3">
+		<header data-bar class="app-header flex h-12 shrink-0 items-center gap-2 border-b px-3">
 			<DropdownMenu.Root onOpenChange={(open) => open && workspace.refresh()}>
 				<DropdownMenu.Trigger>
 					{#snippet child({ props })}
@@ -120,6 +124,12 @@
 								{#if db.name === name}<CheckIcon class="ms-auto" />{/if}
 							</DropdownMenu.Item>
 						{/each}
+						{#each workspace.online.filter((o) => o.settings) as db (db.name)}
+							<DropdownMenu.Item onclick={() => openOnline(db.name)}>
+								<ProviderIcon provider={db.settings?.provider} />
+								<span class="truncate">{db.name}</span>
+							</DropdownMenu.Item>
+						{/each}
 					</DropdownMenu.Group>
 					<DropdownMenu.Separator />
 					<DropdownMenu.Group>
@@ -133,10 +143,10 @@
 			<Separator orientation="vertical" class="data-vertical:h-5 data-vertical:self-center" />
 
 			<Tabs.Root bind:value={() => session.tab, (v) => session.showTab(v as Tab)}>
-				<Tabs.List>
-					<Tabs.Trigger value="diagram"><NetworkIcon class="vivid:text-tone-violet" /> Diagram</Tabs.Trigger>
-					<Tabs.Trigger value="datasheet"><TableIcon class="vivid:text-tone-blue" /> Datasheet</Tabs.Trigger>
-					<Tabs.Trigger value="query"><SearchCodeIcon class="vivid:text-tone-amber" /> Query</Tabs.Trigger>
+				<Tabs.List variant="line">
+					<Tabs.Trigger value="diagram"><NetworkIcon /> Diagram</Tabs.Trigger>
+					<Tabs.Trigger value="datasheet"><TableIcon /> Datasheet</Tabs.Trigger>
+					<Tabs.Trigger value="query"><SearchCodeIcon /> Query</Tabs.Trigger>
 				</Tabs.List>
 			</Tabs.Root>
 
@@ -202,7 +212,7 @@
 	bind:open={creatingDatabase}
 	onCreated={(db, kind) => {
 		if (kind === 'local') switchTo(db);
-		else toast.success(`Saved “${db}”`, { description: 'Find it on the home screen next to your other databases.' });
+		else openOnline(db);
 	}}
 />
 

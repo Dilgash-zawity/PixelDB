@@ -53,19 +53,36 @@ class Session {
 		this.query = newQueryDraft();
 		this.loadError = null;
 		this.loading = true;
+		// Opens run one at a time: the backend's current database is whichever
+		// opened last, so a slow earlier open must not finish after this one.
+		const run = this.opening.then(() => this.load(name));
+		this.opening = run.catch(() => {});
+		await run;
+	}
+
+	private opening: Promise<void> = Promise.resolve();
+
+	private async load(name: string) {
+		// Another database was chosen while waiting.
+		if (this.name !== name) return;
 		try {
-			this.info = await workspaceService.openDatabase(name);
+			const info = await workspaceService.openDatabase(name);
+			if (this.name !== name) return;
+			this.info = info;
 			await this.refresh();
-			this.table = this.tables[0]?.name ?? this.views[0]?.name ?? null;
+			if (this.name === name) this.table = this.tables[0]?.name ?? this.views[0]?.name ?? null;
 		} catch (e) {
-			this.loadError = e instanceof Error ? e.message : String(e);
+			if (this.name === name) this.loadError = e instanceof Error ? e.message : String(e);
 		} finally {
-			this.loading = false;
+			if (this.name === name) this.loading = false;
 		}
 	}
 
 	async close(): Promise<boolean> {
 		if (this.leaveGuard && !(await this.leaveGuard())) return false;
+		this.name = null;
+		// Let an open in flight finish first, or it would reopen the database after this.
+		await this.opening;
 		await attempt(() => databaseService.close());
 		this.name = null;
 		this.info = null;
@@ -75,9 +92,14 @@ class Session {
 	}
 
 	async refresh() {
+		const name = this.name;
 		await attempt(async () => {
-			this.objects = await databaseService.listObjects();
-			this.info = await databaseService.info();
+			const objects = await databaseService.listObjects();
+			const info = await databaseService.info();
+			// The backend still has the previous database open until the next one loads.
+			if (this.name !== name) return;
+			this.objects = objects;
+			this.info = info;
 		});
 	}
 

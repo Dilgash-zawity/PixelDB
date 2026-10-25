@@ -46,10 +46,11 @@
 	import NameDialog from './NameDialog.svelte';
 	import NewDatabaseDrawer from './NewDatabaseDrawer.svelte';
 	import NewAppDrawer from './NewAppDrawer.svelte';
+	import PixelIcon from './PixelIcon.svelte';
+	import ProviderIcon from './ProviderIcon.svelte';
 
 	// Icons
 	import {
-		Cloud as CloudIcon,
 		Copy as CopyIcon,
 		Database as DatabaseIcon,
 		EllipsisVertical as EllipsisVerticalIcon,
@@ -62,6 +63,7 @@
 		Pencil as PencilIcon,
 		PlugZap as PlugZapIcon,
 		Plus as PlusIcon,
+		Settings2 as SettingsIcon,
 		TextCursorInput as TextCursorInputIcon,
 		Trash2 as TrashIcon,
 		TriangleAlert as TriangleAlertIcon,
@@ -72,21 +74,9 @@
 	const MIN_ZOOM = 0.25;
 	const MAX_ZOOM = 2;
 
-	const ACCENT_TEXT: Record<string, string> = {
-		blue: 'text-[oklch(0.55_0.2_255)] bg-[oklch(0.55_0.2_255)]/10',
-		green: 'text-[oklch(0.6_0.15_150)] bg-[oklch(0.6_0.15_150)]/10',
-		amber: 'text-[oklch(0.75_0.16_75)] bg-[oklch(0.75_0.16_75)]/10',
-		red: 'text-[oklch(0.6_0.22_25)] bg-[oklch(0.6_0.22_25)]/10',
-		violet: 'text-[oklch(0.55_0.22_295)] bg-[oklch(0.55_0.22_295)]/10'
-	};
-	// The same hues, for an app's connector lines.
-	const ACCENT_COLOR: Record<string, string> = {
-		blue: 'oklch(0.55 0.2 255)',
-		green: 'oklch(0.6 0.15 150)',
-		amber: 'oklch(0.75 0.16 75)',
-		red: 'oklch(0.6 0.22 25)',
-		violet: 'oklch(0.55 0.22 295)'
-	};
+	/** Graph paper cell, and the chip drawn on each line. */
+	const GRID = 40;
+	const CHIP = 22;
 
 	const apps = $derived(workspace.apps);
 	const databases = $derived(workspace.databases);
@@ -103,7 +93,6 @@
 	);
 	const users = $derived(usersByDatabase(links));
 	const linkKey = (l: { app: string; database: string }) => `${l.app}\u0000${l.database}`;
-	const accentOf = (app: string) => ACCENT_COLOR[appByName.get(app)?.accent ?? ''] ?? 'var(--primary)';
 
 	let layout = $state<MapLayout>({});
 	let zoom = $state(1);
@@ -284,7 +273,8 @@
 		if (tKind === kind) return false;
 		const [app, db] = kind === 'app' ? [name, tName] : [tName, name];
 		const file = appByName.get(app);
-		return !!file?.valid && !!databases.find((d) => d.name === db)?.valid && !file.databases.includes(db);
+		const usable = !!databases.find((d) => d.name === db)?.valid || !!onlineByName.get(db)?.settings;
+		return !!file?.valid && usable && !file.databases.includes(db);
 	}
 
 	function startConnect(e: PointerEvent, kind: NodeKind, name: string, side: 1 | -1) {
@@ -323,22 +313,31 @@
 
 	// ── Lines ──
 
-	const edges = $derived(
-		links.flatMap((l, i) => {
+	const edges = $derived.by(() => {
+		// Lines into the same database share their last stretch; one chip there is enough.
+		const chips = new Set<string>();
+		const chipAt = (p: Point) => {
+			const k = `${p.x},${p.y}`;
+			if (chips.has(k)) return null;
+			chips.add(k);
+			return p;
+		};
+		return links.flatMap((l, i) => {
 			const a = layout[nodeKey('app', l.app)];
 			if (!a) return [];
 			const key = linkKey(l);
 			const active = touches(l);
 			if (l.missing) {
 				const stub = missingStub(a);
-				return [{ link: l, key, i, active, path: stub.path, start: { x: a.x + NODE_WIDTH, y: stub.end.y }, end: stub.end }];
+				return [{ link: l, key, i, active, path: stub.path, end: stub.end, endDir: -1 as const, chip: null }];
 			}
 			const d = layout[nodeKey('db', l.database)];
 			if (!d) return [];
-			const route = edgeRoute(a, NODE_HEIGHT / 2, d, NODE_HEIGHT / 2);
-			return [{ link: l, key, i, active, path: route.path, start: route.start, end: route.end }];
-		})
-	);
+			const route = edgeRoute(a, NODE_HEIGHT / 2, d, NODE_HEIGHT / 2, NODE_WIDTH);
+			const chip = chipAt({ x: (route.mid.x + route.end.x) / 2, y: route.end.y });
+			return [{ link: l, key, i, active, path: route.path, end: route.end, endDir: route.endDir, chip }];
+		});
+	});
 
 	// ── Creating, opening, renaming ──
 
@@ -399,15 +398,15 @@
 		if (result) toast.success(`Connected to “${name}”`, { description: `${result.server} answered in ${result.millis} ms.` });
 	}
 
-	/** Online databases can't be browsed yet; opening one edits its connection. */
 	function open(kind: NodeKind, name: string) {
 		if (kind === 'app') goto(appHref(resolve('/app'), name));
-		else if (onlineByName.has(name)) editOnline(name);
+		else if (onlineByName.has(name)) goto(databaseHref(resolve('/online'), name));
 		else goto(databaseHref(resolve('/db'), name));
 	}
 
 	function canOpen(kind: NodeKind, name: string): boolean {
-		return kind === 'app' ? !!appByName.get(name)?.valid : !!databases.find((d) => d.name === name)?.valid;
+		if (kind === 'app') return !!appByName.get(name)?.valid;
+		return !!databases.find((d) => d.name === name)?.valid || !!onlineByName.get(name)?.settings;
 	}
 
 	function remove(kind: NodeKind, name: string) {
@@ -502,7 +501,8 @@
 {#snippet nodeMenu(kind: NodeKind, name: string, Item: typeof DropdownMenu.Item | typeof ContextMenu.Item)}
 	{#if kind === 'db' && onlineByName.has(name)}
 		{@const readable = !!onlineByName.get(name)?.settings}
-		<Item disabled={!readable} onclick={() => editOnline(name)}><PencilIcon /> Edit connection…</Item>
+		<Item disabled={!readable} onclick={() => open(kind, name)}><ExternalLinkIcon /> Open</Item>
+		<Item disabled={!readable} onclick={() => editOnline(name)}><SettingsIcon /> Edit connection…</Item>
 		<Item disabled={!readable} onclick={() => testOnline(name)}><PlugZapIcon /> Test connection</Item>
 		<Item disabled={!readable} onclick={() => (renaming = { kind, name })}><TextCursorInputIcon /> Rename…</Item>
 	{:else}
@@ -520,7 +520,7 @@
 			aria-label={kind === 'app' ? `Connect ${name} to a database` : `Connect ${name} to an app`}
 			title={kind === 'app' ? 'Drag onto a database to connect' : 'Drag onto an app to connect'}
 			class={cn(
-				'absolute top-1/2 size-3 -translate-y-1/2 cursor-crosshair rounded-full border-2 border-primary bg-background opacity-0 transition-opacity group-hover/node:opacity-100 hover:scale-125',
+				'absolute top-1/2 size-3 -translate-y-1/2 cursor-crosshair rounded-[2px] border-2 border-(--map-line) bg-(--map-paper) opacity-0 transition-opacity group-hover/node:opacity-100 hover:scale-125',
 				side === 1 ? '-end-1.5' : '-start-1.5'
 			)}
 			onpointerdown={(e) => startConnect(e, kind, name, side)}
@@ -529,20 +529,31 @@
 	{/each}
 {/snippet}
 
-{#snippet card(kind: NodeKind, name: string, valid: boolean, body: import('svelte').Snippet, icon: import('svelte').Snippet, connectable = valid)}
+<!-- A tile: name and a line of detail top-left, a pixel icon bottom-right, badges bottom-left. -->
+{#snippet card(
+	kind: NodeKind,
+	name: string,
+	valid: boolean,
+	detail: string,
+	badges: import('svelte').Snippet,
+	icon: import('svelte').Snippet,
+	connectable = valid
+)}
 	{@const key = nodeKey(kind, name)}
 	{@const p = layout[key]}
+	{@const selected = selection?.kind === 'node' && selection.key === key}
 	{#if p}
 		<div
 			data-node={key}
 			role="group"
 			aria-label={`${kind === 'app' ? 'App' : onlineByName.has(name) ? 'Online database' : 'Database'} ${name}`}
 			class={cn(
-				'group/node absolute flex flex-col rounded-lg border bg-card text-card-foreground shadow-md shadow-black/5 transition-[box-shadow,border-color,opacity,translate] select-none',
+				'group/node absolute flex cursor-grab flex-col rounded-lg border border-(--map-tile-border) p-3 text-(--map-tile-fg) transition-[box-shadow,background-color,opacity,translate] select-none active:cursor-grabbing',
+				kind === 'app' ? 'bg-(--map-app)' : 'bg-(--map-db)',
 				!valid && 'opacity-60',
-				related.has(key) && 'border-primary/50',
-				selection?.kind === 'node' && selection.key === key && 'border-primary ring-2 ring-primary/30',
-				dropTarget === key && 'border-primary ring-2 ring-primary/40',
+				related.has(key) && !selected && 'ring-2 ring-(--map-accent)',
+				selected && 'bg-(--map-accent) text-(--map-accent-fg)',
+				dropTarget === key && 'ring-4 ring-(--map-accent)',
 				connecting && !dropTarget && nodeKey(connecting.kind, connecting.name) !== key && !canConnect(connecting.kind, connecting.name, key) && 'opacity-40'
 			)}
 			style:left="{p.x}px"
@@ -551,21 +562,22 @@
 			style:height="{NODE_HEIGHT}px"
 			onpointerenter={() => (hoveredNode = key)}
 			onpointerleave={() => hoveredNode === key && (hoveredNode = null)}
+			onpointerdown={(e) => startNodeDrag(e, key)}
+			ondblclick={() => canOpen(kind, name) && open(kind, name)}
 		>
-			<div
-				class="flex h-11 shrink-0 cursor-grab items-center gap-2 border-b ps-2 pe-1.5 active:cursor-grabbing"
-				role="presentation"
-				onpointerdown={(e) => startNodeDrag(e, key)}
-				ondblclick={() => (canOpen(kind, name) || onlineByName.has(name)) && open(kind, name)}
-			>
-				{@render icon()}
-				<span class="truncate text-sm font-semibold" title={name}>{name}</span>
-				<span class="flex-1"></span>
-				<span role="presentation" onpointerdown={(e) => e.stopPropagation()}>
+			<div class="flex items-start gap-1">
+				<span class="line-clamp-2 min-w-0 flex-1 text-[13px] leading-snug font-medium break-words" title={name}>{name}</span>
+				<span role="presentation" class="-me-1.5 -mt-1.5" onpointerdown={(e) => e.stopPropagation()}>
 					<DropdownMenu.Root>
 						<DropdownMenu.Trigger>
 							{#snippet child({ props })}
-								<Button {...props} variant="ghost" size="icon-sm" aria-label={`${name} options`}><EllipsisVerticalIcon /></Button>
+								<Button
+									{...props}
+									variant="ghost"
+									size="icon-xs"
+									class="text-current opacity-0 group-hover/node:opacity-100 hover:bg-white/15 hover:text-current focus-visible:opacity-100 data-[state=open]:opacity-100"
+									aria-label={`${name} options`}><EllipsisVerticalIcon /></Button
+								>
 							{/snippet}
 						</DropdownMenu.Trigger>
 						<DropdownMenu.Content align="start" side="right">
@@ -580,8 +592,10 @@
 					</DropdownMenu.Root>
 				</span>
 			</div>
-			<div class="flex min-h-0 flex-1 items-center justify-between gap-2 px-3 text-xs text-muted-foreground">
-				{@render body()}
+			{#if detail}<span class="mt-0.5 truncate text-[11px] leading-snug opacity-65" title={detail}>{detail}</span>{/if}
+			<div class="mt-auto flex items-end justify-between gap-2">
+				<div class="flex min-w-0 flex-wrap gap-1">{@render badges()}</div>
+				<span class="shrink-0">{@render icon()}</span>
 			</div>
 			{#if connectable}{@render handles(kind, name)}{/if}
 		</div>
@@ -589,62 +603,49 @@
 {/snippet}
 
 {#snippet appNode(app: AppFile)}
-	{#snippet icon()}
-		<span class="flex size-7 shrink-0 items-center justify-center rounded-md {ACCENT_TEXT[app.accent] ?? 'bg-primary/10 text-primary'}">
-			<LayoutDashboardIcon class="size-4" />
-		</span>
-	{/snippet}
-	{#snippet body()}
+	{#snippet icon()}<PixelIcon name="app" class="size-7" />{/snippet}
+	{#snippet badges()}
 		{#if !app.valid}
 			<Badge variant="destructive"><TriangleAlertIcon /> Can't be read</Badge>
-		{:else}
-			<span class="truncate" title={app.description}>{app.description || `App · edited ${modifiedLabel(app.modified)}`}</span>
-			{#if links.some((l) => l.app === app.name && l.missing)}
-				<Badge variant="outline" class="border-warning/40 bg-warning/10 text-warning"><TriangleAlertIcon /> Missing</Badge>
-			{:else if !app.databases.length}
-				<Badge variant="outline">No data</Badge>
-			{/if}
+		{:else if links.some((l) => l.app === app.name && l.missing)}
+			<Badge variant="outline" class="border-warning/60 bg-warning/15 text-warning"><TriangleAlertIcon /> Missing</Badge>
+		{:else if !app.databases.length}
+			<Badge variant="outline" class="border-current/30 text-current">No data</Badge>
 		{/if}
 	{/snippet}
-	{@render card('app', app.name, app.valid, body, icon)}
+	{@render card('app', app.name, app.valid, app.valid ? app.description || `Edited ${modifiedLabel(app.modified)}` : '', badges, icon)}
 {/snippet}
 
 {#snippet dbNode(db: DatabaseFile)}
 	{@const usedBy = users.get(db.name) ?? []}
-	{#snippet icon()}
-		<span class="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground vivid:bg-tone-cyan/15 vivid:text-tone-cyan">
-			<DatabaseIcon class="size-4" />
-		</span>
-	{/snippet}
-	{#snippet body()}
+	{#snippet icon()}<PixelIcon name="database" class="size-7" />{/snippet}
+	{#snippet badges()}
 		{#if !db.valid}
-			<Badge variant="destructive"><TriangleAlertIcon /> Not a database file</Badge>
+			<Badge variant="destructive"><TriangleAlertIcon /> Not a database</Badge>
 		{:else}
-			<span class="truncate" title={usedBy.join(', ')}>
-				{usedBy.length === 0 ? 'Not used by an app' : usedBy.length === 1 ? `Used by ${usedBy[0]}` : `Used by ${usedBy.length} apps`}
-			</span>
-			<Badge variant="secondary" class="vivid:bg-tone-cyan/12 vivid:text-tone-cyan">{formatBytes(db.size)}</Badge>
+			<Badge variant="outline" class="border-current/30 text-current tabular-nums">{formatBytes(db.size)}</Badge>
 		{/if}
 	{/snippet}
-	{@render card('db', db.name, db.valid, body, icon)}
+	{@render card(
+		'db',
+		db.name,
+		db.valid,
+		!db.valid ? '' : usedBy.length === 0 ? 'Not used by an app' : usedBy.length === 1 ? `Used by ${usedBy[0]}` : `Used by ${usedBy.length} apps`,
+		badges,
+		icon
+	)}
 {/snippet}
 
 {#snippet onlineNode(db: OnlineDatabase)}
-	{#snippet icon()}
-		<span class="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground vivid:bg-tone-blue/15 vivid:text-tone-blue">
-			<CloudIcon class="size-4" />
-		</span>
-	{/snippet}
-	{#snippet body()}
+	{#snippet icon()}<ProviderIcon provider={db.settings?.provider} class="size-7" />{/snippet}
+	{#snippet badges()}
 		{#if !db.settings}
 			<Badge variant="destructive"><TriangleAlertIcon /> Can't be read</Badge>
 		{:else}
-			<span class="truncate" title={connectionSummary(db.settings)}>{connectionSummary(db.settings)}</span>
-			<Badge variant="secondary" class="vivid:bg-tone-blue/12 vivid:text-tone-blue">{providerOf(db.settings.provider)?.name ?? 'Online'}</Badge>
+			<Badge variant="outline" class="border-current/30 text-current">{providerOf(db.settings.provider)?.name ?? 'Online'}</Badge>
 		{/if}
 	{/snippet}
-	<!-- Apps can't use online databases yet, so the card has no connect handles. -->
-	{@render card('db', db.name, !!db.settings, body, icon, false)}
+	{@render card('db', db.name, !!db.settings, db.settings ? connectionSummary(db.settings) : '', badges, icon)}
 {/snippet}
 
 <ContextMenu.Root>
@@ -656,10 +657,9 @@
 				{@attach wheel}
 				role="application"
 				aria-label="Apps and databases"
-				class="relative min-h-0 flex-1 overflow-hidden bg-muted/40 select-none"
+				class="paper-grid relative min-h-0 flex-1 overflow-hidden select-none"
 				class:cursor-crosshair={!!connecting}
-				style:background-image="radial-gradient(var(--border) 1px, transparent 1px)"
-				style:background-size="{20 * zoom}px {20 * zoom}px"
+				style:--grid="{GRID * zoom}px"
 				style:background-position="{pan.x}px {pan.y}px"
 			>
 				{#if !apps.length && !databaseNames.length}
@@ -680,24 +680,19 @@
 				{:else}
 					<div class="absolute top-0 left-0 origin-top-left" style:transform="translate({pan.x}px, {pan.y}px) scale({zoom})">
 						<svg class="pointer-events-none absolute top-0 left-0 overflow-visible" width="1" height="1" aria-hidden="true">
-							{#each edges as { link, key, i, active, path, start, end } (key)}
-								{@const color = link.missing ? 'var(--warning)' : active || !settings.current.focusMode ? accentOf(link.app) : null}
-								<g data-edge class={cn(!color && 'text-muted-foreground')} style:color style:--i={i}>
+							{#each edges as { link, key, i, active, path, end, endDir, chip } (key)}
+								{@const color = link.missing ? 'var(--warning)' : active ? 'var(--map-accent)' : 'var(--map-line)'}
+								{@const d = -endDir}
+								<g data-edge class="link-in" style:color style:--i={i}>
 									<path
 										d={path}
-										pathLength="1"
 										fill="none"
 										stroke="currentColor"
-										stroke-width={active ? 2.25 : 1.5}
-										stroke-opacity={active ? 1 : settings.current.focusMode ? 0.7 : 0.45}
-										class="link-draw"
+										stroke-width={active ? 2 : 1.5}
+										stroke-dasharray="4 4"
+										stroke-opacity={active || link.missing ? 1 : 0.75}
+										class={cn(active && 'link-flow')}
 									/>
-									{#if link.missing}
-										<path d={path} fill="none" stroke="var(--muted)" stroke-width="2" stroke-dasharray="4 4" />
-									{:else if active}
-										<!-- Gaps that travel from the app to the database. -->
-										<path d={path} fill="none" stroke="var(--background)" stroke-width="2.5" stroke-dasharray="2 10" class="link-flow" />
-									{/if}
 									<!-- Wide invisible stroke so the line is easy to click. -->
 									<path
 										role="presentation"
@@ -712,23 +707,41 @@
 										onpointerenter={() => (hoveredLink = key)}
 										onpointerleave={() => hoveredLink === key && (hoveredLink = null)}
 									/>
-									<circle cx={start.x} cy={start.y} r="3.5" fill="currentColor" class="link-end" />
 									{#if link.missing}
-										<circle cx={end.x} cy={end.y} r="6" fill="var(--background)" stroke="currentColor" stroke-width="1.5" class="link-end" />
+										<circle cx={end.x} cy={end.y} r="6" fill="var(--map-paper)" stroke="currentColor" stroke-width="1.5" />
 										<path
 											d="M {end.x - 2.5} {end.y - 2.5} L {end.x + 2.5} {end.y + 2.5} M {end.x + 2.5} {end.y - 2.5} L {end.x - 2.5} {end.y + 2.5}"
 											stroke="currentColor"
 											stroke-width="1.5"
-											class="link-end"
 										/>
 									{:else}
-										<circle cx={end.x} cy={end.y} r="3.5" fill="currentColor" class="link-end" />
+										<!-- Arrowhead into the database, and a chip on its last stretch for the data that flows. -->
+										<path
+											d="M {end.x - 7 * d} {end.y - 4.5} L {end.x} {end.y} L {end.x - 7 * d} {end.y + 4.5}"
+											fill="none"
+											stroke="currentColor"
+											stroke-width="1.5"
+											stroke-linecap="square"
+										/>
+										{#if chip}
+											<rect
+												x={chip.x - CHIP / 2}
+												y={chip.y - CHIP / 2}
+												width={CHIP}
+												height={CHIP}
+												rx="3"
+												fill="var(--map-chip)"
+												stroke="currentColor"
+												stroke-width="1"
+											/>
+											<PixelIcon name="rows" x={chip.x - 7} y={chip.y - 7} width={14} height={14} />
+										{/if}
 									{/if}
 								</g>
 							{/each}
 							{#if connecting}
-								<path d={connectorPreview} fill="none" class="stroke-primary" stroke-width="2" stroke-dasharray="6 5" />
-								<circle cx={connecting.pointer.x} cy={connecting.pointer.y} r="4" class="fill-primary" />
+								<path d={connectorPreview} fill="none" stroke="var(--map-accent)" stroke-width="2" stroke-dasharray="4 4" />
+								<rect x={connecting.pointer.x - 4} y={connecting.pointer.y - 4} width="8" height="8" rx="1" fill="var(--map-accent)" />
 							{/if}
 						</svg>
 						{#each apps as app (app.name)}{@render appNode(app)}{/each}
@@ -751,7 +764,7 @@
 					</div>
 					{#if settings.current.canvasHints}
 						<p class="pointer-events-none absolute bottom-3 left-4 flex items-center gap-1.5 text-xs text-muted-foreground">
-							Drag a card's <span class="inline-block size-2.5 rounded-full border-2 border-primary"></span> onto another to connect ·
+							Drag a card's <span class="inline-block size-2.5 rounded-[2px] border-2 border-(--map-line)"></span> onto another to connect ·
 							Double-click to open · <Kbd>⌘</Kbd> + scroll to zoom · Right-click for more
 						</p>
 					{/if}
@@ -776,7 +789,7 @@
 		{:else if t.kind === 'link'}
 			<ContextMenu.Group>
 				<ContextMenu.Item onclick={() => open('app', t.app)}><LayoutDashboardIcon /> Open “{t.app}”</ContextMenu.Item>
-				<ContextMenu.Item disabled={t.missing || onlineByName.has(t.database)} onclick={() => open('db', t.database)}><DatabaseIcon /> Open “{t.database}”</ContextMenu.Item>
+				<ContextMenu.Item disabled={t.missing} onclick={() => open('db', t.database)}><DatabaseIcon /> Open “{t.database}”</ContextMenu.Item>
 			</ContextMenu.Group>
 			<ContextMenu.Separator />
 			<ContextMenu.Group>
@@ -843,24 +856,12 @@
 />
 
 <style>
-	/* Lines draw themselves in from the app, one after another, like a connection being made. */
-	.link-draw {
-		stroke-dasharray: 1;
-		animation: link-draw 0.7s ease-out calc(var(--i) * 70ms) both;
-	}
-	.link-end {
-		animation: link-fade 0.3s ease-out calc(var(--i) * 70ms + 0.5s) both;
+	/* Lines fade in one after another; a lit line's dashes march from the app to the database. */
+	.link-in {
+		animation: link-fade 0.35s ease-out calc(var(--i) * 60ms) both;
 	}
 	.link-flow {
-		animation: link-flow 0.9s linear infinite;
-	}
-	@keyframes link-draw {
-		from {
-			stroke-dashoffset: 1;
-		}
-		to {
-			stroke-dashoffset: 0;
-		}
+		animation: link-flow 0.6s linear infinite;
 	}
 	@keyframes link-fade {
 		from {
@@ -869,12 +870,11 @@
 	}
 	@keyframes link-flow {
 		to {
-			stroke-dashoffset: -12;
+			stroke-dashoffset: -8;
 		}
 	}
 	@media (prefers-reduced-motion: reduce) {
-		.link-draw,
-		.link-end,
+		.link-in,
 		.link-flow {
 			animation: none;
 		}

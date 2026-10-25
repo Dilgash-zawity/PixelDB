@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Utils
 	import { tick, untrack } from 'svelte';
+	import { provider } from '#lib/logic/online.js';
 	import { TEMPLATES } from '#lib/logic/templates.js';
 	import { databaseNameProblem } from '#lib/logic/values.js';
 	import { workspace } from '#lib/state/workspace.svelte.js';
@@ -12,6 +13,7 @@
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
+	import ProviderIcon from './ProviderIcon.svelte';
 	import StepDrawer from './StepDrawer.svelte';
 
 	// Icons
@@ -49,7 +51,11 @@
 	let nameInput = $state<HTMLInputElement | null>(null);
 
 	const template = $derived(TEMPLATES.find((t) => t.id === start) ?? null);
-	const available = $derived(workspace.databases.filter((d) => d.valid).map((d) => d.name));
+	const available = $derived([
+		...workspace.databases.filter((d) => d.valid).map((d) => d.name),
+		...workspace.online.filter((o) => o.settings).map((o) => o.name)
+	]);
+	const providerOf = (db: string) => workspace.online.find((o) => o.name === db)?.settings?.provider;
 	const steps = $derived([
 		{ label: 'Start', icon: LayoutTemplateIcon },
 		{ label: 'Name', icon: TextCursorInputIcon },
@@ -203,9 +209,12 @@
 							{@const selected = databases.includes(db)}
 							<button type="button" role="checkbox" aria-checked={selected} class={card(selected)} onclick={() => toggle(db)}>
 								<span class={tile(selected)}>
-									{#if selected}<CheckIcon class="size-4" />{:else}<DatabaseIcon class="size-4" />{/if}
+									{#if selected}<CheckIcon class="size-4" />{:else if providerOf(db)}<ProviderIcon provider={providerOf(db)} class="size-4" />{:else}<DatabaseIcon class="size-4" />{/if}
 								</span>
-								<span class="min-w-0 self-center truncate text-sm font-medium">{db}</span>
+								<span class="flex min-w-0 flex-col self-center">
+									<span class="truncate text-sm font-medium">{db}</span>
+									{#if providerOf(db)}<span class="text-xs text-muted-foreground">Online · {provider(providerOf(db) ?? '')?.name ?? 'Server'}</span>{/if}
+								</span>
 							</button>
 						{/each}
 					</div>
