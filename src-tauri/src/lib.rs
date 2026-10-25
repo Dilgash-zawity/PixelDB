@@ -3,6 +3,7 @@ pub mod commands;
 pub mod database;
 pub mod errors;
 pub mod models;
+pub mod online;
 pub mod validation;
 pub mod workspace;
 
@@ -24,6 +25,7 @@ pub fn run() {
       }
       let config_dir = app.path().app_config_dir()?;
       app.manage(WorkspaceStore::load(config_dir.join("settings.json")));
+      app.manage(online::SecretStore::new(config_dir.join("online-secrets.json")));
       if cfg!(debug_assertions) {
         app.handle().plugin(
           tauri_plugin_log::Builder::default()
@@ -42,6 +44,11 @@ pub fn run() {
       commands::workspace::rename_workspace_database,
       commands::workspace::delete_workspace_database,
       commands::workspace::duplicate_workspace_database,
+      commands::online::list_online_databases,
+      commands::online::create_online_database,
+      commands::online::update_online_database,
+      commands::online::delete_online_database,
+      commands::online::test_online_database,
       commands::apps::list_apps,
       commands::apps::create_app,
       commands::apps::load_app,

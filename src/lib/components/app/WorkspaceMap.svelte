@@ -3,7 +3,7 @@
 	import { databaseService } from '#lib/services/database.js';
 
 	// Types
-	import type { AppFile, DatabaseFile } from '#lib/api/types.js';
+	import type { AppFile, DatabaseFile, OnlineDatabase } from '#lib/api/types.js';
 
 	// Utils
 	import { goto } from '$app/navigation';
@@ -11,6 +11,7 @@
 	import { onDestroy, tick, untrack } from 'svelte';
 	import { edgeRoute, type Point } from '#lib/logic/relationships.js';
 	import { appHref, databaseHref } from '#lib/logic/routes.js';
+	import { connectionSummary, provider as providerOf } from '#lib/logic/online.js';
 	import { databaseNameProblem, formatBytes } from '#lib/logic/values.js';
 	import {
 		NODE_HEIGHT,
@@ -28,6 +29,7 @@
 		type WorkspaceLink
 	} from '#lib/logic/workspace-map.js';
 	import { attempt } from '#lib/state/feedback.svelte.js';
+	import { toast } from 'svelte-sonner';
 	import { workspace } from '#lib/state/workspace.svelte.js';
 	import { settings } from '#lib/state/settings.svelte.js';
 	import { cn } from '#lib/utils.js';
@@ -42,10 +44,12 @@
 	import { Kbd } from '#lib/components/ui/kbd/index.js';
 	import FocusModeSwitch from './FocusModeSwitch.svelte';
 	import NameDialog from './NameDialog.svelte';
+	import NewDatabaseDrawer from './NewDatabaseDrawer.svelte';
 	import NewAppDrawer from './NewAppDrawer.svelte';
 
 	// Icons
 	import {
+		Cloud as CloudIcon,
 		Copy as CopyIcon,
 		Database as DatabaseIcon,
 		EllipsisVertical as EllipsisVerticalIcon,
@@ -56,7 +60,9 @@
 		Maximize as MaximizeIcon,
 		Minus as MinusIcon,
 		Pencil as PencilIcon,
+		PlugZap as PlugZapIcon,
 		Plus as PlusIcon,
+		TextCursorInput as TextCursorInputIcon,
 		Trash2 as TrashIcon,
 		TriangleAlert as TriangleAlertIcon,
 		Unlink as UnlinkIcon,
@@ -84,11 +90,15 @@
 
 	const apps = $derived(workspace.apps);
 	const databases = $derived(workspace.databases);
+	const online = $derived(workspace.online);
+	const onlineByName = $derived(new Map(online.map((o) => [o.name, o])));
+	/** Every database card's name, local and online (names are unique across both). */
+	const databaseNames = $derived([...databases.map((d) => d.name), ...online.map((o) => o.name)]);
 	const appByName = $derived(new Map(apps.map((a) => [a.name, a])));
 	const links = $derived(
 		workspaceLinks(
 			apps,
-			databases.filter((d) => d.valid).map((d) => d.name)
+			[...databases.filter((d) => d.valid).map((d) => d.name), ...online.map((o) => o.name)]
 		)
 	);
 	const users = $derived(usersByDatabase(links));
@@ -121,7 +131,7 @@
 	let restoredFor: string | null = null;
 	$effect(() => {
 		const key = storageKey;
-		const [appNames, dbNames, ls] = [apps.map((a) => a.name), databases.map((d) => d.name), links];
+		const [appNames, dbNames, ls] = [apps.map((a) => a.name), databaseNames, links];
 		untrack(() => {
 			if (key !== restoredFor) {
 				restoredFor = key;
@@ -173,7 +183,7 @@
 	function arrange() {
 		layout = autoMapLayout(
 			apps.map((a) => a.name),
-			databases.map((d) => d.name),
+			databaseNames,
 			links
 		);
 		saveLayoutNow();
@@ -360,22 +370,39 @@
 		const at = createAt ?? { x: Math.round(view.x - NODE_WIDTH / 2), y: Math.round(view.y - NODE_HEIGHT / 2) };
 		layout[key] = freeSpot(layout, at, key);
 		// Databases a template created alongside go next to the app.
-		layout = placeMissingNodes(layout, apps.map((a) => a.name), databases.map((d) => d.name), links);
+		layout = placeMissingNodes(layout, apps.map((a) => a.name), databaseNames, links);
 		selection = { kind: 'node', key };
 		saveLayoutNow();
 	}
 
-	async function createDatabase(name: string): Promise<boolean> {
-		if (!(await workspace.create(name))) return false;
+	async function databaseCreated(name: string, kind: 'local' | 'online') {
 		// Creating a database opens it; the home screen keeps nothing open.
-		await attempt(() => databaseService.close());
+		if (kind === 'local') await attempt(() => databaseService.close());
 		await workspace.refresh();
 		placeCreated('db', name);
-		return true;
 	}
 
+	/** The saved online connection being edited. */
+	let editingOnline = $state<OnlineDatabase | null>(null);
+	let editOpen = $state(false);
+	function editOnline(name: string) {
+		const o = onlineByName.get(name);
+		if (!o?.settings) return;
+		editingOnline = o;
+		editOpen = true;
+	}
+
+	async function testOnline(name: string) {
+		const settings = onlineByName.get(name)?.settings;
+		if (!settings) return;
+		const result = await attempt(() => workspace.testOnline(settings, undefined, name));
+		if (result) toast.success(`Connected to “${name}”`, { description: `${result.server} answered in ${result.millis} ms.` });
+	}
+
+	/** Online databases can't be browsed yet; opening one edits its connection. */
 	function open(kind: NodeKind, name: string) {
 		if (kind === 'app') goto(appHref(resolve('/app'), name));
+		else if (onlineByName.has(name)) editOnline(name);
 		else goto(databaseHref(resolve('/db'), name));
 	}
 
@@ -384,11 +411,18 @@
 	}
 
 	function remove(kind: NodeKind, name: string) {
+		if (kind === 'db' && onlineByName.has(name)) return workspace.removeOnline(name);
 		return kind === 'app' ? workspace.removeApp(name) : workspace.remove(name);
 	}
 
 	async function rename(kind: NodeKind, from: string, to: string): Promise<boolean> {
-		const ok = kind === 'app' ? await workspace.renameApp(from, to) : await workspace.rename(from, to);
+		const settings = kind === 'db' ? onlineByName.get(from)?.settings : undefined;
+		const ok =
+			kind === 'app'
+				? await workspace.renameApp(from, to)
+				: settings
+					? await workspace.updateOnline(from, to, settings)
+					: await workspace.rename(from, to);
 		if (ok) moveNode(kind, from, to);
 		return ok;
 	}
@@ -466,9 +500,16 @@
 <svelte:window onkeydown={onKey} />
 
 {#snippet nodeMenu(kind: NodeKind, name: string, Item: typeof DropdownMenu.Item | typeof ContextMenu.Item)}
-	<Item disabled={!canOpen(kind, name)} onclick={() => open(kind, name)}><ExternalLinkIcon /> Open</Item>
-	<Item onclick={() => (renaming = { kind, name })}><PencilIcon /> Rename…</Item>
-	<Item disabled={!canOpen(kind, name)} onclick={() => startDuplicate(kind, name)}><CopyIcon /> Duplicate…</Item>
+	{#if kind === 'db' && onlineByName.has(name)}
+		{@const readable = !!onlineByName.get(name)?.settings}
+		<Item disabled={!readable} onclick={() => editOnline(name)}><PencilIcon /> Edit connection…</Item>
+		<Item disabled={!readable} onclick={() => testOnline(name)}><PlugZapIcon /> Test connection</Item>
+		<Item disabled={!readable} onclick={() => (renaming = { kind, name })}><TextCursorInputIcon /> Rename…</Item>
+	{:else}
+		<Item disabled={!canOpen(kind, name)} onclick={() => open(kind, name)}><ExternalLinkIcon /> Open</Item>
+		<Item onclick={() => (renaming = { kind, name })}><PencilIcon /> Rename…</Item>
+		<Item disabled={!canOpen(kind, name)} onclick={() => startDuplicate(kind, name)}><CopyIcon /> Duplicate…</Item>
+	{/if}
 {/snippet}
 
 {#snippet handles(kind: NodeKind, name: string)}
@@ -488,14 +529,14 @@
 	{/each}
 {/snippet}
 
-{#snippet card(kind: NodeKind, name: string, valid: boolean, body: import('svelte').Snippet, icon: import('svelte').Snippet)}
+{#snippet card(kind: NodeKind, name: string, valid: boolean, body: import('svelte').Snippet, icon: import('svelte').Snippet, connectable = valid)}
 	{@const key = nodeKey(kind, name)}
 	{@const p = layout[key]}
 	{#if p}
 		<div
 			data-node={key}
 			role="group"
-			aria-label={`${kind === 'app' ? 'App' : 'Database'} ${name}`}
+			aria-label={`${kind === 'app' ? 'App' : onlineByName.has(name) ? 'Online database' : 'Database'} ${name}`}
 			class={cn(
 				'group/node absolute flex flex-col rounded-lg border bg-card text-card-foreground shadow-md shadow-black/5 transition-[box-shadow,border-color,opacity,translate] select-none',
 				!valid && 'opacity-60',
@@ -515,7 +556,7 @@
 				class="flex h-11 shrink-0 cursor-grab items-center gap-2 border-b ps-2 pe-1.5 active:cursor-grabbing"
 				role="presentation"
 				onpointerdown={(e) => startNodeDrag(e, key)}
-				ondblclick={() => canOpen(kind, name) && open(kind, name)}
+				ondblclick={() => (canOpen(kind, name) || onlineByName.has(name)) && open(kind, name)}
 			>
 				{@render icon()}
 				<span class="truncate text-sm font-semibold" title={name}>{name}</span>
@@ -532,7 +573,7 @@
 							<DropdownMenu.Separator />
 							<DropdownMenu.Group>
 								<DropdownMenu.Item variant="destructive" onclick={() => remove(kind, name)}>
-									<TrashIcon /> Delete {kind === 'app' ? 'app' : 'database'}
+									<TrashIcon /> {kind === 'app' ? 'Delete app' : onlineByName.has(name) ? 'Remove connection' : 'Delete database'}
 								</DropdownMenu.Item>
 							</DropdownMenu.Group>
 						</DropdownMenu.Content>
@@ -542,7 +583,7 @@
 			<div class="flex min-h-0 flex-1 items-center justify-between gap-2 px-3 text-xs text-muted-foreground">
 				{@render body()}
 			</div>
-			{#if valid}{@render handles(kind, name)}{/if}
+			{#if connectable}{@render handles(kind, name)}{/if}
 		</div>
 	{/if}
 {/snippet}
@@ -588,6 +629,24 @@
 	{@render card('db', db.name, db.valid, body, icon)}
 {/snippet}
 
+{#snippet onlineNode(db: OnlineDatabase)}
+	{#snippet icon()}
+		<span class="flex size-7 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground vivid:bg-tone-blue/15 vivid:text-tone-blue">
+			<CloudIcon class="size-4" />
+		</span>
+	{/snippet}
+	{#snippet body()}
+		{#if !db.settings}
+			<Badge variant="destructive"><TriangleAlertIcon /> Can't be read</Badge>
+		{:else}
+			<span class="truncate" title={connectionSummary(db.settings)}>{connectionSummary(db.settings)}</span>
+			<Badge variant="secondary" class="vivid:bg-tone-blue/12 vivid:text-tone-blue">{providerOf(db.settings.provider)?.name ?? 'Online'}</Badge>
+		{/if}
+	{/snippet}
+	<!-- Apps can't use online databases yet, so the card has no connect handles. -->
+	{@render card('db', db.name, !!db.settings, body, icon, false)}
+{/snippet}
+
 <ContextMenu.Root>
 	<ContextMenu.Trigger oncontextmenu={onContextMenu} onpointerdown={startPan}>
 		{#snippet child({ props })}
@@ -603,7 +662,7 @@
 				style:background-size="{20 * zoom}px {20 * zoom}px"
 				style:background-position="{pan.x}px {pan.y}px"
 			>
-				{#if !apps.length && !databases.length}
+				{#if !apps.length && !databaseNames.length}
 					<Empty.Root class="h-full">
 						<Empty.Header>
 							<Empty.Media variant="icon"><DatabaseIcon /></Empty.Media>
@@ -674,6 +733,7 @@
 						</svg>
 						{#each apps as app (app.name)}{@render appNode(app)}{/each}
 						{#each databases as db (db.file_name)}{@render dbNode(db)}{/each}
+						{#each online as db (db.name)}{@render onlineNode(db)}{/each}
 					</div>
 
 					<div data-toolbar class="absolute top-3 left-3 flex items-center gap-2">
@@ -716,7 +776,7 @@
 		{:else if t.kind === 'link'}
 			<ContextMenu.Group>
 				<ContextMenu.Item onclick={() => open('app', t.app)}><LayoutDashboardIcon /> Open “{t.app}”</ContextMenu.Item>
-				<ContextMenu.Item disabled={t.missing} onclick={() => open('db', t.database)}><DatabaseIcon /> Open “{t.database}”</ContextMenu.Item>
+				<ContextMenu.Item disabled={t.missing || onlineByName.has(t.database)} onclick={() => open('db', t.database)}><DatabaseIcon /> Open “{t.database}”</ContextMenu.Item>
 			</ContextMenu.Group>
 			<ContextMenu.Separator />
 			<ContextMenu.Group>
@@ -748,33 +808,22 @@
 			<ContextMenu.Separator />
 			<ContextMenu.Group>
 				<ContextMenu.Item variant="destructive" onclick={() => remove(t.node, t.name)}>
-					<TrashIcon /> Delete {t.node === 'app' ? 'app' : 'database'}
+					<TrashIcon /> {t.node === 'app' ? 'Delete app' : onlineByName.has(t.name) ? 'Remove connection' : 'Delete database'}
 				</ContextMenu.Item>
 			</ContextMenu.Group>
 		{/if}
 	</ContextMenu.Content>
 </ContextMenu.Root>
 
-<NameDialog
-	bind:open={creatingDatabase}
-	title="New database"
-	description="Give it a name you'll recognise. Double-click it on the map to add tables."
-	initial={(() => {
-		let n = 1;
-		while (workspace.nameTaken(`Database ${n}`)) n++;
-		return n === 1 && !workspace.nameTaken('My database') ? 'My database' : `Database ${n}`;
-	})()}
-	submitLabel="Create database"
-	validate={(v) => dbNameProblem(v)}
-	onSubmit={createDatabase}
-/>
+<NewDatabaseDrawer bind:open={creatingDatabase} onCreated={databaseCreated} />
+<NewDatabaseDrawer bind:open={editOpen} editing={editingOnline} />
 
 <NewAppDrawer bind:open={creatingApp} onCreated={(name) => placeCreated('app', name)} />
 
 <NameDialog
 	bind:open={() => renaming !== null, (o) => !o && (renaming = null)}
 	title={renaming?.kind === 'app' ? 'Rename app' : 'Rename database'}
-	description={renaming?.kind === 'db' ? 'The database file in your folder is renamed too, and apps using it follow.' : undefined}
+	description={renaming?.kind === 'db' ? (onlineByName.has(renaming.name) ? 'Only the name SlateDB shows changes; the database on the server keeps its own.' : 'The database file in your folder is renamed too, and apps using it follow.') : undefined}
 	initial={renaming?.name ?? ''}
 	submitLabel="Rename"
 	validate={(v) => (renaming?.kind === 'app' ? appNameProblem(v, renaming.name) : dbNameProblem(v, renaming?.name))}

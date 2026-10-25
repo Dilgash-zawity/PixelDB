@@ -25,7 +25,7 @@ pub async fn set_workspace(store: State<'_, WorkspaceStore>, path: String) -> Ap
 
 #[tauri::command]
 pub async fn list_databases(store: State<'_, WorkspaceStore>) -> AppResult<Vec<DatabaseFile>> {
-    let dir = store.require()?;
+    let dir = store.databases()?;
     DbManager::run_detached(move || workspace::list_databases(&dir)).await
 }
 
@@ -36,7 +36,7 @@ pub async fn create_workspace_database(
     db: State<'_, DbManager>,
     name: String,
 ) -> AppResult<DatabaseInfo> {
-    let dir = store.require()?;
+    let dir = store.databases()?;
     let mgr = db.inner().clone();
     DbManager::run_detached(move || {
         let path = workspace::new_database_path(&dir, &name)?;
@@ -55,7 +55,7 @@ pub async fn open_workspace_database(
     db: State<'_, DbManager>,
     name: String,
 ) -> AppResult<DatabaseInfo> {
-    let dir = store.require()?;
+    let dir = store.databases()?;
     let mgr = db.inner().clone();
     DbManager::run_detached(move || {
         mgr.open_as_current(&workspace::resolve_database(&dir, &name)?)?;
@@ -76,13 +76,14 @@ pub async fn rename_workspace_database(
     name: String,
     new_name: String,
 ) -> AppResult<()> {
-    let dir = store.require()?;
+    let root = store.require()?;
+    let dir = store.databases()?;
     let mgr = db.inner().clone();
     DbManager::run_detached(move || {
         close_if_open(&mgr, &workspace::resolve_database(&dir, &name)?)?;
         workspace::rename_database(&dir, &name, &new_name)?;
         // Apps address databases by name; keep them pointing at this one.
-        crate::apps::rename_database_in_apps(&dir, &name, &new_name)
+        crate::apps::rename_database_in_apps(&root, &name, &new_name)
     })
     .await
 }
@@ -95,7 +96,7 @@ pub async fn delete_workspace_database(
     name: String,
     confirm: bool,
 ) -> AppResult<()> {
-    let dir = store.require()?;
+    let dir = store.databases()?;
     let mgr = db.inner().clone();
     DbManager::run_detached(move || {
         if confirm {
@@ -112,6 +113,6 @@ pub async fn duplicate_workspace_database(
     name: String,
     new_name: String,
 ) -> AppResult<()> {
-    let dir = store.require()?;
+    let dir = store.databases()?;
     DbManager::run_detached(move || workspace::duplicate_database(&dir, &name, &new_name).map(|_| ())).await
 }

@@ -206,6 +206,7 @@ export type ErrorKind =
 	| 'confirmation_required'
 	| 'sqlite'
 	| 'io'
+	| 'connection'
 	| 'internal';
 
 export interface WorkspaceInfo {
@@ -218,6 +219,34 @@ export interface DatabaseFile {
 	size: number;
 	modified: number | null;
 	valid: boolean;
+}
+
+/** How the app talks to an online database's server. */
+export type Engine = 'postgres' | 'mysql' | 'libsql';
+
+/** Where an online database is; everything but its password or token. */
+export interface ConnectionSettings {
+	provider: string;
+	engine: Engine;
+	host: string;
+	port: number | null;
+	database: string;
+	user: string;
+	ssl: boolean;
+}
+
+export interface OnlineDatabase {
+	name: string;
+	/** Null when the connection file can't be read. */
+	settings: ConnectionSettings | null;
+	/** A password or token is saved for it on this computer. */
+	has_secret: boolean;
+	modified: number | null;
+}
+
+export interface ConnectionTest {
+	server: string;
+	millis: number;
 }
 
 export interface TablePosition {

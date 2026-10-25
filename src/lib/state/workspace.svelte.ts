@@ -1,4 +1,4 @@
-import type { AppFile, DatabaseFile, WorkspaceInfo } from '../api/types';
+import type { AppFile, ConnectionSettings, ConnectionTest, DatabaseFile, OnlineDatabase, WorkspaceInfo } from '../api/types';
 import { addSource, newApp, readApp, removeSource, widgetsUsingSource } from '../logic/app-def';
 import { generatePages } from '../logic/app-generate';
 import type { Template } from '../logic/templates';
@@ -7,6 +7,7 @@ import { databaseService } from '../services/database';
 import { recordService } from '../services/records';
 import { tableService } from '../services/tables';
 import { pickFolder } from '../services/dialogs';
+import { onlineService } from '../services/online';
 import { workspaceService } from '../services/workspace';
 import { attempt, confirm } from './feedback.svelte';
 
@@ -14,6 +15,8 @@ import { attempt, confirm } from './feedback.svelte';
 class WorkspaceState {
 	info = $state<WorkspaceInfo | null>(null);
 	databases = $state<DatabaseFile[]>([]);
+	/** Saved connections to online databases. */
+	online = $state<OnlineDatabase[]>([]);
 	apps = $state<AppFile[]>([]);
 	loaded = $state(false);
 
@@ -21,6 +24,7 @@ class WorkspaceState {
 		await attempt(async () => {
 			this.info = await workspaceService.get();
 			this.databases = this.info ? await workspaceService.listDatabases() : [];
+			this.online = this.info ? await onlineService.list() : [];
 			this.apps = this.info ? await appService.list() : [];
 		});
 		this.loaded = true;
@@ -32,6 +36,7 @@ class WorkspaceState {
 			if (!folder) return;
 			this.info = await workspaceService.set(folder);
 			this.databases = await workspaceService.listDatabases();
+			this.online = await onlineService.list();
 			this.apps = await appService.list();
 		});
 	}
@@ -40,6 +45,7 @@ class WorkspaceState {
 		if (!this.info) return;
 		await attempt(async () => {
 			this.databases = await workspaceService.listDatabases();
+			this.online = await onlineService.list();
 			this.apps = await appService.list();
 		});
 	}
@@ -79,9 +85,42 @@ class WorkspaceState {
 		await this.refresh();
 	}
 
-	/** True when another database already uses `name` (case-insensitively). */
+	/** True when another database, local or online, already uses `name` (case-insensitively). */
 	nameTaken(name: string, except?: string): boolean {
-		return this.databases.some((d) => d.name !== except && d.name.toLowerCase() === name.toLowerCase());
+		return [...this.databases, ...this.online].some((d) => d.name !== except && d.name.toLowerCase() === name.toLowerCase());
+	}
+
+	// ----- Online databases -----
+
+	/** Saves a new connection; returns true on success. */
+	async createOnline(name: string, settings: ConnectionSettings, secret: string): Promise<boolean> {
+		const ok = (await attempt(() => onlineService.create(name, settings, secret || undefined))) !== undefined;
+		await this.refresh();
+		return ok;
+	}
+
+	/** Changes a connection; `secret` undefined keeps the saved one. Returns true on success. */
+	async updateOnline(name: string, newName: string, settings: ConnectionSettings, secret?: string): Promise<boolean> {
+		const ok = (await attempt(() => onlineService.update(name, newName, settings, secret))) !== undefined;
+		await this.refresh();
+		return ok;
+	}
+
+	/** Tries a connection; errors are thrown, not toasted, so the caller can show them in place. */
+	testOnline(settings: ConnectionSettings, secret?: string, name?: string): Promise<ConnectionTest> {
+		return onlineService.test(settings, secret, name);
+	}
+
+	async removeOnline(name: string) {
+		const ok = await confirm({
+			title: `Remove “${name}”?`,
+			description: 'The saved connection and its password are removed from this computer. The online database and its data are not touched.',
+			action: 'Remove connection',
+			destructive: true
+		});
+		if (!ok) return;
+		await attempt(() => onlineService.delete(name, true));
+		await this.refresh();
 	}
 
 	/** First free "<name> copy", "<name> copy 2", … */
