@@ -32,11 +32,7 @@ pub fn run() {
       app.manage(online::SecretStore::new(config_dir.join("online-secrets.json")));
       app.manage(online_data::OnlinePools::default());
       #[cfg(target_os = "linux")]
-      for window in app.webview_windows().values() {
-        if let Err(e) = touchpad::forward_pinches(window) {
-          log::warn!("touchpad pinch zoom unavailable: {e}");
-        }
-      }
+      touchpad::forward_pinches(app.webview_windows().into_values().collect());
       if cfg!(debug_assertions) {
         app.handle().plugin(
           tauri_plugin_log::Builder::default()
