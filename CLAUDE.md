@@ -21,6 +21,10 @@ bunx --bun shadcn-svelte@latest add <component>       # add a UI component
 
 The shadcn-svelte CLI prompts interactively and has no TTY in agent shells; drive it with `expect` (or a small Python `pty` script where `expect` isn't installed), answering `y` to "Ready to install components and dependencies?" (Enter alone cancels it) and Enter on idle for other prompts.
 
+## Build and release
+
+A release is one action, **Build and release**: bump `package.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` (the SlateDB package) and `src-tauri/tauri.conf.json` to the new version, update `docs/community-release-notes.md`, merge to `main`, then run the **Build and release** workflow (`.github/workflows/release.yml`) from `main` with that version. Name commits and PRs "Build and release", not "Release vX.Y.Z". Details and signing setup are in `docs/RELEASING.md`.
+
 ## Architecture
 
 **IPC boundary.** All database work is in Rust. `src-tauri/src/commands/*` are thin `#[tauri::command]` wrappers that run `database::*` functions on a blocking thread via `DbManager::run`. The `database/` functions take a plain `&rusqlite::Connection` and know nothing about Tauri, which is why `src-tauri/tests/phase1.rs` can test them against real temp-file databases. Errors are `errors::AppError`, serialized as `{ kind, message }`; the frontend turns them into `ApiError` (`src/lib/api/client.ts`) and toasts (`state/feedback.svelte.ts`, with `logic/messages.ts` rewriting raw SQLite constraint text into plain language).

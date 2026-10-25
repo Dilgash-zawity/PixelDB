@@ -1,10 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
-  <rect x="100" y="100" width="824" height="824" rx="186" fill="#171717"/>
-  <rect x="104" y="104" width="816" height="816" rx="182" fill="none" stroke="#404040" stroke-width="8"/>
-  <path d="M292 342 V682 C292 734 390 776 512 776 S732 734 732 682 V342 Z" fill="#BDBDBD"/>
-  <g fill="none" stroke="#262626" stroke-width="24" stroke-linecap="round">
-    <path d="M292 454 C292 506 390 548 512 548 S732 506 732 454"/>
-    <path d="M292 568 C292 620 390 662 512 662 S732 620 732 568"/>
-  </g>
-  <ellipse cx="512" cy="342" rx="220" ry="94" fill="#E5E5E5" stroke="#262626" stroke-width="24"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="1024" height="1024" shape-rendering="crispEdges">
+  <rect width="32" height="32" rx="7" fill="#F58B2B" shape-rendering="geometricPrecision"/>
+  <!-- A stepped cylinder on a single pixel grid, centered with generous margins. -->
+  <path fill="#D96C20" d="M11 9h12v2h2v16h-2v2H11v-2H9V11h2Z"/>
+  <path fill="#2C1B12" d="M11 6h10v1h3v2h2v14h-2v2h-3v1H11v-1H8v-2H6V9h2V7h3Z"/>
+  <!-- The broad top and stepped rims make the three database tiers readable at 32px. -->
+  <path fill="#FFC16A" d="M11 8h10v1h3v2h-3v1H11v-1H8V9h3Z"/>
+  <path fill="#FFE0A0" d="M11 8h10v1H11ZM8 9h3v1H8Z"/>
+  <path fill="#ED9A43" d="M8 13h3v1h10v-1h3v3h-3v1H11v-1H8Zm0 6h3v1h10v-1h3v3h-3v1H11v-1H8Z"/>
+  <path fill="#FFBF66" d="M8 13h2v3H8Zm3 1h2v3h-2ZM8 19h2v3H8Zm3 1h2v3h-2Z"/>
+  <path fill="#C76B29" d="M22 13h2v3h-2Zm-3 1h2v3h-2Zm3 5h2v3h-2Zm-3 1h2v3h-2Z"/>
 </svg>
