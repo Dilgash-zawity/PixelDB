@@ -141,7 +141,7 @@
 			{#if editing}
 				<!-- Column guides while editing. -->
 				<div class="pointer-events-none absolute inset-0 grid" style="grid-template-columns: repeat(12, minmax(0, 1fr)); gap: {GAP}px;" aria-hidden="true">
-					{#each Array(12) as _, i (i)}<div class="bg-muted/30"></div>{/each}
+					{#each Array(12) as _, i (i)}<div class="rounded-md bg-muted/30 vivid:border vivid:border-dashed vivid:border-(--map-frame)/50 vivid:bg-transparent"></div>{/each}
 				</div>
 			{/if}
 			{#each page.widgets as w (w.id)}

@@ -273,7 +273,7 @@ pub fn delete(dir: &Path, secrets: &SecretStore, name: &str, confirm: bool) -> A
 
 // ── Testing a connection ──
 
-fn connection_error(e: impl std::fmt::Display) -> AppError {
+pub(crate) fn connection_error(e: impl std::fmt::Display) -> AppError {
     let text = e.to_string();
     AppError::Connection(text.strip_prefix("error returned from database: ").unwrap_or(&text).to_string())
 }
@@ -298,10 +298,13 @@ async fn server_version(s: &ConnectionSettings, secret: Option<&str>) -> AppResu
                 .host(&s.host)
                 .port(s.port.unwrap_or(5432))
                 .username(&s.user)
-                .password(secret)
                 .ssl_mode(if s.ssl { PgSslMode::Require } else { PgSslMode::Prefer });
             if !s.database.is_empty() {
                 opts = opts.database(&s.database);
+            }
+            // An empty secret means no password; sending one fails where none is set.
+            if !secret.is_empty() {
+                opts = opts.password(secret);
             }
             let mut conn = PgConnection::connect_with(&opts).await.map_err(connection_error)?;
             let (v,): (String,) = sqlx::query_as("SELECT version()").fetch_one(&mut conn).await.map_err(connection_error)?;
@@ -315,10 +318,13 @@ async fn server_version(s: &ConnectionSettings, secret: Option<&str>) -> AppResu
                 .host(&s.host)
                 .port(s.port.unwrap_or(3306))
                 .username(&s.user)
-                .password(secret)
                 .ssl_mode(if s.ssl { MySqlSslMode::Required } else { MySqlSslMode::Preferred });
             if !s.database.is_empty() {
                 opts = opts.database(&s.database);
+            }
+            // An empty secret means no password; sending one fails where none is set.
+            if !secret.is_empty() {
+                opts = opts.password(secret);
             }
             let mut conn = MySqlConnection::connect_with(&opts).await.map_err(connection_error)?;
             let (v,): (String,) = sqlx::query_as("SELECT VERSION()").fetch_one(&mut conn).await.map_err(connection_error)?;

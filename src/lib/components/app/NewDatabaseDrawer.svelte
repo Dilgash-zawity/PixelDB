@@ -27,6 +27,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
+	import ProviderIcon from './ProviderIcon.svelte';
 	import StepDrawer from './StepDrawer.svelte';
 
 	// Icons
@@ -291,7 +292,7 @@
 							{@const selected = settings.provider === p.id}
 							<button type="button" role="radio" aria-checked={selected} class={card(selected)} onclick={() => chooseProvider(p.id)} ondblclick={() => chooseProvider(p.id, true)}>
 								<span class={tile(selected)}>
-									{#if p.group === 'service'}<CloudIcon class="size-4" />{:else}<DatabaseIcon class="size-4" />{/if}
+									<ProviderIcon provider={p.id} class="size-4" />
 								</span>
 								<span class="flex min-w-0 flex-col gap-1">
 									<span class="text-sm font-medium">{p.name}</span>
@@ -306,7 +307,12 @@
 		</div>
 	{:else if current === 'connection'}
 		<div class="flex flex-col gap-6">
-			<p class="text-sm text-muted-foreground">{chosen.hint}</p>
+			<div class="flex items-center gap-3">
+				<span class="flex size-8 shrink-0 items-center justify-center rounded-md bg-muted text-muted-foreground vivid:bg-tone-blue/15 vivid:text-tone-blue">
+					<ProviderIcon provider={chosen.id} class="size-4" />
+				</span>
+				<p class="text-sm text-muted-foreground">{chosen.hint}</p>
+			</div>
 			<Field.Field>
 				<Field.Label for="nd-url">Connection string</Field.Label>
 				<div class="flex gap-2">

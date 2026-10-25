@@ -535,10 +535,9 @@
 			{@attach wheel}
 			role="application"
 			aria-label="Relationships diagram"
-			class="relative min-h-0 flex-1 overflow-hidden bg-muted/40 select-none"
+			class="paper-grid relative min-h-0 flex-1 overflow-hidden select-none"
 			class:cursor-crosshair={!!connecting}
-			style:background-image="radial-gradient(var(--border) 1px, transparent 1px)"
-			style:background-size="{20 * zoom}px {20 * zoom}px"
+			style:--grid="{40 * zoom}px"
 			style:background-position="{pan.x}px {pan.y}px"
 		>
 			{#if loading}
@@ -560,8 +559,16 @@
 				<div class="absolute top-0 left-0 origin-top-left" style:transform="translate({pan.x}px, {pan.y}px) scale({zoom})">
 					<svg class="pointer-events-none absolute top-0 left-0 overflow-visible" width="1" height="1" aria-hidden="true">
 						{#each edges as { rel, route, active } (rel.id)}
-							<g data-edge class="text-muted-foreground" class:text-primary={active}>
-								<path d={route.path} fill="none" stroke="currentColor" stroke-width={active ? 2.25 : 1.5} stroke-opacity={active ? 1 : 0.7} />
+							<g data-edge style:color={active ? 'var(--map-accent)' : 'var(--map-line)'}>
+								<path
+									d={route.path}
+									fill="none"
+									stroke="currentColor"
+									stroke-width={active ? 2 : 1.5}
+									stroke-dasharray="4 4"
+									stroke-opacity={active ? 1 : 0.75}
+									class={active ? 'rel-flow' : ''}
+								/>
 								<!-- Wide invisible stroke so the line is easy to click. -->
 								<path
 									role="presentation"
@@ -576,8 +583,15 @@
 									onpointerenter={() => (hoveredEdge = rel.id)}
 									onpointerleave={() => hoveredEdge === rel.id && (hoveredEdge = null)}
 								/>
-								<circle cx={route.start.x} cy={route.start.y} r="3.5" fill="currentColor" />
-								<circle cx={route.end.x} cy={route.end.y} r="3.5" fill="currentColor" />
+								<!-- A square where the line leaves the key, an arrowhead into the linking field. -->
+								<rect x={route.start.x - 3} y={route.start.y - 3} width="6" height="6" fill="currentColor" />
+								<path
+									d="M {route.end.x + route.endDir * 7} {route.end.y - 4.5} L {route.end.x} {route.end.y} L {route.end.x + route.endDir * 7} {route.end.y + 4.5}"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="1.5"
+									stroke-linecap="square"
+								/>
 								<text x={route.start.x + route.startDir * 12} y={route.start.y - 7} text-anchor="middle" class="fill-foreground text-[13px] font-medium">1</text>
 								<text x={route.end.x + route.endDir * 14} y={route.end.y - 6} text-anchor="middle" class="fill-foreground font-medium {rel.cardinality === 'one_to_one' ? 'text-[13px]' : 'text-[17px]'}">
 									{rel.cardinality === 'one_to_one' ? '1' : '∞'}
@@ -585,8 +599,8 @@
 							</g>
 						{/each}
 						{#if connecting}
-							<path d={connectorPreview} fill="none" class="stroke-primary" stroke-width="2" stroke-dasharray="6 5" />
-							<circle cx={connecting.pointer.x} cy={connecting.pointer.y} r="4" class="fill-primary" />
+							<path d={connectorPreview} fill="none" stroke="var(--map-accent)" stroke-width="2" stroke-dasharray="4 4" />
+							<rect x={connecting.pointer.x - 4} y={connecting.pointer.y - 4} width="8" height="8" rx="1" fill="var(--map-accent)" />
 						{/if}
 					</svg>
 					{#each defs as def (def.name)}
@@ -624,7 +638,7 @@
 				</div>
 				{#if settings.current.canvasHints}
 					<p class="pointer-events-none absolute bottom-3 left-4 flex items-center gap-1.5 text-xs text-muted-foreground">
-						Drag a field's <span class="inline-block size-2.5 rounded-full border-2 border-primary"></span> onto another table to link ·
+						Drag a field's <span class="inline-block size-2.5 rounded-[2px] border-2 border-(--map-line)"></span> onto another table to link ·
 						<Kbd>⌘</Kbd> + scroll to zoom · Right-click to add tables and more
 					</p>
 				{/if}
@@ -714,3 +728,20 @@
 <NewLinkDrawer bind:open={linking} bind:draft {defs} {infos} {rels} {busy} onCreate={create} />
 
 <NewTableDrawer bind:open={addingTable} initial={suggestedTableName()} onCreate={addTable} />
+
+<style>
+	/* A lit relationship's dashes march from the key to the linking field. */
+	.rel-flow {
+		animation: rel-flow 0.6s linear infinite;
+	}
+	@keyframes rel-flow {
+		to {
+			stroke-dashoffset: -8;
+		}
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.rel-flow {
+			animation: none;
+		}
+	}
+</style>

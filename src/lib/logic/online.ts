@@ -267,3 +267,64 @@ export function suggestedName(s: ConnectionSettings): string {
 	const first = s.host.split('.')[0] ?? '';
 	return s.provider === 'turso' ? first.split('-')[0] || first : first;
 }
+
+/** Something a kind of online database does differently from a local one. */
+export interface EngineFeature {
+	id: 'shared' | 'edit' | 'schemas' | 'server-types' | 'plans' | 'timed-plans' | 'edge';
+	label: string;
+	description: string;
+}
+
+/** What a database on `engine` offers that a local one doesn't. */
+export function engineFeatures(engine: Engine): EngineFeature[] {
+	const out: EngineFeature[] = [
+		{ id: 'shared', label: 'Shared', description: 'Everyone and every app connected to the server sees the same data, straight away.' },
+		{ id: 'edit', label: 'Edit rows', description: 'Rows of tables with a primary key can be added, changed and deleted here and from apps.' }
+	];
+	if (engine === 'postgres')
+		out.push({ id: 'schemas', label: 'Schemas', description: 'Tables are grouped by schema; tables outside public are named schema.table.' });
+	if (engine !== 'libsql')
+		out.push({ id: 'server-types', label: 'Server types', description: engine === 'postgres' ? 'JSON, UUIDs, arrays, enums and exact decimals are kept as the server stores them.' : 'Exact decimals, enums, sets and JSON are kept as the server stores them.' });
+	out.push({ id: 'plans', label: 'Query plans', description: 'See how the server would run a query before you rely on it.' });
+	if (engine === 'postgres')
+		out.push({ id: 'timed-plans', label: 'Timed plans', description: 'Run a query read-only and see where the time goes (EXPLAIN ANALYZE).' });
+	if (engine === 'libsql')
+		out.push({ id: 'edge', label: 'SQLite over HTTPS', description: 'The same SQLite as a local database, served from the edge.' });
+	return out;
+}
+
+/** What only local databases have; online structure is changed with the server's own tools. */
+export const LOCAL_ONLY = ['Designing tables and fields', 'The relationship diagram', 'Saving queries', 'Files in fields'];
+
+/** Whether the server can time a query plan by running it. */
+export const canTimePlans = (engine: Engine): boolean => engine === 'postgres';
+
+export interface SchemaGroup<T> {
+	/** Empty for the default schema. */
+	schema: string;
+	items: { label: string; item: T }[];
+}
+
+/**
+ * Groups listed objects by schema: `sales.orders` is "orders" under "sales"
+ * when `sales` is one of `schemas`; anything else is in the default group,
+ * which comes first.
+ */
+export function groupBySchema<T extends { name: string }>(objects: T[], schemas: string[]): SchemaGroup<T>[] {
+	const groups = new Map<string, SchemaGroup<T>>([['', { schema: '', items: [] }]]);
+	for (const o of objects) {
+		const dot = o.name.indexOf('.');
+		const schema = dot > 0 && schemas.includes(o.name.slice(0, dot)) ? o.name.slice(0, dot) : '';
+		if (!groups.has(schema)) groups.set(schema, { schema, items: [] });
+		groups.get(schema)!.items.push({ label: schema ? o.name.slice(dot + 1) : o.name, item: o });
+	}
+	return [...groups.values()].filter((g) => g.items.length);
+}
+
+/** A listed name written for SQL on `engine`: `sales.orders` becomes `"sales"."orders"` when `sales` is a schema. */
+export function sqlName(engine: Engine, name: string, schemas: string[]): string {
+	const q = (s: string) => (engine === 'mysql' ? `\`${s.replaceAll('`', '``')}\`` : `"${s.replaceAll('"', '""')}"`);
+	const dot = name.indexOf('.');
+	if (dot > 0 && schemas.includes(name.slice(0, dot))) return `${q(name.slice(0, dot))}.${q(name.slice(dot + 1))}`;
+	return q(name);
+}

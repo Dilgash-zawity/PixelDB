@@ -1,4 +1,4 @@
-import { CARD_WIDTH, roundedPath, type Point } from './relationships';
+import { roundedPath, type Point } from './relationships';
 
 /** One line on the home screen's map: an app using a database. */
 export interface WorkspaceLink {
@@ -13,9 +13,9 @@ export type NodeKind = 'app' | 'db';
 /** Card positions on the home canvas, keyed by `nodeKey`. */
 export type MapLayout = Record<string, Point>;
 
-/** Cards are as wide as diagram tables so lines route the same way. */
-export const NODE_WIDTH = CARD_WIDTH;
-export const NODE_HEIGHT = 92;
+/** Cards are square-ish tiles; lines route with `edgeRoute(…, NODE_WIDTH)`. */
+export const NODE_WIDTH = 136;
+export const NODE_HEIGHT = 120;
 const COLUMN_GAP = 200;
 const ROW_GAP = 28;
 

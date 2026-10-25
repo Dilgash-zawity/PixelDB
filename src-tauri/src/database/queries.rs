@@ -38,7 +38,7 @@ fn skip_trivia(mut s: &str) -> &str {
 }
 
 /// The query text without leading trivia or trailing semicolons and whitespace.
-fn normalize(sql: &str) -> AppResult<&str> {
+pub(crate) fn normalize(sql: &str) -> AppResult<&str> {
     let body = skip_trivia(sql).trim_end().trim_end_matches(';').trim_end();
     if body.is_empty() {
         return Err(AppError::Validation("the query is empty".into()));

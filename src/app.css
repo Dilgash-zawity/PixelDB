@@ -93,86 +93,165 @@
  * .dark, so the accent and corner settings below still win.
  */
 :root:where(:not([data-focus])) {
-	--background: oklch(0.992 0.002 260);
-	--foreground: oklch(0.2 0.015 260);
-	--card: oklch(1 0 0);
-	--card-foreground: oklch(0.2 0.015 260);
-	--popover: oklch(1 0 0);
-	--popover-foreground: oklch(0.2 0.015 260);
-	--primary: oklch(0.53 0.17 260);
-	--primary-foreground: oklch(0.99 0 0);
-	--secondary: oklch(0.965 0.006 260);
-	--secondary-foreground: oklch(0.27 0.03 260);
-	--muted: oklch(0.968 0.004 260);
-	--muted-foreground: oklch(0.52 0.02 260);
-	--accent: oklch(0.955 0.014 260);
-	--accent-foreground: oklch(0.3 0.08 260);
-	--border: oklch(0.91 0.008 260);
-	--input: oklch(0.89 0.01 260);
-	--ring: oklch(0.6 0.15 260);
-	--chart-1: oklch(0.56 0.16 260);
-	--chart-2: oklch(0.66 0.11 195);
-	--chart-3: oklch(0.74 0.13 75);
-	--chart-4: oklch(0.62 0.13 155);
-	--chart-5: oklch(0.6 0.17 25);
+	/* Paper: the cream of the home map, black ink, orange highlights. */
+	--background: oklch(0.985 0.022 95);
+	--foreground: oklch(0.18 0.01 80);
+	--card: oklch(0.995 0.01 95);
+	--card-foreground: oklch(0.18 0.01 80);
+	--popover: oklch(0.995 0.01 95);
+	--popover-foreground: oklch(0.18 0.01 80);
+	--primary: oklch(0.16 0 0);
+	--primary-foreground: oklch(0.99 0.005 95);
+	--secondary: oklch(0.955 0.03 95);
+	--secondary-foreground: oklch(0.22 0.01 80);
+	--muted: oklch(0.958 0.03 95);
+	--muted-foreground: oklch(0.47 0.02 80);
+	--accent: oklch(0.94 0.045 95);
+	--accent-foreground: oklch(0.18 0.01 80);
+	--border: oklch(0.86 0.04 92);
+	--input: oklch(0.82 0.035 90);
+	--ring: oklch(0.73 0.17 55);
+	--chart-1: oklch(0.7 0.17 55);
+	--chart-2: oklch(0.36 0 0);
+	--chart-3: oklch(0.62 0.12 155);
+	--chart-4: oklch(0.55 0.14 255);
+	--chart-5: oklch(0.6 0.19 25);
 	--radius: 0.5rem;
-	--sidebar: oklch(0.98 0.003 260);
-	--sidebar-foreground: oklch(0.2 0.015 260);
-	--sidebar-primary: oklch(0.53 0.17 260);
-	--sidebar-primary-foreground: oklch(0.99 0 0);
-	--sidebar-accent: oklch(0.95 0.012 260);
-	--sidebar-accent-foreground: oklch(0.25 0.05 260);
-	--sidebar-border: oklch(0.91 0.008 260);
-	--sidebar-ring: oklch(0.6 0.15 260);
-	--tone-violet: oklch(0.54 0.16 295);
-	--tone-blue: oklch(0.53 0.15 258);
-	--tone-cyan: oklch(0.55 0.09 220);
-	--tone-green: oklch(0.55 0.12 155);
-	--tone-amber: oklch(0.62 0.13 65);
-	--tone-pink: oklch(0.56 0.16 355);
+	--sidebar: oklch(0.972 0.03 95);
+	--sidebar-foreground: oklch(0.18 0.01 80);
+	--sidebar-primary: oklch(0.16 0 0);
+	--sidebar-primary-foreground: oklch(0.99 0.005 95);
+	--sidebar-accent: oklch(0.93 0.05 95);
+	--sidebar-accent-foreground: oklch(0.18 0.01 80);
+	--sidebar-border: oklch(0.86 0.04 92);
+	--sidebar-ring: oklch(0.73 0.17 55);
+	--tone-violet: oklch(0.52 0.15 295);
+	--tone-blue: oklch(0.5 0.14 258);
+	--tone-cyan: oklch(0.52 0.09 220);
+	--tone-green: oklch(0.52 0.12 155);
+	--tone-amber: oklch(0.6 0.15 55);
+	--tone-pink: oklch(0.54 0.16 355);
 }
 .dark:where(:not([data-focus])) {
-	--background: oklch(0.17 0.008 260);
-	--foreground: oklch(0.96 0.004 260);
-	--card: oklch(0.205 0.01 260);
-	--card-foreground: oklch(0.96 0.004 260);
-	--popover: oklch(0.215 0.01 260);
-	--popover-foreground: oklch(0.96 0.004 260);
-	--primary: oklch(0.66 0.15 260);
-	--primary-foreground: oklch(0.99 0 0);
-	--secondary: oklch(0.26 0.012 260);
-	--secondary-foreground: oklch(0.94 0.006 260);
-	--muted: oklch(0.24 0.01 260);
-	--muted-foreground: oklch(0.7 0.015 260);
-	--accent: oklch(0.27 0.02 260);
-	--accent-foreground: oklch(0.95 0.01 260);
-	--border: oklch(1 0 0 / 9%);
-	--input: oklch(1 0 0 / 13%);
-	--ring: oklch(0.66 0.14 260);
-	--chart-1: oklch(0.68 0.14 260);
-	--chart-2: oklch(0.74 0.1 195);
-	--chart-3: oklch(0.8 0.12 75);
-	--chart-4: oklch(0.72 0.12 155);
-	--chart-5: oklch(0.7 0.15 25);
-	--sidebar: oklch(0.19 0.009 260);
-	--sidebar-foreground: oklch(0.96 0.004 260);
-	--sidebar-primary: oklch(0.66 0.15 260);
-	--sidebar-primary-foreground: oklch(0.99 0 0);
-	--sidebar-accent: oklch(0.26 0.016 260);
-	--sidebar-accent-foreground: oklch(0.95 0.01 260);
-	--sidebar-border: oklch(1 0 0 / 9%);
-	--sidebar-ring: oklch(0.66 0.14 260);
+	--background: oklch(0.17 0.01 90);
+	--foreground: oklch(0.95 0.015 95);
+	--card: oklch(0.2 0.01 90);
+	--card-foreground: oklch(0.95 0.015 95);
+	--popover: oklch(0.21 0.01 90);
+	--popover-foreground: oklch(0.95 0.015 95);
+	--primary: oklch(0.95 0.02 95);
+	--primary-foreground: oklch(0.16 0 0);
+	--secondary: oklch(0.25 0.012 90);
+	--secondary-foreground: oklch(0.94 0.015 95);
+	--muted: oklch(0.23 0.012 90);
+	--muted-foreground: oklch(0.7 0.02 90);
+	--accent: oklch(0.27 0.02 90);
+	--accent-foreground: oklch(0.95 0.015 95);
+	--border: oklch(1 0 0 / 11%);
+	--input: oklch(1 0 0 / 15%);
+	--ring: oklch(0.74 0.16 55);
+	--chart-1: oklch(0.74 0.16 55);
+	--chart-2: oklch(0.8 0.01 90);
+	--chart-3: oklch(0.72 0.12 155);
+	--chart-4: oklch(0.7 0.13 255);
+	--chart-5: oklch(0.7 0.16 25);
+	--sidebar: oklch(0.15 0.01 90);
+	--sidebar-foreground: oklch(0.95 0.015 95);
+	--sidebar-primary: oklch(0.95 0.02 95);
+	--sidebar-primary-foreground: oklch(0.16 0 0);
+	--sidebar-accent: oklch(0.25 0.018 90);
+	--sidebar-accent-foreground: oklch(0.95 0.015 95);
+	--sidebar-border: oklch(1 0 0 / 10%);
+	--sidebar-ring: oklch(0.74 0.16 55);
 	--tone-violet: oklch(0.72 0.13 295);
 	--tone-blue: oklch(0.7 0.13 258);
 	--tone-cyan: oklch(0.75 0.09 215);
 	--tone-green: oklch(0.74 0.12 155);
-	--tone-amber: oklch(0.8 0.12 75);
+	--tone-amber: oklch(0.78 0.14 60);
 	--tone-pink: oklch(0.73 0.14 355);
+}
+
+/*
+ * The home map: graph paper with black (apps) and graphite (databases) tiles,
+ * dashed connectors and an orange highlight. Focus mode keeps the layout in greys.
+ */
+:root {
+	--map-paper: oklch(0.975 0 0);
+	--map-grid: oklch(0.915 0 0);
+	--map-app: oklch(0.13 0 0);
+	--map-db: oklch(0.36 0 0);
+	--map-tile-fg: oklch(0.99 0 0);
+	--map-tile-border: transparent;
+	--map-line: oklch(0.25 0 0);
+	--map-frame: oklch(0.65 0 0);
+	--map-chip: oklch(1 0 0);
+	--map-accent: oklch(0.5 0 0);
+	--map-accent-fg: oklch(0.99 0 0);
+}
+.dark {
+	--map-paper: oklch(0.16 0 0);
+	--map-grid: oklch(0.22 0 0);
+	--map-app: oklch(0.07 0 0);
+	--map-db: oklch(0.3 0 0);
+	--map-tile-border: oklch(1 0 0 / 12%);
+	--map-line: oklch(0.78 0 0);
+	--map-frame: oklch(0.5 0 0);
+	--map-chip: oklch(0.2 0 0);
+	--map-accent: oklch(0.62 0 0);
+}
+:root:where(:not([data-focus])) {
+	--map-paper: var(--background);
+	--map-grid: oklch(0.935 0.035 95);
+	--map-accent: oklch(0.73 0.17 55);
+	--map-accent-fg: oklch(0.16 0.03 55);
+}
+.dark:where(:not([data-focus])) {
+	--map-paper: var(--background);
+	--map-grid: oklch(0.24 0.02 90);
+	--map-accent: oklch(0.74 0.16 55);
+}
+
+/* Graph paper behind canvases and pages; set --grid (cell size) and background-position to pan/zoom it. */
+.paper-grid {
+	background-color: var(--map-paper);
+	background-image:
+		linear-gradient(var(--map-grid) 1px, transparent 1px),
+		linear-gradient(90deg, var(--map-grid) 1px, transparent 1px);
+	background-size: var(--grid, 40px) var(--grid, 40px);
+}
+
+/*
+ * Top bars (data-bar) are black like the map's app tiles in the colorful look; their
+ * controls get the dark tokens. Focus mode keeps the plain bar.
+ */
+:root:not([data-focus]) [data-bar] {
+	--background: oklch(0.13 0 0);
+	--foreground: oklch(0.97 0.01 95);
+	--card: oklch(0.17 0 0);
+	--card-foreground: oklch(0.97 0.01 95);
+	--primary: oklch(0.73 0.17 55);
+	--primary-foreground: oklch(0.16 0.03 55);
+	--secondary: oklch(0.22 0 0);
+	--secondary-foreground: oklch(0.97 0.01 95);
+	--muted: oklch(0.2 0 0);
+	--muted-foreground: oklch(0.72 0.01 90);
+	--accent: oklch(0.25 0 0);
+	--accent-foreground: oklch(0.97 0.01 95);
+	--border: oklch(1 0 0 / 14%);
+	--input: oklch(1 0 0 / 18%);
+	--sidebar: oklch(0.13 0 0);
+	background-color: var(--background);
+	color: var(--foreground);
+	border-color: var(--map-tile-border);
 }
 
 /* App accent colors: the first chart series and highlights inside an app. */
 :root {
 	--app-accent: var(--primary);
+}
+/* An app without its own accent uses the map's orange (black-on-black otherwise in the top bar). */
+:root:not([data-focus]) [data-accent='neutral'] {
+	--app-accent: var(--map-accent);
 }
 [data-accent='blue'] {
 	--app-accent: oklch(0.55 0.2 255);
@@ -242,7 +321,7 @@ html[data-text='large'] {
 }
 /* Colorful extras; each is a no-op in Focus mode. */
 :root:not([data-focus]) ::selection {
-	background: color-mix(in oklch, var(--primary) 22%, transparent);
+	background: color-mix(in oklch, var(--map-accent) 35%, transparent);
 }
 /* Main buttons: a solid fill with a thin top highlight, like a pressed key. */
 :root:not([data-focus]) [data-slot='button'].bg-primary {
@@ -250,12 +329,16 @@ html[data-text='large'] {
 		inset 0 1px 0 oklch(1 0 0 / 14%),
 		0 1px 2px oklch(0 0 0 / 12%);
 }
-:root:not([data-focus]) [data-slot='tabs-trigger'][data-state='active'] {
-	color: var(--primary);
+/* Active tabs: an orange underline (the line variant draws one; the pill variant gets one). */
+:root:not([data-focus]) [data-variant='default'] > [data-slot='tabs-trigger'][data-state='active'] {
+	box-shadow: inset 0 -2px 0 var(--map-accent);
+}
+:root:not([data-focus]) [data-variant='line'] > [data-slot='tabs-trigger']::after {
+	background-color: var(--map-accent);
 }
 :root:not([data-focus]) [data-slot='empty-icon'][data-variant='icon'] {
-	background-color: color-mix(in oklch, var(--primary) 10%, transparent);
-	color: var(--primary);
+	background-color: var(--map-app);
+	color: var(--map-tile-fg);
 }
 html[data-reduce-motion] *,
 html[data-reduce-motion] ::before,

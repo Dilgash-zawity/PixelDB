@@ -249,6 +249,61 @@ export interface ConnectionTest {
 	millis: number;
 }
 
+export type OnlineObjectKind = 'table' | 'view';
+
+/** A column of an online table, as the server describes it. */
+export interface OnlineColumn {
+	name: string;
+	/** The server's own type, e.g. `character varying(80)`. */
+	server_type: string;
+	/** The closest SlateDB type, used by forms and formatting. */
+	field_type: FieldType;
+	nullable: boolean;
+	default: string | null;
+	primary_key: boolean;
+	unique: boolean;
+	/** Filled in by the server (identity, serial, auto_increment). */
+	auto: boolean;
+	/** Computed by the server; can't be written. */
+	generated: boolean;
+	description: string | null;
+}
+
+/** A table or view of an online database. Mirrors `online_records::OnlineTable`. */
+export interface OnlineTable {
+	/** The name it is listed and addressed by (`orders`, or `sales.orders` outside the default schema). */
+	name: string;
+	schema: string;
+	kind: OnlineObjectKind;
+	columns: OnlineColumn[];
+	primary_key: string[];
+	foreign_keys: ForeignKeyDef[];
+	unique_constraints: string[][];
+	/** Rows can be added, changed and deleted (tables with a primary key). */
+	editable: boolean;
+	row_estimate: number | null;
+}
+
+export interface OnlineInfo {
+	engine: Engine;
+	version: string;
+	/** Bytes on disk, when the server tells. */
+	size: number | null;
+	schemas: string[];
+	tables: number;
+	views: number;
+}
+
+/** Rows read from an online database (query plans). */
+export interface OnlineRows {
+	columns: string[];
+	types: string[];
+	rows: JsonValue[][];
+	truncated: boolean;
+	total: number | null;
+	elapsed_ms: number;
+}
+
 export interface TablePosition {
 	x: number;
 	y: number;

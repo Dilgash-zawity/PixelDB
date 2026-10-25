@@ -34,7 +34,7 @@
 <svelte:window onfocus={refreshOnFocus} />
 
 <div class="flex h-svh flex-col">
-	<header class="app-header flex h-12 shrink-0 items-center gap-2 border-b bg-sidebar px-3">
+	<header data-bar class="app-header flex h-12 shrink-0 items-center gap-2 border-b bg-sidebar px-3">
 		<Logo class="size-6" />
 		<span class="font-semibold">SlateDB</span>
 		<span class="flex-1"></span>

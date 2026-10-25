@@ -33,6 +33,7 @@ import { appService } from '../services/apps';
 import { databaseService } from '../services/database';
 import { recordService } from '../services/records';
 import { tableService } from '../services/tables';
+import { onlineService } from '../services/online';
 import { workspaceService } from '../services/workspace';
 import { attempt, reportError } from './feedback.svelte';
 
@@ -84,8 +85,10 @@ class AppSession {
 	saveState = $state<'saved' | 'saving' | 'unsaved' | 'error'>('saved');
 	canUndo = $state(false);
 	canRedo = $state(false);
-	/** Names of the databases in the workspace folder. */
+	/** Names of the databases apps can use: local ones in the workspace folder and saved online connections. */
 	databases = $state<string[]>([]);
+	/** The names in `databases` that are online connections. */
+	online = $state<string[]>([]);
 	objects = $state<Record<string, ObjectSummary[]>>({});
 	schemas = $state<Record<string, ObjectSchema>>({});
 	/** Widget copied with ⌘C, pasted with ⌘V on any page (of any app). */
@@ -136,6 +139,8 @@ class AppSession {
 		this.syncHistory();
 		try {
 			const def = readApp(await appService.load(name));
+			// Another app was opened while this one loaded.
+			if (this.name !== name) return;
 			this.def = def;
 			this.pageId = def.startPage;
 			this.vars = initialVariables(def);
@@ -144,7 +149,7 @@ class AppSession {
 			await this.syncAuto();
 			await this.loadSchema();
 		} catch (e) {
-			this.loadError = e instanceof Error ? e.message : String(e);
+			if (this.name === name) this.loadError = e instanceof Error ? e.message : String(e);
 		}
 	}
 
@@ -208,7 +213,9 @@ class AppSession {
 		const def = this.def;
 		if (!def) return;
 		await attempt(async () => {
-			this.databases = (await workspaceService.listDatabases()).filter((d) => d.valid).map((d) => d.name);
+			const [local, online] = await Promise.all([workspaceService.listDatabases(), onlineService.list()]);
+			this.online = online.filter((o) => o.settings).map((o) => o.name);
+			this.databases = [...local.filter((d) => d.valid).map((d) => d.name), ...this.online];
 		});
 		const objects: Record<string, ObjectSummary[]> = {};
 		await Promise.all(
@@ -465,7 +472,7 @@ class AppSession {
 		this.def = def;
 		if (!findPage(def, this.pageId)) this.pageId = def.pages[0].id;
 		if (this.selected && !findWidget(def, this.selected) && !findCommand(def, this.selected)) this.selected = null;
-		for (const v of def.variables) if (!(v.name in this.vars)) this.vars[v.name] = v.default;
+		for (const v of def.variables) if (!(v.name in this.vars)) this.vars[v.name] = jsonClone(v.default);
 		this.syncHistory();
 		this.scheduleSave();
 	}

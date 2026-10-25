@@ -1,6 +1,16 @@
 /// <reference types="bun" />
 import { describe, expect, test } from 'bun:test';
-import { connectionProblems, connectionSummary, newSettings, parseConnectionUrl, suggestedName } from './online';
+import {
+	canTimePlans,
+	connectionProblems,
+	connectionSummary,
+	engineFeatures,
+	groupBySchema,
+	newSettings,
+	parseConnectionUrl,
+	sqlName,
+	suggestedName
+} from './online';
 
 describe('parseConnectionUrl', () => {
 	test('reads a Neon connection string', () => {
@@ -60,4 +70,31 @@ describe('connectionProblems', () => {
 	test('summarises a connection', () => {
 		expect(connectionSummary({ ...newSettings('postgres'), host: 'h', port: 5433, user: 'u', database: 'd' })).toBe('u@h:5433/d');
 	});
+});
+
+describe('engine features', () => {
+	test('differ by engine', () => {
+		const ids = (e: 'postgres' | 'mysql' | 'libsql') => engineFeatures(e).map((f) => f.id);
+		expect(ids('postgres')).toEqual(['shared', 'edit', 'schemas', 'server-types', 'plans', 'timed-plans']);
+		expect(ids('mysql')).toEqual(['shared', 'edit', 'server-types', 'plans']);
+		expect(ids('libsql')).toEqual(['shared', 'edit', 'plans', 'edge']);
+		expect(canTimePlans('postgres')).toBe(true);
+		expect(canTimePlans('libsql')).toBe(false);
+	});
+
+	test('groups listed names by schema', () => {
+		const objects = [{ name: 'orders' }, { name: 'sales.leads' }, { name: 'v1.2 report' }, { name: 'auth.users' }];
+		expect(groupBySchema(objects, ['public', 'sales', 'auth'])).toEqual([
+			{ schema: '', items: [{ label: 'orders', item: objects[0] }, { label: 'v1.2 report', item: objects[2] }] },
+			{ schema: 'sales', items: [{ label: 'leads', item: objects[1] }] },
+			{ schema: 'auth', items: [{ label: 'users', item: objects[3] }] }
+		]);
+		expect(groupBySchema([], [])).toEqual([]);
+	});
+});
+
+test('sqlName quotes per engine and splits schemas', () => {
+	expect(sqlName('postgres', 'sales.Order "Lines"', ['sales'])).toBe('"sales"."Order ""Lines"""');
+	expect(sqlName('mysql', 'v1.2', [])).toBe('`v1.2`');
+	expect(sqlName('libsql', 'orders', [])).toBe('"orders"');
 });

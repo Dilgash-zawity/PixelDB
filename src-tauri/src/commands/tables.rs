@@ -1,6 +1,9 @@
 use tauri::State;
 
-use super::target;
+use super::{on_online, target};
+use crate::online::SecretStore;
+use crate::online_data::OnlinePools;
+use crate::online_records;
 use crate::database::{DbManager, migrations, schema};
 use crate::errors::AppResult;
 use crate::models::{FieldDef, SchemaChangeResult, TableDef, TableDesign, TableInfo};
@@ -10,9 +13,12 @@ use crate::workspace::WorkspaceStore;
 pub async fn get_table(
     state: State<'_, DbManager>,
     store: State<'_, WorkspaceStore>,
+    secrets: State<'_, SecretStore>,
+    pools: State<'_, OnlinePools>,
     database: Option<String>,
     name: String,
 ) -> AppResult<TableInfo> {
+    on_online!(store, secrets, pools, database, |o| online_records::table_info(&o, &name));
     state.run_on(target(&store, database)?, move |db| schema::table_info(&db.conn, &name)).await
 }
 

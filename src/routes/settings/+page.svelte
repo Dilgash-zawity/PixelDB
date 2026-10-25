@@ -2,7 +2,9 @@
 	// Utils
 	import { getVersion } from '@tauri-apps/api/app';
 	import { isTauri } from '@tauri-apps/api/core';
-	import { onMount } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { resolve } from '$app/paths';
+	import { page } from '$app/state';
 	import { openUrl } from '@tauri-apps/plugin-opener';
 	import { resetMode, setMode, userPrefersMode } from 'mode-watcher';
 	import { ACCENTS, RADII, TEXT_SIZES, type Settings } from '#lib/logic/settings.js';
@@ -16,21 +18,17 @@
 
 	// Components
 	import Logo from '#lib/components/app/Logo.svelte';
-	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
+	import { Separator } from '#lib/components/ui/separator/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
 
 	// Icons
 	import {
 		ArrowLeft as ArrowLeftIcon,
-		Check as CheckIcon,
-		Database as DatabaseIcon,
-		Focus as FocusIcon,
 		FolderOpen as FolderOpenIcon,
 		Info as InfoIcon,
-		LayoutDashboard as LayoutDashboardIcon,
 		Monitor as MonitorIcon,
 		Moon as MoonIcon,
 		Palette as PaletteIcon,
@@ -45,10 +43,6 @@
 	const RELEASES = 'https://github.com/Dilgash-zawity/SlateDB/releases/latest';
 	const native = isTauri();
 	const updateBusy = $derived(['checking', 'confirming', 'downloading', 'installing'].includes(updates.current.status));
-
-	onMount(() => {
-		if (location.hash === '#updates') jump('updates');
-	});
 
 	async function installUpdate() {
 		await updates.manager.install(() => confirm({
@@ -65,13 +59,23 @@
 	if (!workspace.loaded) workspace.load();
 
 	const SECTIONS = [
-		{ id: 'workspace', label: 'Workspace', icon: FolderOpenIcon, tone: 'vivid:text-tone-blue' },
-		{ id: 'appearance', label: 'Appearance', icon: PaletteIcon, tone: 'vivid:text-tone-pink' },
-		{ id: 'behaviour', label: 'Behaviour', icon: SlidersHorizontalIcon, tone: 'vivid:text-tone-green' },
-		{ id: 'updates', label: 'Updates', icon: RefreshCwIcon, tone: 'vivid:text-tone-blue' },
-		{ id: 'about', label: 'About', icon: InfoIcon, tone: 'vivid:text-tone-amber' }
-	];
-	let active = $state('workspace');
+		{ id: 'workspace', label: 'Workspace', icon: FolderOpenIcon, description: 'The folder on this computer where your databases and apps live.' },
+		{ id: 'appearance', label: 'Appearance', icon: PaletteIcon, description: 'Make SlateDB look the way you like. Changes apply straight away.' },
+		{ id: 'behaviour', label: 'Behaviour', icon: SlidersHorizontalIcon, description: 'How the canvases and animations feel.' },
+		{ id: 'updates', label: 'Updates', icon: RefreshCwIcon, description: 'Get new features and fixes from the official SlateDB releases.' },
+		{ id: 'about', label: 'About', icon: InfoIcon, description: 'The app and who made it.' }
+	] as const;
+	type SectionId = (typeof SECTIONS)[number]['id'];
+	/** The page shown, from `?section=` (links like "View update" open one directly). */
+	const current = $derived(SECTIONS.find((x) => x.id === page.url.searchParams.get('section')) ?? SECTIONS[0]);
+
+	let scroller = $state<HTMLElement | null>(null);
+
+	/** Switches pages in place, so Back still leaves Settings. */
+	function show(id: SectionId) {
+		goto(`${resolve('/settings')}?section=${id}`, { replace: true });
+		if (scroller) scroller.scrollTop = 0;
+	}
 
 	const THEMES = [
 		{ value: 'light', label: 'Light', icon: SunIcon },
@@ -84,7 +88,7 @@
 	}
 
 	const SWATCH = $derived<Record<Settings['accent'], string>>({
-		neutral: settings.current.focusMode ? 'var(--foreground)' : 'oklch(0.53 0.17 260)',
+		neutral: settings.current.focusMode ? 'var(--foreground)' : 'oklch(0.16 0 0)',
 		blue: 'oklch(0.55 0.2 255)',
 		green: 'oklch(0.56 0.15 150)',
 		amber: 'oklch(0.75 0.16 75)',
@@ -117,36 +121,24 @@
 		setMode('dark');
 	}
 
-	function jump(id: string) {
-		active = id;
-		document.getElementById(id)?.scrollIntoView({ behavior: settings.current.reduceMotion ? 'auto' : 'smooth', block: 'start' });
-	}
-
-	/** Highlights the section being read in the side menu. */
-	function spy(node: HTMLElement) {
-		const io = new IntersectionObserver(
-			(entries) => {
-				const top = entries.filter((e) => e.isIntersecting).sort((a, b) => a.boundingClientRect.top - b.boundingClientRect.top)[0];
-				if (top) active = top.target.id;
-			},
-			{ root: node, rootMargin: '0px 0px -60% 0px' }
-		);
-		for (const s of node.querySelectorAll('section[id]')) io.observe(s);
-		return () => io.disconnect();
-	}
 </script>
 
-<svelte:head><title>Settings · SlateDB</title></svelte:head>
+<svelte:head><title>{current.label} · Settings · SlateDB</title></svelte:head>
 
-{#snippet sectionHeading(title: string, description: string)}
-	<div class="flex flex-col gap-1">
-		<h2 class="text-lg font-semibold tracking-tight">{title}</h2>
-		<p class="text-sm text-muted-foreground">{description}</p>
-	</div>
+<!-- One setting: what it does on the left, its control on the right. -->
+<!-- `wide` controls (button groups) go under the text when there isn't room beside it. -->
+{#snippet row(title: string, description: string, control: import('svelte').Snippet, id?: string, wide = false)}
+	<Field.Field orientation={wide ? 'responsive' : 'horizontal'} class="px-4 py-3.5">
+		<Field.Content>
+			{#if id}<Field.Label for={id}>{title}</Field.Label>{:else}<Field.Title>{title}</Field.Title>{/if}
+			<Field.Description>{description}</Field.Description>
+		</Field.Content>
+		{@render control()}
+	</Field.Field>
 {/snippet}
 
 <div class="flex h-svh flex-col">
-	<header class="app-header flex h-12 shrink-0 items-center gap-2 border-b bg-sidebar px-3">
+	<header data-bar class="app-header flex h-12 shrink-0 items-center gap-2 border-b bg-sidebar px-3">
 		<Button variant="ghost" size="sm" onclick={() => history.back()}>
 			<ArrowLeftIcon data-icon="inline-start" /> Back
 		</Button>
@@ -154,155 +146,95 @@
 	</header>
 
 	<div class="flex min-h-0 flex-1">
-		<nav class="hidden w-56 shrink-0 flex-col gap-1 border-e bg-sidebar p-3 md:flex" aria-label="Settings sections">
+		<nav class="flex w-48 shrink-0 flex-col gap-0.5 border-e bg-sidebar p-2 sm:w-56 sm:p-3" aria-label="Settings">
 			{#each SECTIONS as s (s.id)}
+				{@const active = current.id === s.id}
 				<Button
 					variant="ghost"
 					size="sm"
-					class={cn('justify-start', active === s.id && 'bg-accent text-accent-foreground')}
-					aria-current={active === s.id ? 'true' : undefined}
-					onclick={() => jump(s.id)}
+					class={cn('justify-start', active && 'bg-accent text-accent-foreground vivid:shadow-[inset_2px_0_0_var(--map-accent)]')}
+					aria-current={active ? 'page' : undefined}
+					onclick={() => show(s.id)}
 				>
-					<s.icon data-icon="inline-start" class={s.tone} />
+					<s.icon data-icon="inline-start" />
 					{s.label}
 				</Button>
 			{/each}
 		</nav>
 
-		<main class="min-h-0 flex-1 overflow-y-auto" {@attach spy}>
-			<div class="mx-auto flex max-w-3xl flex-col gap-12 px-6 py-10">
-				<!-- Workspace -->
-				<section id="workspace" class="flex scroll-mt-6 flex-col gap-6">
-					{@render sectionHeading('Workspace', 'The folder on this computer where your databases and apps live.')}
-					<div class="flex flex-col gap-4 border bg-card p-4">
-						<div class="flex flex-wrap items-center gap-3">
-							<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground vivid:bg-tone-blue/15 vivid:text-tone-blue">
-								<FolderOpenIcon class="size-5" />
-							</span>
-							<div class="flex min-w-0 flex-1 flex-col gap-0.5">
-								<span class="text-sm font-medium">Root folder</span>
-								{#if workspace.info}
-									<code class="truncate text-sm text-muted-foreground" title={workspace.info.path}>{workspace.info.path}</code>
-								{:else}
-									<span class="text-sm text-muted-foreground">No folder chosen yet</span>
-								{/if}
-							</div>
+		<main bind:this={scroller} class="min-h-0 flex-1 overflow-y-auto">
+			<div class="mx-auto flex max-w-2xl flex-col gap-6 px-6 py-10">
+				<div class="flex flex-col gap-1">
+					<h1 class="text-xl font-semibold tracking-tight">{current.label}</h1>
+					<p class="text-sm text-muted-foreground">{current.description}</p>
+				</div>
+
+				<div class="flex flex-col rounded-lg border bg-card">
+					{#if current.id === 'workspace'}
+						{#snippet folder()}
 							<Button variant="outline" onclick={() => workspace.chooseFolder()}>
 								<FolderOpenIcon data-icon="inline-start" />
 								{workspace.info ? 'Change folder…' : 'Choose folder…'}
 							</Button>
-						</div>
-						{#if workspace.info}
-							<div class="flex flex-wrap gap-2 border-t pt-4 text-sm text-muted-foreground">
-								<Badge variant="secondary"><DatabaseIcon /> {workspace.databases.length} database{workspace.databases.length === 1 ? '' : 's'}</Badge>
-								<Badge variant="secondary"><LayoutDashboardIcon /> {workspace.apps.length} app{workspace.apps.length === 1 ? '' : 's'}</Badge>
-								<span>Apps are stored in the <code>Apps</code> folder inside it.</span>
-							</div>
-						{/if}
-					</div>
-					<Field.Group>
-						<Field.Field orientation="horizontal">
-							<Field.Content>
-								<Field.Title>Home map layout</Field.Title>
-								<Field.Description>Forget where you moved the cards on the home screen and lay them out again.</Field.Description>
-							</Field.Content>
+						{/snippet}
+						{#snippet layoutReset()}
 							<Button variant="outline" disabled={!workspace.info} onclick={resetLayout}><RotateCcwIcon data-icon="inline-start" /> Reset layout</Button>
-						</Field.Field>
-					</Field.Group>
-				</section>
-
-				<!-- Appearance -->
-				<section id="appearance" class="flex scroll-mt-6 flex-col gap-6">
-					{@render sectionHeading('Appearance', 'Make SlateDB look the way you like. Changes apply straight away.')}
-					<Field.Group>
-						<Field.Field orientation="horizontal" class="rounded-lg border bg-card p-4">
-							<span class="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted text-muted-foreground vivid:bg-primary/10 vivid:text-primary">
-								<FocusIcon class="size-5" />
-							</span>
-							<Field.Content>
-								<Field.Label for="focus-mode">Focus mode</Field.Label>
-								<Field.Description>A calm grey look with square corners and no decoration. Turn it off for the colorful look.</Field.Description>
+						{/snippet}
+						<Field.Field orientation="horizontal" class="px-4 py-3.5">
+							<Field.Content class="min-w-0">
+								<Field.Title>Root folder</Field.Title>
+								{#if workspace.info}
+									<code class="truncate text-sm text-muted-foreground" title={workspace.info.path}>{workspace.info.path}</code>
+									<Field.Description>
+										{workspace.databases.length} database{workspace.databases.length === 1 ? '' : 's'} in its <code>DB</code> folder,
+										{workspace.apps.length} app{workspace.apps.length === 1 ? '' : 's'} in <code>Apps</code>.
+									</Field.Description>
+								{:else}
+									<Field.Description>No folder chosen yet.</Field.Description>
+								{/if}
 							</Field.Content>
-							<Switch id="focus-mode" checked={settings.current.focusMode} onCheckedChange={(v) => settings.update({ focusMode: v })} />
+							{@render folder()}
 						</Field.Field>
-
-						<Field.Separator />
-
-						<Field.Set>
-							<Field.Legend variant="label">Theme</Field.Legend>
-							<div class="grid grid-cols-3 gap-3">
+						<Separator />
+						{@render row('Home map layout', 'Forget where you moved the cards on the home screen and lay them out again.', layoutReset)}
+					{:else if current.id === 'appearance'}
+						{#snippet focus()}
+							<Switch id="focus-mode" checked={settings.current.focusMode} onCheckedChange={(v) => settings.update({ focusMode: v })} />
+						{/snippet}
+						{#snippet theme()}
+							<ToggleGroup.Root
+								type="single"
+								variant="outline"
+								size="sm"
+								value={userPrefersMode.current}
+								onValueChange={(v) => v && chooseTheme(v as 'light' | 'dark' | 'system')}
+							>
 								{#each THEMES as t (t.value)}
-									{@const selected = userPrefersMode.current === t.value}
-									<button
-										type="button"
-										aria-pressed={selected}
-										class={cn(
-											'flex flex-col gap-2 border bg-card p-2 text-start outline-none transition-colors hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring',
-											'rounded-[var(--radius)]',
-											selected && 'border-primary ring-1 ring-primary'
-										)}
-										onclick={() => chooseTheme(t.value)}
-									>
-										<!-- A tiny window in that theme. -->
-										<span
-											class={cn(
-												'flex h-16 flex-col gap-1 overflow-hidden border p-1.5',
-												t.value === 'light' && 'border-neutral-200 bg-white',
-												t.value === 'dark' && 'border-neutral-700 bg-neutral-900',
-												t.value === 'system' && 'border-neutral-400 bg-[linear-gradient(135deg,white_50%,var(--color-neutral-900)_50%)]'
-											)}
-											aria-hidden="true"
-										>
-											<span class={cn('h-1.5 w-10', t.value === 'dark' ? 'bg-neutral-600' : 'bg-neutral-300')}></span>
-											<span class="flex flex-1 gap-1">
-												<span class={cn('w-1/3', t.value === 'dark' ? 'bg-neutral-800' : 'bg-neutral-100')}></span>
-												<span class="flex-1 border border-dashed border-neutral-400/60"></span>
-											</span>
-										</span>
-										<span class="flex items-center gap-2 text-sm font-medium">
-											<t.icon class="size-4" />
-											{t.label}
-											{#if selected}<CheckIcon class="ms-auto size-4 text-primary" />{/if}
-										</span>
-									</button>
+									<ToggleGroup.Item value={t.value}><t.icon /> {t.label}</ToggleGroup.Item>
 								{/each}
-							</div>
-						</Field.Set>
-
-						<Field.Separator />
-
-						<Field.Set>
-							<Field.Legend variant="label">Accent color</Field.Legend>
-							<Field.Description>Used for main buttons, focus rings and highlighted lines.</Field.Description>
-							<div class="flex flex-wrap gap-2">
+							</ToggleGroup.Root>
+						{/snippet}
+						{#snippet accent()}
+							<div class="flex flex-wrap gap-1.5" role="radiogroup" aria-label="Accent color">
 								{#each ACCENTS as a (a)}
 									{@const selected = settings.current.accent === a}
 									<button
 										type="button"
-										aria-pressed={selected}
+										role="radio"
+										aria-checked={selected}
+										aria-label={label(a)}
+										title={label(a)}
 										class={cn(
-											'flex items-center gap-2 border bg-card py-1.5 ps-1.5 pe-3 text-sm outline-none transition-colors hover:bg-accent/50 focus-visible:ring-2 focus-visible:ring-ring',
-											'rounded-[var(--radius)]',
-											selected && 'border-primary ring-1 ring-primary'
+											'size-7 rounded-full border-2 border-transparent outline-none transition-transform hover:scale-110 focus-visible:ring-2 focus-visible:ring-ring',
+											selected && 'border-background ring-2 ring-foreground'
 										)}
+										style:background={SWATCH[a]}
 										onclick={() => settings.update({ accent: a })}
-									>
-										<span class="flex size-6 items-center justify-center rounded-full" style:background={SWATCH[a]}>
-											{#if selected}<CheckIcon class="size-3.5 text-background" />{/if}
-										</span>
-										{label(a)}
-									</button>
+									></button>
 								{/each}
 							</div>
-						</Field.Set>
-
-						<Field.Separator />
-
-						<Field.Field orientation="responsive">
-							<Field.Content>
-								<Field.Title>Corners</Field.Title>
-								<Field.Description>Square like a spreadsheet, or softer.</Field.Description>
-							</Field.Content>
+						{/snippet}
+						{#snippet corners()}
 							<ToggleGroup.Root
 								type="single"
 								variant="outline"
@@ -317,15 +249,8 @@
 									</ToggleGroup.Item>
 								{/each}
 							</ToggleGroup.Root>
-						</Field.Field>
-
-						<Field.Separator />
-
-						<Field.Field orientation="responsive">
-							<Field.Content>
-								<Field.Title>Text size</Field.Title>
-								<Field.Description>Scales text and spacing throughout the app.</Field.Description>
-							</Field.Content>
+						{/snippet}
+						{#snippet textSize()}
 							<ToggleGroup.Root
 								type="single"
 								variant="outline"
@@ -340,60 +265,48 @@
 									</ToggleGroup.Item>
 								{/each}
 							</ToggleGroup.Root>
-						</Field.Field>
-					</Field.Group>
-				</section>
-
-				<!-- Behaviour -->
-				<section id="behaviour" class="flex scroll-mt-6 flex-col gap-6">
-					{@render sectionHeading('Behaviour', 'How the canvases and animations feel.')}
-					<Field.Group>
-						<Field.Field orientation="horizontal">
-							<Field.Content>
-								<Field.Label for="reduce-motion">Reduce motion</Field.Label>
-								<Field.Description>Turn off animations, including the moving lines between apps and databases.</Field.Description>
-							</Field.Content>
-							<Switch
-								id="reduce-motion"
-								checked={settings.current.reduceMotion}
-								onCheckedChange={(v) => settings.update({ reduceMotion: v })}
-							/>
-						</Field.Field>
-						<Field.Separator />
-						<Field.Field orientation="horizontal">
-							<Field.Content>
-								<Field.Label for="canvas-hints">Show canvas hints</Field.Label>
-								<Field.Description>The tips along the bottom of the home map and the relationships diagram.</Field.Description>
-							</Field.Content>
-							<Switch
-								id="canvas-hints"
-								checked={settings.current.canvasHints}
-								onCheckedChange={(v) => settings.update({ canvasHints: v })}
-							/>
-						</Field.Field>
-						<Field.Separator />
-						<Field.Field orientation="horizontal">
-							<Field.Content>
-								<Field.Title>Reset all settings</Field.Title>
-								<Field.Description>Go back to the dark theme and the colorful look. Your data isn't touched.</Field.Description>
-							</Field.Content>
+						{/snippet}
+						{@render row('Theme', 'Light, dark, or follow your computer.', theme, undefined, true)}
+						<Separator />
+						{@render row('Focus mode', 'A calm grey look with square corners and no decoration.', focus, 'focus-mode')}
+						<Separator />
+						{@render row('Accent color', 'Used for main buttons, focus rings and highlighted lines.', accent, undefined, true)}
+						<Separator />
+						{@render row('Corners', 'Square like a spreadsheet, or softer.', corners, undefined, true)}
+						<Separator />
+						{@render row('Text size', 'Scales text and spacing throughout the app.', textSize, undefined, true)}
+					{:else if current.id === 'behaviour'}
+						{#snippet motion()}
+							<Switch id="reduce-motion" checked={settings.current.reduceMotion} onCheckedChange={(v) => settings.update({ reduceMotion: v })} />
+						{/snippet}
+						{#snippet hints()}
+							<Switch id="canvas-hints" checked={settings.current.canvasHints} onCheckedChange={(v) => settings.update({ canvasHints: v })} />
+						{/snippet}
+						{#snippet reset()}
 							<Button variant="outline" onclick={resetAll}><RotateCcwIcon data-icon="inline-start" /> Reset</Button>
-						</Field.Field>
-					</Field.Group>
-				</section>
-
-				<section id="updates" class="flex scroll-mt-6 flex-col gap-6">
-					{@render sectionHeading('Updates', 'Get new features and fixes from the official SlateDB releases.')}
-					<Field.Group>
-						<Field.Field orientation="horizontal">
-							<Field.Content>
-								<Field.Label for="automatic-updates">Check for updates automatically</Field.Label>
-								<Field.Description>Check on launch and every six hours while SlateDB is open. You choose when to install. Database contents are never sent.</Field.Description>
-							</Field.Content>
+						{/snippet}
+						{@render row('Reduce motion', 'Turn off animations, including the moving lines between apps and databases.', motion, 'reduce-motion')}
+						<Separator />
+						{@render row('Show canvas hints', 'The tips along the bottom of the home map and the relationships diagram.', hints, 'canvas-hints')}
+						<Separator />
+						{@render row('Reset all settings', "Go back to the dark theme and the default look. Your data isn't touched.", reset)}
+					{:else if current.id === 'updates'}
+						{#snippet actions()}
+							<div class="flex flex-wrap gap-2">
+								{#if updates.current.status === 'ready'}
+									<Button onclick={() => updates.manager.restart()}>Restart SlateDB</Button>
+								{:else}
+									<Button variant="outline" disabled={!native || updateBusy} onclick={() => updates.manager.check()}>Check for updates</Button>
+									{#if updates.current.version}
+										<Button disabled={updateBusy} onclick={installUpdate}>Install {updates.current.version}</Button>
+									{/if}
+								{/if}
+							</div>
+						{/snippet}
+						{#snippet automatic()}
 							<Switch id="automatic-updates" checked={settings.current.automaticUpdates} onCheckedChange={(value) => settings.update({ automaticUpdates: value })} />
-						</Field.Field>
-						<Field.Separator />
-						<Field.Field orientation="responsive">
+						{/snippet}
+						<Field.Field orientation="horizontal" class="px-4 py-3.5">
 							<Field.Content>
 								<Field.Title>SlateDB {version ?? '—'}</Field.Title>
 								<Field.Description>
@@ -405,47 +318,36 @@
 									</span>
 								</Field.Description>
 							</Field.Content>
-							<div class="flex flex-wrap gap-2">
-								{#if updates.current.status === 'ready'}
-									<Button onclick={() => updates.manager.restart()}>Restart SlateDB</Button>
-								{:else}
-									<Button variant="outline" disabled={!native || updateBusy} onclick={() => updates.manager.check()}>Check for updates</Button>
-									{#if updates.current.version}
-										<Button disabled={updateBusy} onclick={installUpdate}>Install {updates.current.version}</Button>
-									{/if}
-								{/if}
-							</div>
+							{@render actions()}
 						</Field.Field>
-					</Field.Group>
-					{#if updates.current.notes}
-						<details class="rounded-lg border p-4">
-							<summary class="cursor-pointer text-sm font-medium">Release notes</summary>
-							<p class="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{updates.current.notes}</p>
-						</details>
-					{/if}
-					<Button variant="link" class="self-start" disabled={!native} onclick={() => attempt(() => openUrl(RELEASES))}>View official downloads</Button>
-				</section>
-
-				<!-- About -->
-				<section id="about" class="flex scroll-mt-6 flex-col gap-6">
-					{@render sectionHeading('About', 'The app and who made it.')}
-					<div class="flex flex-wrap items-center gap-4 border bg-card p-4">
-						<Logo class="size-14" />
-						<div class="flex min-w-0 flex-1 flex-col gap-1">
-							<div class="flex items-center gap-2">
-								<span class="text-lg font-semibold">SlateDB</span>
-								<Badge variant="secondary">Version {version ?? '—'}</Badge>
+						<Separator />
+						{@render row('Check automatically', 'On launch and every six hours while SlateDB is open. You choose when to install. Database contents are never sent.', automatic, 'automatic-updates')}
+						{#if updates.current.notes}
+							<Separator />
+							<details class="px-4 py-3.5">
+								<summary class="cursor-pointer text-sm font-medium">Release notes</summary>
+								<p class="mt-3 whitespace-pre-wrap text-sm text-muted-foreground">{updates.current.notes}</p>
+							</details>
+						{/if}
+					{:else}
+						<div class="flex items-center gap-4 px-4 py-4">
+							<Logo class="size-12" />
+							<div class="flex min-w-0 flex-1 flex-col gap-0.5">
+								<span class="font-semibold">SlateDB <span class="font-normal text-muted-foreground">{version ?? ''}</span></span>
+								<p class="text-sm text-muted-foreground">An offline desktop database app in the spirit of Microsoft Access. Your data stays on this computer.</p>
 							</div>
-							<p class="text-sm text-muted-foreground">
-								An offline desktop database app in the spirit of Microsoft Access. Your data stays on this computer.
-							</p>
-							<p class="text-sm text-muted-foreground">
-								Made by
-								<Button variant="link" class="h-auto cursor-pointer p-0" onclick={() => attempt(() => openUrl(WEBSITE))}>Dilgash</Button>
-							</p>
 						</div>
-					</div>
-				</section>
+						<Separator />
+						{#snippet author()}
+							<Button variant="outline" disabled={!native} onclick={() => attempt(() => openUrl(WEBSITE))}>dilgash.com</Button>
+						{/snippet}
+						{@render row('Made by Dilgash', 'Design and development.', author)}
+					{/if}
+				</div>
+
+				{#if current.id === 'updates'}
+					<Button variant="link" class="self-start px-0" disabled={!native} onclick={() => attempt(() => openUrl(RELEASES))}>View official downloads</Button>
+				{/if}
 			</div>
 		</main>
 	</div>

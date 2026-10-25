@@ -27,7 +27,7 @@
 			announcedVersion = update.version;
 			toast.info(`SlateDB ${update.version} is available`, {
 				description: 'Open Settings to install when you’re ready.',
-				action: { label: 'View update', onClick: () => { void goto('/settings#updates'); } }
+				action: { label: 'View update', onClick: () => { void goto('/settings?section=updates'); } }
 			});
 		}
 	});
