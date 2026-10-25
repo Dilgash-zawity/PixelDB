@@ -3,7 +3,11 @@
 This free, MIT-licensed release adds **Settings → Updates**, automatic checks
 for new versions, release notes, download progress, and signed update installation.
 It also includes the newer app-builder, board, and query improvements added
-since version 0.0.8. Your databases stay in your selected workspace folder.
+since version 0.0.8, and saved online database connections (PostgreSQL, MySQL,
+MariaDB, libSQL, and hosted providers such as Neon, Supabase and Turso) with a
+"Test connection" check. Online databases can be saved and tested but cannot be
+browsed or used by apps yet. Your local databases stay in your selected
+workspace folder.
 
 **Signing status:** Update payloads are cryptographically signed with SlateDB's
 update key and verified before installation. The Mac apps use ad-hoc signatures
@@ -18,11 +22,11 @@ Choose the matching file in the release assets:
 
 | Platform | File |
 | --- | --- |
-| Windows 64-bit | `SlateDB_0.0.11_x64-setup.exe` |
-| macOS Apple Silicon | `SlateDB_0.0.11_aarch64.dmg` |
-| macOS Intel | `SlateDB_0.0.11_x64.dmg` |
-| Ubuntu / Debian 64-bit | `SlateDB_0.0.11_amd64.deb` |
-| Linux 64-bit | `SlateDB_0.0.11_amd64.AppImage` |
+| Windows 64-bit | `SlateDB_0.0.12_x64-setup.exe` |
+| macOS Apple Silicon | `SlateDB_0.0.12_aarch64.dmg` |
+| macOS Intel | `SlateDB_0.0.12_x64.dmg` |
+| Ubuntu / Debian 64-bit | `SlateDB_0.0.12_amd64.deb` |
+| Linux 64-bit | `SlateDB_0.0.12_amd64.AppImage` |
 
 If you are using 0.0.8 or an earlier version, install this version manually once.
 It can then check for future updates from **Settings → Updates**. Installation

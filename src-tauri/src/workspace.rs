@@ -1,6 +1,7 @@
-//! The workspace is the folder that holds the user's databases. Databases
-//! are addressed by name inside it, so the frontend never passes file paths
-//! for database files. The chosen folder is remembered in the app config dir.
+//! The workspace is the folder that holds the user's databases (in its `DB`
+//! folder) and apps (in `Apps`). Databases are addressed by name, so the
+//! frontend never passes file paths for database files. The chosen folder is
+//! remembered in the app config dir.
 
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -13,6 +14,7 @@ use crate::errors::{AppError, AppResult};
 use crate::validation::paths::{ALLOWED_EXTENSIONS, check_sqlite_header};
 
 pub const DEFAULT_EXTENSION: &str = "db";
+pub const DATABASES_FOLDER: &str = "DB";
 pub const MAX_NAME_LEN: usize = 100;
 
 #[derive(Debug, Clone, Serialize)]
@@ -52,6 +54,9 @@ impl WorkspaceStore {
             .and_then(|s| serde_json::from_str::<Settings>(&s).ok())
             .and_then(|s| s.workspace)
             .filter(|p| p.is_dir());
+        if let Some(root) = &saved {
+            move_loose_databases(root);
+        }
         WorkspaceStore { settings_path, current: Arc::new(Mutex::new(saved)) }
     }
 
@@ -70,6 +75,11 @@ impl WorkspaceStore {
             .ok_or_else(|| AppError::NotFound("no database folder has been chosen".into()))
     }
 
+    /// The workspace's `DB` folder, created on first use.
+    pub fn databases(&self) -> AppResult<PathBuf> {
+        databases_dir(&self.require()?)
+    }
+
     /// Validates and remembers a folder.
     pub fn set(&self, raw: &str) -> AppResult<PathBuf> {
         let dir = validate_folder(raw)?;
@@ -81,6 +91,7 @@ impl WorkspaceStore {
         let tmp = self.settings_path.with_extension("json.tmp");
         fs::write(&tmp, serde_json::to_vec_pretty(&settings)?)?;
         fs::rename(&tmp, &self.settings_path)?;
+        move_loose_databases(&dir);
         *self.lock()? = Some(dir.clone());
         Ok(dir)
     }
@@ -99,6 +110,47 @@ pub fn validate_folder(raw: &str) -> AppResult<PathBuf> {
         return Err(AppError::InvalidPath(format!("{}: not a folder", dir.display())));
     }
     Ok(dir)
+}
+
+/// The `DB` folder inside the workspace. It must be a real folder, not a
+/// link pointing somewhere else.
+pub fn databases_dir(workspace: &Path) -> AppResult<PathBuf> {
+    let dir = workspace.join(DATABASES_FOLDER);
+    match fs::symlink_metadata(&dir) {
+        Ok(m) if m.is_dir() => Ok(dir),
+        Ok(_) => Err(AppError::InvalidPath(format!("{}: not a folder", dir.display()))),
+        Err(_) => {
+            fs::create_dir(&dir)?;
+            Ok(dir)
+        }
+    }
+}
+
+/// Databases used to live directly in the workspace folder. Moves those
+/// (SQLite files only, with their sidecars) into `DB`; a name already taken
+/// there, or a file that cannot be moved, stays where it is.
+pub fn move_loose_databases(workspace: &Path) {
+    let Ok(loose) = list_databases(workspace) else { return };
+    let loose: Vec<_> = loose.into_iter().filter(|d| d.valid).collect();
+    if loose.is_empty() {
+        return;
+    }
+    let Ok(dir) = databases_dir(workspace) else { return };
+    for db in loose {
+        if ensure_name_free(&dir, &db.name, None).is_err() {
+            continue;
+        }
+        let (from, to) = (workspace.join(&db.file_name), dir.join(&db.file_name));
+        if fs::symlink_metadata(&to).is_ok() || fs::rename(&from, &to).is_err() {
+            continue;
+        }
+        for suffix in SIDECAR_SUFFIXES {
+            let side = sidecar(&from, suffix);
+            if side.exists() {
+                let _ = fs::rename(&side, sidecar(&to, suffix));
+            }
+        }
+    }
 }
 
 /// Checks a database name and returns its file name (`name.db`).
@@ -199,9 +251,7 @@ pub fn resolve_database(dir: &Path, name: &str) -> AppResult<PathBuf> {
 /// Path for a new database. Fails if any database with that name exists.
 pub fn new_database_path(dir: &Path, name: &str) -> AppResult<PathBuf> {
     let file_name = database_file_name(name)?;
-    if list_databases(dir)?.iter().any(|d| d.name.eq_ignore_ascii_case(name)) {
-        return Err(AppError::AlreadyExists(format!("a database named {name:?} already exists")));
-    }
+    ensure_name_free(dir, name, None)?;
     Ok(dir.join(file_name))
 }
 
@@ -214,11 +264,13 @@ fn sidecar(path: &Path, suffix: &str) -> PathBuf {
     PathBuf::from(s)
 }
 
-/// Fails if another database (case-insensitively) already uses `name`.
+/// Fails if another database, local or online, already uses `name`
+/// (case-insensitively).
 fn ensure_name_free(dir: &Path, name: &str, except_file: Option<&str>) -> AppResult<()> {
     let taken = list_databases(dir)?
         .iter()
-        .any(|d| d.name.eq_ignore_ascii_case(name) && Some(d.file_name.as_str()) != except_file);
+        .any(|d| d.name.eq_ignore_ascii_case(name) && Some(d.file_name.as_str()) != except_file)
+        || crate::online::names(dir)?.iter().any(|n| n.eq_ignore_ascii_case(name));
     if taken {
         return Err(AppError::AlreadyExists(format!("a database named {name:?} already exists")));
     }
@@ -320,6 +372,23 @@ mod tests {
         assert!(resolve_database(d, "Shop").unwrap().ends_with("Shop.db"));
         assert!(resolve_database(d, "../Shop").is_err());
         assert!(matches!(new_database_path(d, "shop"), Err(AppError::AlreadyExists(_))));
+    }
+
+    #[test]
+    fn moves_loose_databases_into_db_folder() {
+        let dir = tempfile::tempdir().unwrap();
+        let w = dir.path();
+        let db = crate::database::OpenDatabase::create(w.join("Shop.db").to_str().unwrap()).unwrap();
+        db.close().unwrap();
+        fs::write(w.join("Shop.db-wal"), b"").unwrap();
+        fs::write(w.join("fake.db"), b"not sqlite").unwrap();
+        move_loose_databases(w);
+        let d = databases_dir(w).unwrap();
+        assert!(d.join("Shop.db").is_file() && d.join("Shop.db-wal").is_file());
+        assert!(!w.join("Shop.db").exists());
+        assert!(w.join("fake.db").is_file(), "non-SQLite files stay put");
+        let names: Vec<_> = list_databases(&d).unwrap().into_iter().map(|x| x.name).collect();
+        assert_eq!(names, ["Shop"]);
     }
 
     #[test]

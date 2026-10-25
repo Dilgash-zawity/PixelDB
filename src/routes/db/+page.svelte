@@ -1,10 +1,10 @@
 <script lang="ts">
 	// Utils
 	import { goto } from '$app/navigation';
+	import { toast } from 'svelte-sonner';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { databaseHref } from '#lib/logic/routes.js';
-	import { databaseNameProblem } from '#lib/logic/values.js';
 	import { session, type Tab } from '#lib/state/session.svelte.js';
 	import { workspace } from '#lib/state/workspace.svelte.js';
 
@@ -12,7 +12,7 @@
 	import CommandPalette from '#lib/components/app/CommandPalette.svelte';
 	import Logo from '#lib/components/app/Logo.svelte';
 	import NewTableDrawer from '#lib/components/app/NewTableDrawer.svelte';
-	import NameDialog from '#lib/components/app/NameDialog.svelte';
+	import NewDatabaseDrawer from '#lib/components/app/NewDatabaseDrawer.svelte';
 	import QueryView from '#lib/components/app/QueryView.svelte';
 	import RecordsView from '#lib/components/app/RecordsView.svelte';
 	import RelationshipsView from '#lib/components/app/RelationshipsView.svelte';
@@ -198,18 +198,11 @@
 
 <CommandPalette bind:open={paletteOpen} onNewTable={() => (creatingTable = true)} onBack={back} onSettings={openSettings} />
 
-<NameDialog
+<NewDatabaseDrawer
 	bind:open={creatingDatabase}
-	title="New database"
-	description="It is saved as a single file in your databases folder."
-	initial=""
-	placeholder="e.g. Shop"
-	submitLabel="Create database"
-	validate={(v) => databaseNameProblem(v) ?? (workspace.nameTaken(v) ? 'A database with this name already exists' : null)}
-	onSubmit={async (db) => {
-		if (!(await workspace.create(db))) return false;
-		switchTo(db);
-		return true;
+	onCreated={(db, kind) => {
+		if (kind === 'local') switchTo(db);
+		else toast.success(`Saved “${db}”`, { description: 'Find it on the home screen next to your other databases.' });
 	}}
 />
 
