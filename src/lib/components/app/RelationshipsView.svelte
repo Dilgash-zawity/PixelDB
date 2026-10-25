@@ -31,6 +31,7 @@
 		unlinkDesign,
 		updateLinkDesign
 	} from '#lib/logic/relationships.js';
+	import { WHEEL_ZOOM_RATE } from '#lib/logic/pinch.js';
 	import { jsonClone } from '#lib/logic/values.js';
 	import { attempt, confirm } from '#lib/state/feedback.svelte.js';
 	import { session } from '#lib/state/session.svelte.js';
@@ -41,7 +42,6 @@
 	import * as ButtonGroup from '#lib/components/ui/button-group/index.js';
 	import * as ContextMenu from '#lib/components/ui/context-menu/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
-	import { Kbd } from '#lib/components/ui/kbd/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import DiagramCard from './DiagramCard.svelte';
 	import NameDialog from './NameDialog.svelte';
@@ -49,6 +49,7 @@
 	import NewLinkDrawer from './NewLinkDrawer.svelte';
 	import NewTableDrawer from './NewTableDrawer.svelte';
 	import RelationshipPanel, { type Selection } from './RelationshipPanel.svelte';
+	import Shortcut from './Shortcut.svelte';
 
 	// Icons
 	import {
@@ -217,7 +218,7 @@
 			e.preventDefault();
 			if (e.ctrlKey || e.metaKey) {
 				const rect = node.getBoundingClientRect();
-				zoomTo(zoom * Math.exp(-e.deltaY * 0.01), { x: e.clientX - rect.left, y: e.clientY - rect.top });
+				zoomTo(zoom * Math.exp(-e.deltaY * WHEEL_ZOOM_RATE), { x: e.clientX - rect.left, y: e.clientY - rect.top });
 			} else {
 				pan = { x: pan.x - e.deltaX, y: pan.y - e.deltaY };
 			}
@@ -639,7 +640,7 @@
 				{#if settings.current.canvasHints}
 					<p class="pointer-events-none absolute bottom-3 left-4 flex items-center gap-1.5 text-xs text-muted-foreground">
 						Drag a field's <span class="inline-block size-2.5 rounded-[2px] border-2 border-(--map-line)"></span> onto another table to link ·
-						<Kbd>⌘</Kbd> + scroll to zoom · Right-click to add tables and more
+						<Shortcut keys="mod" /> + scroll to zoom · Right-click to add tables and more · <Shortcut keys="?" /> shortcuts
 					</p>
 				{/if}
 			{/if}

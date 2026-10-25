@@ -8,6 +8,7 @@
 	// Utils
 	import { prefillFromFilters, resolveFilters, type TableWidget } from '#lib/logic/app-def.js';
 	import { loadLookups, lookupLabel, type LookupOption } from '#lib/logic/lookups.js';
+	import { matches, typingTarget } from '#lib/logic/shortcuts.js';
 	import { displayValue, toEditorValue } from '#lib/logic/values.js';
 	import { appSession } from '#lib/state/app.svelte.js';
 	import { cleanMessage } from '#lib/state/feedback.svelte.js';
@@ -19,6 +20,7 @@
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
 	import RecordDrawer from '../RecordDrawer.svelte';
+	import { RowKeys } from '../row-keys.svelte.js';
 	import ValueBadge from './ValueBadge.svelte';
 
 	// Icons
@@ -109,6 +111,7 @@
 			.then((res) => {
 				if (stale) return;
 				page = res;
+				rows.clamp(res.rows.length);
 				error = null;
 			})
 			.catch((e) => !stale && (error = cleanMessage(e?.message ?? String(e))));
@@ -162,6 +165,40 @@
 		drawerOpen = true;
 	}
 
+	let searchInput = $state<HTMLInputElement | null>(null);
+	let body = $state<HTMLElement | null>(null);
+	const rows = new RowKeys({ open: (i) => page && clickRow(page.rows[i]) });
+	const lastPage = () => !page || offset + widget.pageSize >= page.total;
+
+	/** Keys while focus is in this table (a page can show several): / search, N new, [ ] pages. */
+	function onKey(e: KeyboardEvent) {
+		if (e.defaultPrevented || editing || typingTarget(e.target)) return;
+		if (matches(e, '/') && widget.search) {
+			e.preventDefault();
+			searchInput?.focus();
+		} else if (matches(e, 'n') && canAdd) {
+			e.preventDefault();
+			addRecord();
+		} else if (matches(e, '[') && offset > 0) {
+			e.preventDefault();
+			offset = Math.max(0, offset - widget.pageSize);
+		} else if (matches(e, ']') && !lastPage()) {
+			e.preventDefault();
+			offset += widget.pageSize;
+		}
+	}
+
+	/** In the search box, ↓ goes to the rows and Esc clears it, then leaves it. */
+	function onSearchKey(e: KeyboardEvent) {
+		if (e.key === 'ArrowDown' || (e.key === 'Escape' && !search)) {
+			e.preventDefault();
+			rows.focusIn(body);
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
+			search = '';
+		}
+	}
+
 	// A button's "new record" action pointed at this table.
 	let seenIntent = appSession.intent.n;
 	$effect(() => {
@@ -191,18 +228,19 @@
 	);
 </script>
 
-<div class="flex h-full min-h-0 flex-col gap-2">
+<!-- svelte-ignore a11y_no_static_element_interactions (keys from the controls inside) -->
+<div class="flex h-full min-h-0 flex-col gap-2" onkeydown={onKey}>
 	{#if widget.search || canAdd}
 		<div class="flex items-center gap-2">
 			{#if widget.search}
 				<InputGroup.Root class="h-8 max-w-64">
-					<InputGroup.Input placeholder="Search" bind:value={search} aria-label="Search {widget.title || 'records'}" />
+					<InputGroup.Input bind:ref={searchInput} placeholder="Search" bind:value={search} aria-label="Search {widget.title || 'records'}" onkeydown={onSearchKey} />
 					<InputGroup.Addon><SearchIcon /></InputGroup.Addon>
 				</InputGroup.Root>
 			{/if}
 			<span class="flex-1"></span>
 			{#if canAdd}
-				<Button size="sm" variant="outline" disabled={editing} onclick={addRecord}><PlusIcon data-icon="inline-start" /> New</Button>
+				<Button size="sm" variant="outline" disabled={editing} title="New record (N)" onclick={addRecord}><PlusIcon data-icon="inline-start" /> New</Button>
 			{/if}
 		</div>
 	{/if}
@@ -235,11 +273,14 @@
 						{/each}
 					</Table.Row>
 				</Table.Header>
-				<Table.Body>
+				<Table.Body bind:ref={body} onkeydown={rows.keydown}>
 					{#each page.rows as row, r (r)}
 						<Table.Row
+							data-row={r}
+							tabindex={clickable ? rows.tabindex(r) : undefined}
+							onfocus={() => rows.focused(r)}
 							data-state={isSelected(row) ? 'selected' : undefined}
-							class={cn(clickable && 'cursor-pointer')}
+							class={cn(clickable && 'cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring')}
 							onclick={() => clickRow(row)}
 						>
 							{#each shown as col (col.name)}
@@ -269,10 +310,10 @@
 	{:else if page && page.total > page.limit}
 		<div class="flex items-center justify-end gap-2 text-xs text-muted-foreground">
 			<span class="tabular-nums">{page.offset + 1}–{Math.min(page.total, page.offset + page.rows.length)} of {page.total}</span>
-			<Button size="icon-sm" variant="ghost" aria-label="Previous page" disabled={offset === 0} onclick={() => (offset = Math.max(0, offset - widget.pageSize))}>
+			<Button size="icon-sm" variant="ghost" aria-label="Previous page" title="Previous page ([)" disabled={offset === 0} onclick={() => (offset = Math.max(0, offset - widget.pageSize))}>
 				<ChevronLeftIcon />
 			</Button>
-			<Button size="icon-sm" variant="ghost" aria-label="Next page" disabled={offset + widget.pageSize >= page.total} onclick={() => (offset += widget.pageSize)}>
+			<Button size="icon-sm" variant="ghost" aria-label="Next page" title="Next page (])" disabled={lastPage()} onclick={() => (offset += widget.pageSize)}>
 				<ChevronRightIcon />
 			</Button>
 		</div>

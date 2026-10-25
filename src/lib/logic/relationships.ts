@@ -363,6 +363,21 @@ export function describeRelationship(rel: Pick<Relationship, 'parent' | 'child' 
 		: `Each ${rel.parent} record can have many ${rel.child} records; each of those belongs to one ${rel.parent} record.`;
 }
 
+/** What deleting or re-keying a parent record does to the linked records, in words. */
+export function describeRules(rel: Pick<Relationship, 'parent' | 'child' | 'onDelete' | 'onUpdate'>): string[] {
+	const { parent: p, child: c } = rel;
+	const onDelete: Record<FkAction, string> = {
+		cascade: `Deleting a ${p} record deletes its ${c} records too.`,
+		set_null: `Deleting a ${p} record clears the link in its ${c} records.`,
+		set_default: `Deleting a ${p} record sets the link in its ${c} records back to its default.`,
+		restrict: `A ${p} record can't be deleted while ${c} records link to it.`,
+		no_action: `A ${p} record can't be deleted while ${c} records link to it.`
+	};
+	const out = [onDelete[rel.onDelete]];
+	if (rel.onUpdate === 'cascade') out.push(`Changing a ${p} key updates its ${c} records too.`);
+	return out;
+}
+
 // ── Editing a single field from the diagram ──
 
 /**
@@ -434,16 +449,28 @@ export function autoLayout(defs: TableDef[], rels: Relationship[]): DiagramLayou
 		const r = rank.get(d.name) ?? 0;
 		columns.set(r, [...(columns.get(r) ?? []), d]);
 	}
+	// A rank taller than MAX_STACK wraps into more columns, so a database of
+	// many unlinked tables doesn't become one endless stack.
 	const layout: DiagramLayout = {};
-	for (const [r, tables] of columns) {
+	let x = 48;
+	for (const r of [...columns.keys()].sort((a, b) => a - b)) {
 		let y = 48;
-		for (const d of tables) {
-			layout[d.name] = { x: 48 + r * (CARD_WIDTH + 112), y };
-			y += cardHeight(d) + 48;
+		for (const d of columns.get(r)!) {
+			const h = cardHeight(d);
+			if (y > 48 && y + h > MAX_STACK) {
+				x += CARD_WIDTH + 64;
+				y = 48;
+			}
+			layout[d.name] = { x, y };
+			y += h + 48;
 		}
+		x += CARD_WIDTH + 112;
 	}
 	return layout;
 }
+
+/** How tall a column of cards grows before `autoLayout` starts another. */
+const MAX_STACK = 1600;
 
 /** Positions for tables missing from `layout`, placed below everything else. */
 export function placeMissing(defs: TableDef[], layout: DiagramLayout): DiagramLayout {

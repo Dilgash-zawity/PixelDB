@@ -2,6 +2,9 @@
 	// Types
 	import type { Component, Snippet } from 'svelte';
 
+	// Utils
+	import { matches, shortcutText, typingTarget } from '#lib/logic/shortcuts.js';
+
 	// Components
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Drawer from '#lib/components/ui/drawer/index.js';
@@ -66,6 +69,8 @@
 	const last = $derived(step >= steps.length - 1);
 	const Root = $derived(nested ? Drawer.NestedRoot : Drawer.Root);
 
+	let form = $state<HTMLFormElement | null>(null);
+
 	function submit(e: SubmitEvent) {
 		e.preventDefault();
 		if (busy || disabled) return;
@@ -73,14 +78,35 @@
 		if (onNext?.(step) === false) return;
 		step++;
 	}
+
+	/**
+	 * ⌘↵ is the main button from anywhere, text areas included; Alt+→ / Alt+←
+	 * walk the steps (not while typing, where Alt+arrows move by word on a Mac).
+	 * A nested drawer handles its keys first and marks them handled.
+	 */
+	function onKey(e: KeyboardEvent) {
+		if (e.defaultPrevented) return;
+		onkeydown?.(e);
+		if (e.defaultPrevented) return;
+		if (matches(e, 'mod+enter')) {
+			e.preventDefault();
+			form?.requestSubmit();
+		} else if (matches(e, 'alt+arrowright') && !last && !typingTarget(e.target)) {
+			e.preventDefault();
+			form?.requestSubmit();
+		} else if (matches(e, 'alt+arrowleft') && step > 0 && !typingTarget(e.target)) {
+			e.preventDefault();
+			step--;
+		}
+	}
 </script>
 
 <Root bind:open>
 	<Drawer.Content
 		class="h-dvh data-[vaul-drawer-direction=bottom]:mt-0 data-[vaul-drawer-direction=bottom]:max-h-dvh"
-		{onkeydown}
+		onkeydown={onKey}
 	>
-		<form class="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col" onsubmit={submit}>
+		<form bind:this={form} class="mx-auto flex min-h-0 w-full max-w-3xl flex-1 flex-col" onsubmit={submit}>
 			<Drawer.Header class="gap-5">
 				<div class="flex flex-col gap-1">
 					<Drawer.Title>{title}</Drawer.Title>
@@ -95,7 +121,7 @@
 
 			<Drawer.Footer class="flex-row items-center gap-2">
 				{#if step > 0}
-					<Button variant="outline" onclick={() => step--}><ArrowLeftIcon data-icon="inline-start" /> Back</Button>
+					<Button variant="outline" title="Back ({shortcutText('alt+arrowleft')})" onclick={() => step--}><ArrowLeftIcon data-icon="inline-start" /> Back</Button>
 				{:else}
 					<Drawer.Close>
 						{#snippet child({ props })}<Button {...props} variant="outline">Cancel</Button>{/snippet}
@@ -104,7 +130,7 @@
 				{@render actions?.()}
 				<span class="flex-1"></span>
 				{#if last}{@render secondary?.()}{/if}
-				<Button type="submit" disabled={busy || disabled}>
+				<Button type="submit" disabled={busy || disabled} title={shortcutText('mod+enter')}>
 					{#if last}
 						{#if busy}
 							<Spinner data-icon="inline-start" />

@@ -12,6 +12,8 @@
 	import { edgeRoute, type Point } from '#lib/logic/relationships.js';
 	import { appHref, databaseHref } from '#lib/logic/routes.js';
 	import { connectionSummary, provider as providerOf } from '#lib/logic/online.js';
+	import { WHEEL_ZOOM_RATE } from '#lib/logic/pinch.js';
+	import { matches, nearestInDirection } from '#lib/logic/shortcuts.js';
 	import { databaseNameProblem, formatBytes } from '#lib/logic/values.js';
 	import {
 		NODE_HEIGHT,
@@ -41,11 +43,12 @@
 	import * as ContextMenu from '#lib/components/ui/context-menu/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
-	import { Kbd } from '#lib/components/ui/kbd/index.js';
 	import FocusModeSwitch from './FocusModeSwitch.svelte';
 	import NameDialog from './NameDialog.svelte';
 	import NewDatabaseDrawer from './NewDatabaseDrawer.svelte';
 	import NewAppDrawer from './NewAppDrawer.svelte';
+	import HomeCommandPalette from './HomeCommandPalette.svelte';
+	import Shortcut from './Shortcut.svelte';
 	import PixelIcon from './PixelIcon.svelte';
 	import ProviderIcon from './ProviderIcon.svelte';
 
@@ -206,13 +209,32 @@
 		pan = { x: (w - (maxX - minX) * z) / 2 - minX * z, y: (h - (maxY - minY) * z) / 2 - minY * z };
 	}
 
+	/** Pans just enough to bring card `key` into view, with a margin. */
+	function reveal(key: string) {
+		const p = layout[key];
+		if (!viewport || !p) return;
+		// Focusing a card can scroll the clipped viewport itself; panning does that job.
+		viewport.scrollTop = viewport.scrollLeft = 0;
+		const m = 32;
+		const { clientWidth: w, clientHeight: h } = viewport;
+		const [left, top] = [p.x * zoom + pan.x, p.y * zoom + pan.y];
+		const [right, bottom] = [left + NODE_WIDTH * zoom, top + NODE_HEIGHT * zoom];
+		const dx = left < m ? m - left : right > w - m ? w - m - right : 0;
+		const dy = top < m ? m - top : bottom > h - m ? h - m - bottom : 0;
+		if (dx || dy) pan = { x: pan.x + dx, y: pan.y + dy };
+	}
+
+	function focusCard(key: string) {
+		viewport?.querySelector<HTMLElement>(`[data-node="${CSS.escape(key)}"]`)?.focus({ preventScroll: true });
+	}
+
 	/** Wheel pans; pinch or Ctrl/⌘ + wheel zooms around the pointer. Not passive, so it can stop page scroll. */
 	function wheel(node: HTMLDivElement) {
 		const onWheel = (e: WheelEvent) => {
 			e.preventDefault();
 			if (e.ctrlKey || e.metaKey) {
 				const rect = node.getBoundingClientRect();
-				zoomTo(zoom * Math.exp(-e.deltaY * 0.01), { x: e.clientX - rect.left, y: e.clientY - rect.top });
+				zoomTo(zoom * Math.exp(-e.deltaY * WHEEL_ZOOM_RATE), { x: e.clientX - rect.left, y: e.clientY - rect.top });
 			} else {
 				pan = { x: pan.x - e.deltaX, y: pan.y - e.deltaY };
 			}
@@ -353,6 +375,13 @@
 	const dbNameProblem = (v: string, except?: string) =>
 		databaseNameProblem(v) ?? (workspace.nameTaken(v, except) ? 'A database with this name already exists' : null);
 
+	let paletteOpen = $state(false);
+
+	/** Opens the ⌘K search (also from the home screen's top bar). */
+	export function openSearch() {
+		paletteOpen = true;
+	}
+
 	function newDatabase(at: Point | null = null) {
 		createAt = at;
 		creatingDatabase = true;
@@ -446,7 +475,16 @@
 	type MenuTarget = { kind: 'canvas' } | { kind: 'node'; node: NodeKind; name: string } | { kind: 'link'; app: string; database: string; missing: boolean };
 	let menu = $state<{ target: MenuTarget; at: Point }>({ target: { kind: 'canvas' }, at: { x: 0, y: 0 } });
 
+	/** When Shift+F10 last opened a card's options, so the browser's own context menu for that key is skipped. */
+	let optionsByKeyAt = 0;
+	/** The card whose options menu is open. */
+	let optionsOpen = $state<string | null>(null);
+
 	function onContextMenu(e: MouseEvent) {
+		if (Date.now() - optionsByKeyAt < 500) {
+			e.preventDefault();
+			return;
+		}
 		const el = e.target as Element;
 		const node = el.closest<HTMLElement>('[data-node]')?.dataset.node;
 		const link = el.closest<SVGElement>('[data-link]')?.dataset.link;
@@ -462,9 +500,43 @@
 		}
 	}
 
+	const ARROWS: Record<string, 'up' | 'down' | 'left' | 'right'> = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+
 	function onKey(e: KeyboardEvent) {
-		const typing = (e.target as Element | null)?.closest('input, textarea, select, [contenteditable], [role="dialog"], [role="menu"], [role="listbox"]');
-		if (typing || !selection) return;
+		if (matches(e, 'mod+k') && !e.defaultPrevented) {
+			e.preventDefault();
+			paletteOpen = !paletteOpen;
+			return;
+		}
+		const typing = (e.target as Element | null)?.closest('input, textarea, select, [contenteditable], [role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"]');
+		if (typing || e.defaultPrevented || creatingDatabase || creatingApp) return;
+		if (matches(e, 'n') || matches(e, 'shift+n')) {
+			e.preventDefault();
+			if (e.shiftKey) newApp();
+			else newDatabase();
+			return;
+		}
+		const direction = ARROWS[e.key];
+		if (direction && !e.altKey && !e.metaKey && !e.ctrlKey) {
+			const keys = Object.keys(layout).filter((k) => viewport?.querySelector(`[data-node="${CSS.escape(k)}"]`));
+			const from = selection?.kind === 'node' ? layout[selection.key] : null;
+			// With nothing selected, start from the card nearest the top left.
+			const next = from
+				? nearestInDirection({ x: from.x, y: from.y }, direction, keys.filter((k) => k !== selection?.key).map((k) => ({ key: k, ...layout[k] })))
+				: keys.sort((a, b) => layout[a].x + layout[a].y - (layout[b].x + layout[b].y))[0];
+			if (next) {
+				e.preventDefault();
+				focusCard(next);
+			}
+			return;
+		}
+		if (!selection) return;
+		if ((matches(e, 'shift+f10') || e.key === 'ContextMenu') && selection.kind === 'node') {
+			e.preventDefault();
+			optionsByKeyAt = Date.now();
+			optionsOpen = selection.key;
+			return;
+		}
 		if (e.key === 'Escape') {
 			selection = null;
 		} else if (e.key === 'Enter' && selection.kind === 'node') {
@@ -543,12 +615,19 @@
 	{@const p = layout[key]}
 	{@const selected = selection?.kind === 'node' && selection.key === key}
 	{#if p}
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex (a card is a focus stop: Enter opens it; it holds its own buttons, so it can't be one) -->
 		<div
 			data-node={key}
 			role="group"
+			tabindex="0"
 			aria-label={`${kind === 'app' ? 'App' : onlineByName.has(name) ? 'Online database' : 'Database'} ${name}`}
+			aria-keyshortcuts="Enter Delete Shift+F10"
+			onfocus={() => {
+				selection = { kind: 'node', key };
+				reveal(key);
+			}}
 			class={cn(
-				'group/node absolute flex cursor-grab flex-col rounded-lg border border-(--map-tile-border) p-3 text-(--map-tile-fg) transition-[box-shadow,background-color,opacity,translate] select-none active:cursor-grabbing',
+				'group/node absolute flex cursor-grab flex-col rounded-lg border outline-none focus-visible:ring-4 focus-visible:ring-(--map-accent) border-(--map-tile-border) p-3 text-(--map-tile-fg) transition-[box-shadow,background-color,opacity,translate] select-none active:cursor-grabbing',
 				kind === 'app' ? 'bg-(--map-app)' : 'bg-(--map-db)',
 				!valid && 'opacity-60',
 				related.has(key) && !selected && 'ring-2 ring-(--map-accent)',
@@ -568,7 +647,7 @@
 			<div class="flex items-start gap-1">
 				<span class="line-clamp-2 min-w-0 flex-1 text-[13px] leading-snug font-medium break-words" title={name}>{name}</span>
 				<span role="presentation" class="-me-1.5 -mt-1.5" onpointerdown={(e) => e.stopPropagation()}>
-					<DropdownMenu.Root>
+					<DropdownMenu.Root open={optionsOpen === key} onOpenChange={(o) => (optionsOpen = o ? key : null)}>
 						<DropdownMenu.Trigger>
 							{#snippet child({ props })}
 								<Button
@@ -765,7 +844,7 @@
 					{#if settings.current.canvasHints}
 						<p class="pointer-events-none absolute bottom-3 left-4 flex items-center gap-1.5 text-xs text-muted-foreground">
 							Drag a card's <span class="inline-block size-2.5 rounded-[2px] border-2 border-(--map-line)"></span> onto another to connect ·
-							Double-click to open · <Kbd>⌘</Kbd> + scroll to zoom · Right-click for more
+							Double-click or Enter to open · <Shortcut keys="mod" /> + scroll to zoom · Right-click for more · <Shortcut keys="?" /> shortcuts
 						</p>
 					{/if}
 				{/if}
@@ -832,6 +911,16 @@
 <NewDatabaseDrawer bind:open={editOpen} editing={editingOnline} />
 
 <NewAppDrawer bind:open={creatingApp} onCreated={(name) => placeCreated('app', name)} />
+
+<HomeCommandPalette
+	bind:open={paletteOpen}
+	{canOpen}
+	onOpen={open}
+	onNewDatabase={() => newDatabase()}
+	onNewApp={() => newApp()}
+	onTidy={arrange}
+	onFit={fit}
+/>
 
 <NameDialog
 	bind:open={() => renaming !== null, (o) => !o && (renaming = null)}

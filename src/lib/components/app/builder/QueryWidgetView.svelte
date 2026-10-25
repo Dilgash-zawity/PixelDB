@@ -17,6 +17,7 @@
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
+	import { RowKeys } from '../row-keys.svelte.js';
 
 	// Icons
 	import { Search as SearchIcon } from '@lucide/svelte';
@@ -84,6 +85,9 @@
 	}
 
 	const numeric = (t: FieldType | null) => !!t && ['number', 'large_number', 'currency', 'auto_number'].includes(t.type);
+	const rowKeys = new RowKeys({ open: (i) => clickable && rows[i] && appSession.run(widget.rowAction, rowValues(rows[i].values)) });
+	$effect(() => rowKeys.clamp(rows.length));
+
 	const clickable = $derived(!editing && widget.rowAction.do !== 'none' && widget.rowAction.do !== 'edit-record');
 
 	function rowValues(values: JsonValue[]): Record<string, JsonValue> {
@@ -125,11 +129,14 @@
 						{/each}
 					</Table.Row>
 				</Table.Header>
-				<Table.Body>
-					{#each rows as row (row.i)}
+				<Table.Body onkeydown={rowKeys.keydown}>
+					{#each rows as row, r (row.i)}
 						<Table.Row
+							data-row={r}
+							tabindex={clickable ? rowKeys.tabindex(r) : undefined}
+							onfocus={() => rowKeys.focused(r)}
 							data-state={isSelected(row.values) ? 'selected' : undefined}
-							class={cn(clickable && 'cursor-pointer')}
+							class={cn(clickable && 'cursor-pointer focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring')}
 							onclick={() => clickable && appSession.run(widget.rowAction, rowValues(row.values))}
 						>
 							{#each row.values as value, c (c)}

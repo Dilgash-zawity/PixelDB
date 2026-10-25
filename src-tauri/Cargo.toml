@@ -1,6 +1,6 @@
 [package]
 name = "SlateDB"
-version = "0.0.14"
+version = "0.0.15"
 description = "SlateDB — an offline desktop database builder"
 authors = ["Dilgash"]
 license = "MIT"
@@ -31,11 +31,15 @@ tauri-plugin-opener = "2"
 # Online databases: connection tests for PostgreSQL/MySQL hosts and Turso (libSQL over HTTP).
 sqlx = { version = "0.8", default-features = false, features = ["runtime-tokio", "tls-rustls-ring-webpki", "postgres", "mysql"] }
 reqwest = { version = "0.13", features = ["json"] }
-tokio = { version = "1", features = ["time"] }
+tokio = { version = "1", features = ["sync", "time"] }
 futures-util = { version = "0.3", default-features = false }
 
+# Touchpad pinches on Linux (`touchpad.rs`); the same versions Tauri uses.
+[target.'cfg(target_os = "linux")'.dependencies]
+gtk = "0.18"
+
 [dev-dependencies]
-tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "sync", "time"] }
 tempfile = "3"
 
 [target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]

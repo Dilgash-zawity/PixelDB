@@ -21,6 +21,10 @@ use crate::online::{ConnectionSettings, Engine, connection_error};
 pub const MAX_PAGE_ROWS: u32 = 500;
 /// Time allowed for connecting on top of the query timeout.
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(15);
+/// Connections kept per server. Opening a table sends several requests at
+/// once (its description, a page of rows, the linked tables' labels), and
+/// each holds a connection for a few round trips.
+const POOL_SIZE: u32 = 6;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -79,6 +83,9 @@ pub struct OnlinePools {
     mysql: Arc<Mutex<HashMap<String, sqlx::MySqlPool>>>,
     /// Table descriptions read recently, per connection (`pool_key`).
     pub(crate) catalog: Arc<Mutex<HashMap<String, crate::online_records::Catalog>>>,
+    /// One gate per catalog entry being read, so requests arriving together
+    /// wait for the first one's answer instead of each asking the server.
+    gates: Arc<Mutex<HashMap<String, Arc<tokio::sync::Mutex<()>>>>>,
 }
 
 pub(crate) fn pool_key(s: &ConnectionSettings, secret: &str) -> String {
@@ -90,6 +97,11 @@ pub(crate) fn lock<T>(m: &Mutex<T>) -> AppResult<std::sync::MutexGuard<'_, T>> {
 }
 
 impl OnlinePools {
+    /// The gate for catalog entry `key`; hold its lock while reading it.
+    pub(crate) fn gate(&self, key: String) -> AppResult<Arc<tokio::sync::Mutex<()>>> {
+        Ok(lock(&self.gates)?.entry(key).or_default().clone())
+    }
+
     pub(crate) fn pg(&self, s: &ConnectionSettings, secret: &str) -> AppResult<sqlx::PgPool> {
         use sqlx::postgres::{PgConnectOptions, PgPoolOptions, PgSslMode};
         let mut pools = lock(&self.pg)?;
@@ -111,7 +123,7 @@ impl OnlinePools {
             opts = opts.password(secret);
         }
         let pool = PgPoolOptions::new()
-            .max_connections(2)
+            .max_connections(POOL_SIZE)
             .min_connections(0)
             .idle_timeout(Duration::from_secs(120))
             .acquire_timeout(CONNECT_TIMEOUT)
@@ -140,7 +152,7 @@ impl OnlinePools {
             opts = opts.password(secret);
         }
         let pool = MySqlPoolOptions::new()
-            .max_connections(2)
+            .max_connections(POOL_SIZE)
             .min_connections(0)
             .idle_timeout(Duration::from_secs(120))
             .acquire_timeout(CONNECT_TIMEOUT)
@@ -369,14 +381,16 @@ pub(crate) async fn pg_read(
 }
 
 /// A read-only transaction that gives up after the query timeout.
-pub(crate) async fn pg_begin(pool: &sqlx::PgPool) -> AppResult<sqlx::Transaction<'static, sqlx::Postgres>> {
-    let mut tx = pool.begin().await.map_err(sqlx_error)?;
-    sqlx::query("SET TRANSACTION READ ONLY").execute(&mut *tx).await.map_err(sqlx_error)?;
-    sqlx::query(&format!("SET LOCAL statement_timeout = {}", QUERY_TIMEOUT.as_millis()))
-        .execute(&mut *tx)
-        .await
-        .map_err(sqlx_error)?;
-    Ok(tx)
+// Boxed with an explicit `Send` for the same reason as `mysql_begin`.
+pub(crate) fn pg_begin(pool: &sqlx::PgPool) -> BoxFuture<'_, AppResult<sqlx::Transaction<'static, sqlx::Postgres>>> {
+    Box::pin(async move {
+        use sqlx::Executor;
+        let mut tx = pool.begin().await.map_err(sqlx_error)?;
+        // A plain string runs unprepared, so both settings go in one round trip.
+        let settings = format!("SET TRANSACTION READ ONLY; SET LOCAL statement_timeout = {}", QUERY_TIMEOUT.as_millis());
+        (&mut *tx).execute(settings.as_str()).await.map_err(sqlx_error)?;
+        Ok(tx)
+    })
 }
 
 // ── MySQL values ──

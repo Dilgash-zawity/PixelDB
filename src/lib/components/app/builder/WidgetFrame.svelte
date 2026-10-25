@@ -8,9 +8,9 @@
 	import * as Alert from '#lib/components/ui/alert/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import { Kbd } from '#lib/components/ui/kbd/index.js';
 	import WidgetTypeIcon from './WidgetTypeIcon.svelte';
 	import WidgetView from './WidgetView.svelte';
+	import Shortcut from '../Shortcut.svelte';
 
 	// Icons
 	import {
@@ -89,12 +89,12 @@
 				</DropdownMenu.Trigger>
 				<DropdownMenu.Content align="end">
 					<DropdownMenu.Group>
-						<DropdownMenu.Item onclick={onduplicate}><CopyIcon /> Duplicate <Kbd class="ms-auto">⌘D</Kbd></DropdownMenu.Item>
-						<DropdownMenu.Item onclick={oncopy}><ClipboardCopyIcon /> Copy <Kbd class="ms-auto">⌘C</Kbd></DropdownMenu.Item>
+						<DropdownMenu.Item onclick={onduplicate}><CopyIcon /> Duplicate <Shortcut keys="mod+d" class="ms-auto" /></DropdownMenu.Item>
+						<DropdownMenu.Item onclick={oncopy}><ClipboardCopyIcon /> Copy <Shortcut keys="mod+c" class="ms-auto" /></DropdownMenu.Item>
 					</DropdownMenu.Group>
 					<DropdownMenu.Separator />
 					<DropdownMenu.Group>
-						<DropdownMenu.Item variant="destructive" onclick={onremove}><TrashIcon /> Delete <Kbd class="ms-auto">⌫</Kbd></DropdownMenu.Item>
+						<DropdownMenu.Item variant="destructive" onclick={onremove}><TrashIcon /> Delete <Shortcut keys="delete" class="ms-auto" /></DropdownMenu.Item>
 					</DropdownMenu.Group>
 				</DropdownMenu.Content>
 			</DropdownMenu.Root>

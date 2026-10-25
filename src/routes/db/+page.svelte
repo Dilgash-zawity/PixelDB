@@ -4,6 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { databaseHref } from '#lib/logic/routes.js';
+	import { matches, shortcutText } from '#lib/logic/shortcuts.js';
 	import { session, type Tab } from '#lib/state/session.svelte.js';
 	import { workspace } from '#lib/state/workspace.svelte.js';
 
@@ -16,12 +17,12 @@
 	import QueryView from '#lib/components/app/QueryView.svelte';
 	import RecordsView from '#lib/components/app/RecordsView.svelte';
 	import RelationshipsView from '#lib/components/app/RelationshipsView.svelte';
+	import SearchButton from '#lib/components/app/SearchButton.svelte';
 	import ThemeToggle from '#lib/components/app/ThemeToggle.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
-	import { Kbd } from '#lib/components/ui/kbd/index.js';
 	import * as Select from '#lib/components/ui/select/index.js';
 	import { Separator } from '#lib/components/ui/separator/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
@@ -36,7 +37,6 @@
 		Settings as SettingsIcon,
 		Network as NetworkIcon,
 		Plus as PlusIcon,
-		Search as SearchIcon,
 		SearchCode as SearchCodeIcon,
 		Table2 as TableIcon,
 		TriangleAlert as TriangleAlertIcon,
@@ -79,10 +79,18 @@
 		return `Table ${n}`;
 	}
 
+	const TABS: Tab[] = ['diagram', 'datasheet', 'query'];
+
 	function onKey(e: KeyboardEvent) {
-		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+		if (matches(e, 'mod+k')) {
 			e.preventDefault();
 			paletteOpen = !paletteOpen;
+			return;
+		}
+		const n = TABS.findIndex((_, i) => matches(e, `mod+${i + 1}`));
+		if (n >= 0 && session.info) {
+			e.preventDefault();
+			session.showTab(TABS[n]);
 		}
 	}
 </script>
@@ -144,9 +152,9 @@
 
 			<Tabs.Root bind:value={() => session.tab, (v) => session.showTab(v as Tab)}>
 				<Tabs.List variant="line">
-					<Tabs.Trigger value="diagram"><NetworkIcon /> Diagram</Tabs.Trigger>
-					<Tabs.Trigger value="datasheet"><TableIcon /> Datasheet</Tabs.Trigger>
-					<Tabs.Trigger value="query"><SearchCodeIcon /> Query</Tabs.Trigger>
+					<Tabs.Trigger value="diagram" title="Diagram ({shortcutText('mod+1')})"><NetworkIcon /> Diagram</Tabs.Trigger>
+					<Tabs.Trigger value="datasheet" title="Datasheet ({shortcutText('mod+2')})"><TableIcon /> Datasheet</Tabs.Trigger>
+					<Tabs.Trigger value="query" title="Query ({shortcutText('mod+3')})"><SearchCodeIcon /> Query</Tabs.Trigger>
 				</Tabs.List>
 			</Tabs.Root>
 
@@ -170,9 +178,7 @@
 			{/if}
 
 			<span class="flex-1"></span>
-			<Button variant="ghost" size="sm" class="text-muted-foreground" onclick={() => (paletteOpen = true)}>
-				<SearchIcon data-icon="inline-start" /> Search <Kbd>⌘K</Kbd>
-			</Button>
+			<SearchButton onclick={() => (paletteOpen = true)} />
 			<ThemeToggle />
 		</header>
 

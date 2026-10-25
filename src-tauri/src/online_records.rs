@@ -12,7 +12,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 
-use futures_util::future::BoxFuture;
+use futures_util::future::{BoxFuture, join, try_join, try_join3};
 use serde::Serialize;
 use serde_json::{Map, Value as JsonValue, json};
 
@@ -441,13 +441,18 @@ impl<'a> Online<'a> {
 
     /// Tables and views; `fresh` reads them again and forgets descriptions.
     async fn objects(&self, fresh: bool) -> AppResult<Arc<Vec<OnlineObject>>> {
-        if !fresh {
-            let cached = lock(&self.pools.catalog)?.get(&self.key()).and_then(|c| c.objects.clone());
-            if let Some((at, list)) = cached
-                && at.elapsed() < CATALOG_TTL
-            {
-                return Ok(list);
-            }
+        let cached = || -> AppResult<Option<Arc<Vec<OnlineObject>>>> {
+            let entry = lock(&self.pools.catalog)?.get(&self.key()).and_then(|c| c.objects.clone());
+            Ok(entry.filter(|(at, _)| at.elapsed() < CATALOG_TTL).map(|(_, list)| list))
+        };
+        if !fresh && let Some(list) = cached()? {
+            return Ok(list);
+        }
+        let gate = self.pools.gate(format!("{}\u{0}", self.key()))?;
+        let _turn = gate.lock().await;
+        // Read while this call waited its turn.
+        if !fresh && let Some(list) = cached()? {
+            return Ok(list);
         }
         let list = Arc::new(online_data::list_objects(self.pools, self.s, self.secret).await?);
         let mut catalog = lock(&self.pools.catalog)?;
@@ -473,10 +478,17 @@ impl<'a> Online<'a> {
 
     /// The columns and keys of the table or view `name`; cached briefly.
     pub async fn describe(&self, name: &str) -> AppResult<Arc<OnlineTable>> {
-        let cached = lock(&self.pools.catalog)?.get(&self.key()).and_then(|c| c.tables.get(name).cloned());
-        if let Some((at, t)) = cached
-            && at.elapsed() < CATALOG_TTL
-        {
+        let cached = || -> AppResult<Option<Arc<OnlineTable>>> {
+            let entry = lock(&self.pools.catalog)?.get(&self.key()).and_then(|c| c.tables.get(name).cloned());
+            Ok(entry.filter(|(at, _)| at.elapsed() < CATALOG_TTL).map(|(_, t)| t))
+        };
+        if let Some(t) = cached()? {
+            return Ok(t);
+        }
+        // Opening a table asks for its description several times at once.
+        let gate = self.pools.gate(format!("{}\u{0}{name}", self.key()))?;
+        let _turn = gate.lock().await;
+        if let Some(t) = cached()? {
             return Ok(t);
         }
         let object = self.resolve(name).await?;
@@ -592,7 +604,7 @@ impl<'a> Online<'a> {
     async fn pg_catalog(&self, o: &OnlineObject) -> AppResult<CatalogRows> {
         let pool = self.pools.pg(self.s, self.secret)?;
         type Col = (String, String, String, String, bool, Option<String>, Option<i64>, bool, bool);
-        let cols: Vec<Col> = sqlx::query_as(
+        let cols = sqlx::query_as::<_, Col>(
             "SELECT column_name::text, data_type::text, udt_schema::text, udt_name::text, \
              (is_nullable::text = 'YES'), column_default::text, character_maximum_length::int8, \
              (COALESCE(is_identity::text, 'NO') = 'YES'), (COALESCE(is_generated::text, 'NEVER') <> 'NEVER') \
@@ -600,11 +612,9 @@ impl<'a> Online<'a> {
         )
         .bind(&o.schema)
         .bind(&o.name)
-        .fetch_all(&pool)
-        .await
-        .map_err(sqlx_error)?;
+        .fetch_all(&pool);
         type Con = (String, String, String, String, String, String, String, String);
-        let cons: Vec<Con> = sqlx::query_as(
+        let cons = sqlx::query_as::<_, Con>(
             "SELECT con.contype::text, con.conname::text, a.attname::text, COALESCE(fn.nspname::text, ''), \
              COALESCE(fc.relname::text, ''), COALESCE(fa.attname::text, ''), con.confupdtype::text, con.confdeltype::text \
              FROM pg_catalog.pg_constraint con \
@@ -620,18 +630,16 @@ impl<'a> Online<'a> {
         )
         .bind(&o.schema)
         .bind(&o.name)
-        .fetch_all(&pool)
-        .await
-        .map_err(sqlx_error)?;
-        let rows: Option<(i64,)> = sqlx::query_as(
+        .fetch_all(&pool);
+        let rows = sqlx::query_as::<_, (i64,)>(
             "SELECT c.reltuples::int8 FROM pg_catalog.pg_class c JOIN pg_catalog.pg_namespace n ON n.oid = c.relnamespace \
              WHERE n.nspname = $1 AND c.relname = $2 AND c.relkind IN ('r', 'p', 'f')",
         )
         .bind(&o.schema)
         .bind(&o.name)
-        .fetch_optional(&pool)
-        .await
-        .map_err(sqlx_error)?;
+        .fetch_optional(&pool);
+        // Each on its own connection, so the round trips overlap.
+        let (cols, cons, rows) = try_join3(cols, cons, rows).await.map_err(sqlx_error)?;
         let cols = cols
             .into_iter()
             .map(|(name, data_type, udt_schema, udt, nullable, default, max_length, identity, generated)| {
@@ -689,8 +697,7 @@ impl<'a> Online<'a> {
                 "SELECT CAST(COLUMN_NAME AS CHAR), CAST(DATA_TYPE AS CHAR), CAST(COLUMN_TYPE AS CHAR), CAST(IS_NULLABLE AS CHAR), \
                  CAST(COLUMN_DEFAULT AS CHAR), CAST(EXTRA AS CHAR), CAST(CHARACTER_MAXIMUM_LENGTH AS CHAR), CAST(COLUMN_COMMENT AS CHAR) \
                  FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? ORDER BY ORDINAL_POSITION",
-            )
-            .await?;
+            );
             let cons = text(
                 "SELECT CAST(CASE c.CONSTRAINT_TYPE WHEN 'PRIMARY KEY' THEN 'p' WHEN 'UNIQUE' THEN 'u' ELSE 'f' END AS CHAR), \
                  CAST(k.CONSTRAINT_NAME AS CHAR), CAST(k.COLUMN_NAME AS CHAR), CAST(k.REFERENCED_TABLE_SCHEMA AS CHAR), \
@@ -703,13 +710,12 @@ impl<'a> Online<'a> {
                  AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME \
                  WHERE k.TABLE_SCHEMA = ? AND k.TABLE_NAME = ? AND c.CONSTRAINT_TYPE IN ('PRIMARY KEY', 'UNIQUE', 'FOREIGN KEY') \
                  ORDER BY k.CONSTRAINT_NAME, k.ORDINAL_POSITION",
-            )
-            .await?;
+            );
             let rows = text(
                 "SELECT CAST(TABLE_ROWS AS CHAR) FROM information_schema.TABLES WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? \
                  AND TABLE_TYPE = 'BASE TABLE'",
-            )
-            .await?;
+            );
+            let (cols, cons, rows) = try_join3(cols, cons, rows).await?;
             let get = |r: &Vec<Option<String>>, i: usize| r.get(i).cloned().flatten().unwrap_or_default();
             let cols = cols
                 .iter()
@@ -1309,9 +1315,8 @@ pub async fn list_records(o: &Online<'_>, table: &str, q: &RecordQuery) -> AppRe
     };
     page.push(&format!(" LIMIT {limit} OFFSET {}", q.offset.min(i64::MAX as u64)));
 
-    let (_, _, totals) = o.read(&count).await?;
+    let ((_, _, totals), (_, _, rows)) = try_join(o.read(&count), o.read(&page)).await?;
     let total = totals.first().and_then(|r| r.first()).and_then(JsonValue::as_i64).unwrap_or(0);
-    let (_, _, rows) = o.read(&page).await?;
     Ok(RecordPage {
         columns: t.columns.iter().map(|c| c.name.clone()).collect(),
         types: t.columns.iter().map(|c| Some(c.field_type.clone())).collect(),
@@ -1505,7 +1510,9 @@ pub async fn saved_query(o: &Online<'_>, name: &str) -> AppResult<SavedQuery> {
 
 pub async fn info(o: &Online<'_>) -> AppResult<OnlineInfo> {
     let engine = o.engine();
-    let objects = o.objects(true).await?;
+    // The page lists objects (fresh) at the same time; reading the listing
+    // fresh here too would forget the table descriptions a second time.
+    let objects = o.objects(false).await?;
     let (version_sql, size_sql) = match engine {
         Engine::Postgres => ("SELECT version()", "SELECT pg_database_size(current_database())::int8"),
         Engine::Mysql => (
@@ -1514,13 +1521,15 @@ pub async fn info(o: &Online<'_>) -> AppResult<OnlineInfo> {
         ),
         Engine::Libsql => ("SELECT sqlite_version()", "SELECT page_count * page_size FROM pragma_page_count(), pragma_page_size()"),
     };
-    let (_, _, v) = o.read(&Sql::new(engine, version_sql)).await?;
+    let (version_sql, size_sql) = (Sql::new(engine, version_sql), Sql::new(engine, size_sql));
+    let (v, size) = join(o.read(&version_sql), o.read(&size_sql)).await;
+    let (_, _, v) = v?;
     let mut version = v.first().and_then(|r| r.first()).and_then(JsonValue::as_str).unwrap_or_default().to_string();
     if engine == Engine::Libsql {
         version = format!("SQLite {version}");
     }
     // Not every server lets every user see its size.
-    let size = match o.read(&Sql::new(engine, size_sql)).await {
+    let size = match size {
         Ok((_, _, r)) => r.first().and_then(|r| r.first()).and_then(|v| v.as_i64().or_else(|| v.as_str()?.parse().ok())),
         Err(_) => None,
     };

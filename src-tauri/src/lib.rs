@@ -6,6 +6,8 @@ pub mod models;
 pub mod online;
 pub mod online_data;
 pub mod online_records;
+#[cfg(target_os = "linux")]
+mod touchpad;
 pub mod validation;
 pub mod workspace;
 
@@ -29,6 +31,12 @@ pub fn run() {
       app.manage(WorkspaceStore::load(config_dir.join("settings.json")));
       app.manage(online::SecretStore::new(config_dir.join("online-secrets.json")));
       app.manage(online_data::OnlinePools::default());
+      #[cfg(target_os = "linux")]
+      for window in app.webview_windows().values() {
+        if let Err(e) = touchpad::forward_pinches(window) {
+          log::warn!("touchpad pinch zoom unavailable: {e}");
+        }
+      }
       if cfg!(debug_assertions) {
         app.handle().plugin(
           tauri_plugin_log::Builder::default()

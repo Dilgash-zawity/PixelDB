@@ -8,6 +8,7 @@
 	import { openUrl } from '@tauri-apps/plugin-opener';
 	import { resetMode, setMode, userPrefersMode } from 'mode-watcher';
 	import { ACCENTS, RADII, TEXT_SIZES, type Settings } from '#lib/logic/settings.js';
+	import { nextRow, typingTarget } from '#lib/logic/shortcuts.js';
 	import { homeLayoutKey } from '#lib/logic/workspace-map.js';
 	import { attempt, confirm } from '#lib/state/feedback.svelte.js';
 	import { settings } from '#lib/state/settings.svelte.js';
@@ -77,6 +78,23 @@
 		if (scroller) scroller.scrollTop = 0;
 	}
 
+	/** Escape goes back, unless a dialog or menu is open to take it. */
+	function onKey(e: KeyboardEvent) {
+		if (e.key !== 'Escape' || e.defaultPrevented || typingTarget(e.target)) return;
+		if (document.querySelector('[role="dialog"], [role="alertdialog"], [role="menu"]')) return;
+		history.back();
+	}
+
+	/** Up and Down walk the sections while the menu has focus. */
+	function onNavKey(e: KeyboardEvent) {
+		const i = SECTIONS.findIndex((x) => x.id === current.id);
+		const next = nextRow(e.key, i, SECTIONS.length);
+		if (next === null || next === i) return;
+		e.preventDefault();
+		show(SECTIONS[next].id);
+		(e.currentTarget as HTMLElement).querySelectorAll('button')[next]?.focus();
+	}
+
 	const THEMES = [
 		{ value: 'light', label: 'Light', icon: SunIcon },
 		{ value: 'dark', label: 'Dark', icon: MoonIcon },
@@ -137,16 +155,19 @@
 	</Field.Field>
 {/snippet}
 
+<svelte:window onkeydown={onKey} />
+
 <div class="flex h-svh flex-col">
 	<header data-bar class="app-header flex h-12 shrink-0 items-center gap-2 border-b bg-sidebar px-3">
-		<Button variant="ghost" size="sm" onclick={() => history.back()}>
+		<Button variant="ghost" size="sm" title="Back (Esc)" onclick={() => history.back()}>
 			<ArrowLeftIcon data-icon="inline-start" /> Back
 		</Button>
 		<span class="font-semibold">Settings</span>
 	</header>
 
 	<div class="flex min-h-0 flex-1">
-		<nav class="flex w-48 shrink-0 flex-col gap-0.5 border-e bg-sidebar p-2 sm:w-56 sm:p-3" aria-label="Settings">
+		<!-- svelte-ignore a11y_no_noninteractive_element_interactions (arrow keys for the buttons inside) -->
+		<nav class="flex w-48 shrink-0 flex-col gap-0.5 border-e bg-sidebar p-2 sm:w-56 sm:p-3" aria-label="Settings" onkeydown={onNavKey}>
 			{#each SECTIONS as s (s.id)}
 				{@const active = current.id === s.id}
 				<Button

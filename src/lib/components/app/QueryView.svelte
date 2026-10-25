@@ -40,7 +40,6 @@
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
-	import { Kbd } from '#lib/components/ui/kbd/index.js';
 	import * as Select from '#lib/components/ui/select/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
@@ -48,6 +47,7 @@
 	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
 	import FieldTypeIcon from './FieldTypeIcon.svelte';
 	import NameDialog from './NameDialog.svelte';
+	import Shortcut from './Shortcut.svelte';
 
 	// Icons
 	import {
@@ -357,7 +357,7 @@
 
 			<Button size="sm" disabled={!currentSql.trim() || running} onclick={() => run()}>
 				{#if running}<Spinner data-icon="inline-start" />{:else}<PlayIcon data-icon="inline-start" />{/if}
-				Run <Kbd>⌘ ↵</Kbd>
+				Run <Shortcut keys="mod+enter" />
 			</Button>
 
 			<ButtonGroup.Root>

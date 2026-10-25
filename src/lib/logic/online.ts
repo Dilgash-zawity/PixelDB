@@ -294,7 +294,7 @@ export function engineFeatures(engine: Engine): EngineFeature[] {
 }
 
 /** What only local databases have; online structure is changed with the server's own tools. */
-export const LOCAL_ONLY = ['Designing tables and fields', 'The relationship diagram', 'Saving queries', 'Files in fields'];
+export const LOCAL_ONLY = ['Designing tables, fields and links', 'Saving queries', 'Files in fields'];
 
 /** Whether the server can time a query plan by running it. */
 export const canTimePlans = (engine: Engine): boolean => engine === 'postgres';

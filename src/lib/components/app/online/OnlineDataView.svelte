@@ -11,6 +11,7 @@
 	import { untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { loadLookups, lookupLabel, type LookupOption } from '#lib/logic/lookups.js';
+	import { matches, typingTarget } from '#lib/logic/shortcuts.js';
 	import { displayValue } from '#lib/logic/values.js';
 	import { attempt, cleanMessage, confirm } from '#lib/state/feedback.svelte.js';
 	import { cn } from '#lib/utils.js';
@@ -23,6 +24,8 @@
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
 	import RecordDrawer from '../RecordDrawer.svelte';
+	import { RowKeys } from '../row-keys.svelte.js';
+	import Shortcut from '../Shortcut.svelte';
 
 	// Icons
 	import {
@@ -65,6 +68,16 @@
 
 	const editable = $derived(!!described?.editable);
 
+	let searchInput = $state<HTMLInputElement | null>(null);
+	let body = $state<HTMLElement | null>(null);
+	const rows = new RowKeys({
+		open: (i) => page && openRow(page.rows[i]),
+		toggle: (i) => {
+			const row = page?.rows[i];
+			if (row && editable) toggle(row, !selected.includes(keyOf(row)));
+		}
+	});
+
 	$effect(() => {
 		untrack(async () => {
 			const [d, i] = await Promise.all([
@@ -103,6 +116,7 @@
 			page = p;
 			error = null;
 			selected = [];
+			rows.clamp(p.rows.length);
 		} catch (e) {
 			if (r === request) error = cleanMessage(e instanceof Error ? e.message : String(e));
 		} finally {
@@ -126,6 +140,46 @@
 		if (!editable || !info) return;
 		drawerRow = row;
 		drawerOpen = true;
+	}
+
+	const lastPage = () => !page || offset + PAGE_SIZE >= page.total;
+
+	/** Keys for the whole view, while nothing else (a text box, menu or dialog) takes them. */
+	function onWindowKey(e: KeyboardEvent) {
+		if (e.defaultPrevented || drawerOpen || typingTarget(e.target)) return;
+		if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+		if (matches(e, '/')) {
+			e.preventDefault();
+			searchInput?.focus();
+		} else if (matches(e, 'n') && editable && info) {
+			e.preventDefault();
+			openRow(null);
+		} else if (matches(e, '[') && offset > 0) {
+			e.preventDefault();
+			offset = Math.max(0, offset - PAGE_SIZE);
+		} else if (matches(e, ']') && !lastPage()) {
+			e.preventDefault();
+			offset += PAGE_SIZE;
+		} else if (matches(e, 'delete') && editable) {
+			// The selected rows, or else the focused one.
+			const focused = (e.target as HTMLElement).closest('[data-row]') && page?.rows[rows.active];
+			if (!selected.length && focused) selected = [keyOf(focused)];
+			if (selected.length) {
+				e.preventDefault();
+				deleteSelected();
+			}
+		}
+	}
+
+	/** In the search box, ↓ goes to the rows and Esc clears it, then leaves it. */
+	function onSearchKey(e: KeyboardEvent) {
+		if (e.key === 'ArrowDown' || (e.key === 'Escape' && !search)) {
+			e.preventDefault();
+			rows.focusIn(body);
+		} else if (e.key === 'Escape') {
+			e.preventDefault();
+			search = '';
+		}
 	}
 
 	async function deleteSelected() {
@@ -153,11 +207,14 @@
 	const allSelected = $derived(!!page?.rows.length && page.rows.every((r) => selected.includes(keyOf(r))));
 </script>
 
+<svelte:window onkeydown={onWindowKey} />
+
 <div class="flex h-full min-h-0 flex-col">
 	<div class="flex shrink-0 items-center gap-2 border-b px-3 py-2">
 		<InputGroup.Root class="h-8 max-w-72">
-			<InputGroup.Input placeholder="Search" bind:value={search} aria-label="Search {table}" />
+			<InputGroup.Input bind:ref={searchInput} placeholder="Search" bind:value={search} aria-label="Search {table}" onkeydown={onSearchKey} />
 			<InputGroup.Addon><SearchIcon /></InputGroup.Addon>
+			<InputGroup.Addon align="inline-end"><Shortcut keys="/" /></InputGroup.Addon>
 		</InputGroup.Root>
 		{#if described && !described.editable}
 			<Badge variant="outline" class="border-warning/40 bg-warning/10 text-warning">
@@ -170,7 +227,7 @@
 		{/if}
 		<Button size="icon-sm" variant="ghost" aria-label="Reload rows" disabled={loading} onclick={() => revision++}><RefreshIcon /></Button>
 		{#if editable && info}
-			<Button size="sm" onclick={() => openRow(null)}><PlusIcon data-icon="inline-start" /> New record</Button>
+			<Button size="sm" title="New record (N)" onclick={() => openRow(null)}><PlusIcon data-icon="inline-start" /> New record</Button>
 		{/if}
 	</div>
 
@@ -209,12 +266,15 @@
 						{/each}
 					</Table.Row>
 				</Table.Header>
-				<Table.Body>
+				<Table.Body bind:ref={body} onkeydown={rows.keydown}>
 					{#each page.rows as row, r (r)}
 						{@const k = keyOf(row)}
 						<Table.Row
+							data-row={r}
+							tabindex={rows.tabindex(r)}
+							onfocus={() => rows.focused(r)}
 							data-state={selected.includes(k) ? 'selected' : undefined}
-							class={cn(editable && info && 'cursor-pointer')}
+							class={cn('focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-ring', editable && info && 'cursor-pointer')}
 							onclick={() => openRow(row)}
 						>
 							{#if editable}
@@ -246,10 +306,10 @@
 			{:else}
 				<span>0 records</span>
 			{/if}
-			<Button size="icon-sm" variant="ghost" aria-label="Previous page" disabled={offset === 0} onclick={() => (offset = Math.max(0, offset - PAGE_SIZE))}>
+			<Button size="icon-sm" variant="ghost" aria-label="Previous page" title="Previous page ([)" disabled={offset === 0} onclick={() => (offset = Math.max(0, offset - PAGE_SIZE))}>
 				<ChevronLeftIcon />
 			</Button>
-			<Button size="icon-sm" variant="ghost" aria-label="Next page" disabled={offset + PAGE_SIZE >= page.total} onclick={() => (offset += PAGE_SIZE)}>
+			<Button size="icon-sm" variant="ghost" aria-label="Next page" title="Next page (])" disabled={lastPage()} onclick={() => (offset += PAGE_SIZE)}>
 				<ChevronRightIcon />
 			</Button>
 		</div>

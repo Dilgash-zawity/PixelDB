@@ -10,6 +10,7 @@
 	// Components
 	import FocusModeSwitch from '#lib/components/app/FocusModeSwitch.svelte';
 	import Logo from '#lib/components/app/Logo.svelte';
+	import SearchButton from '#lib/components/app/SearchButton.svelte';
 	import ThemeToggle from '#lib/components/app/ThemeToggle.svelte';
 	import WorkspaceMap from '#lib/components/app/WorkspaceMap.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -27,6 +28,7 @@
 	});
 
 	workspace.load();
+	let map = $state<WorkspaceMap | null>(null);
 	// Files can change outside the app; pick that up when the window regains focus.
 	const refreshOnFocus = () => workspace.info && workspace.refresh();
 </script>
@@ -38,6 +40,7 @@
 		<Logo class="size-6" />
 		<span class="font-semibold">SlateDB</span>
 		<span class="flex-1"></span>
+		{#if workspace.info}<SearchButton onclick={() => map?.openSearch()} />{/if}
 		<Button variant="ghost" size="icon-sm" href={resolve('/settings')} aria-label="Settings" title="Settings"><SettingsIcon /></Button>
 		<ThemeToggle />
 	</header>
@@ -63,6 +66,6 @@
 			</Empty.Content>
 		</Empty.Root>
 	{:else}
-		<WorkspaceMap />
+		<WorkspaceMap bind:this={map} />
 	{/if}
 </div>

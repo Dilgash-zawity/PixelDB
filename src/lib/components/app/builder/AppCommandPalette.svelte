@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Utils
 	import { toggleMode } from 'mode-watcher';
+	import { shortcutsDialog } from '#lib/state/shortcuts.svelte.js';
 	import { widgetLabel, WIDGET_TYPES, type WidgetType } from '#lib/logic/app-def.js';
 	import { appSession } from '#lib/state/app.svelte.js';
 
@@ -12,6 +13,7 @@
 	// Icons
 	import {
 		ArrowLeft as ArrowLeftIcon,
+		Keyboard as KeyboardIcon,
 		ClipboardPaste as ClipboardPasteIcon,
 		FilePlus as FilePlusIcon,
 		PanelLeft as PanelLeftIcon,
@@ -54,7 +56,7 @@
 			{#each (appSession.def?.pages ?? []).filter((p) => editing || !p.hidden) as p (p.id)}
 				<Command.Item value={`page ${p.group} ${p.title}`} onSelect={() => run(() => appSession.showPage(p.id))}>
 					<AppIcon name={p.icon} /> {p.title}
-					{#if p.group}<span class="ms-auto text-xs text-muted-foreground">{p.group}</span>{/if}
+					{#if p.group}<Command.Shortcut class="tracking-normal">{p.group}</Command.Shortcut>{/if}
 				</Command.Item>
 			{/each}
 			{#if editing}
@@ -95,6 +97,7 @@
 			<Command.Item onSelect={() => run(() => appSession.run({ do: 'refresh' }))}><RefreshCwIcon /> Reload the data</Command.Item>
 			<Command.Item onSelect={() => run(() => setTimeout(() => window.print(), 100))}><PrinterIcon /> Print this page</Command.Item>
 			<Command.Item onSelect={() => run(toggleMode)}><SunMoonIcon /> Toggle light / dark</Command.Item>
+			<Command.Item value="keyboard shortcuts" onSelect={() => run(() => (shortcutsDialog.open = true))}><KeyboardIcon /> Keyboard shortcuts</Command.Item>
 			<Command.Item onSelect={() => run(onBack)}><ArrowLeftIcon /> Home</Command.Item>
 			<Command.Item onSelect={() => run(onSettings)}><SettingsIcon /> Settings</Command.Item>
 		</Command.Group>

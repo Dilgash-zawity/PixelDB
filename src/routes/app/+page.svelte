@@ -5,7 +5,8 @@
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
-	import { removeCommand } from '#lib/logic/app-def.js';
+	import { pageGroups, removeCommand } from '#lib/logic/app-def.js';
+	import { matches, shortcutText } from '#lib/logic/shortcuts.js';
 	import { appHref } from '#lib/logic/routes.js';
 	import { appSession, type AppMode } from '#lib/state/app.svelte.js';
 	import { workspace } from '#lib/state/workspace.svelte.js';
@@ -19,11 +20,12 @@
 	import CommandProperties from '#lib/components/app/builder/CommandProperties.svelte';
 	import NewPageDialog from '#lib/components/app/builder/NewPageDialog.svelte';
 	import WidgetProperties from '#lib/components/app/builder/WidgetProperties.svelte';
+	import Shortcut from '#lib/components/app/Shortcut.svelte';
+	import SearchButton from '#lib/components/app/SearchButton.svelte';
 	import ThemeToggle from '#lib/components/app/ThemeToggle.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
-	import { Kbd } from '#lib/components/ui/kbd/index.js';
 	import { Separator } from '#lib/components/ui/separator/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
@@ -41,7 +43,6 @@
 		Pencil as PencilIcon,
 		Play as PlayIcon,
 		Redo2 as Redo2Icon,
-		Search as SearchIcon,
 		TriangleAlert as TriangleAlertIcon,
 		Undo2 as Undo2Icon,
 	} from '@lucide/svelte';
@@ -99,6 +100,20 @@
 		if (mod && e.key.toLowerCase() === 'b' && !inTextBox(e)) {
 			e.preventDefault();
 			appSession.toggleSidebar();
+			return;
+		}
+		if (matches(e, 'mod+e') && appSession.def) {
+			e.preventDefault();
+			appSession.setMode(editing ? 'run' : 'edit');
+			return;
+		}
+		if ((matches(e, 'alt+arrowdown') || matches(e, 'alt+arrowup')) && !inTextBox(e) && appSession.def) {
+			e.preventDefault();
+			// In sidebar order; hidden pages only while editing, as the sidebar shows them.
+			const pages = pageGroups(appSession.def.pages, editing).flatMap((g) => g.pages);
+			const i = pages.findIndex((p) => p.id === appSession.page?.id);
+			const next = pages[i + (e.key === 'ArrowDown' ? 1 : -1)];
+			if (next) appSession.showPage(next.id);
 			return;
 		}
 		if (!editing || inTextBox(e)) return;
@@ -183,7 +198,7 @@
 						</Button>
 					{/snippet}
 				</Tooltip.Trigger>
-				<Tooltip.Content>{appSession.sidebarCollapsed ? 'Expand' : 'Collapse'} sidebar <Kbd>⌘B</Kbd></Tooltip.Content>
+				<Tooltip.Content>{appSession.sidebarCollapsed ? 'Expand' : 'Collapse'} sidebar <Shortcut keys="mod+b" /></Tooltip.Content>
 			</Tooltip.Root>
 			<DropdownMenu.Root onOpenChange={(open) => open && workspace.refresh()}>
 				<DropdownMenu.Trigger>
@@ -236,7 +251,7 @@
 							<Button {...props} variant="ghost" size="icon-sm" aria-label="Undo" disabled={!appSession.canUndo} onclick={() => appSession.undo()}><Undo2Icon /></Button>
 						{/snippet}
 					</Tooltip.Trigger>
-					<Tooltip.Content>Undo <Kbd>⌘Z</Kbd></Tooltip.Content>
+					<Tooltip.Content>Undo <Shortcut keys="mod+z" /></Tooltip.Content>
 				</Tooltip.Root>
 				<Tooltip.Root>
 					<Tooltip.Trigger>
@@ -244,7 +259,7 @@
 							<Button {...props} variant="ghost" size="icon-sm" aria-label="Redo" disabled={!appSession.canRedo} onclick={() => appSession.redo()}><Redo2Icon /></Button>
 						{/snippet}
 					</Tooltip.Trigger>
-					<Tooltip.Content>Redo <Kbd>⇧⌘Z</Kbd></Tooltip.Content>
+					<Tooltip.Content>Redo <Shortcut keys="shift+mod+z" /></Tooltip.Content>
 				</Tooltip.Root>
 				<Separator orientation="vertical" class="data-vertical:h-5 data-vertical:self-center" />
 			{/if}
@@ -257,14 +272,13 @@
 					value={appSession.mode}
 					onValueChange={(v) => v && appSession.setMode(v as AppMode)}
 					aria-label="Mode"
+					title="Switch between Edit and Run ({shortcutText('mod+e')})"
 				>
 					<ToggleGroup.Item value="edit" aria-label="Edit"><PencilIcon /> Edit</ToggleGroup.Item>
 					<ToggleGroup.Item value="run" aria-label="Run"><PlayIcon /> Run</ToggleGroup.Item>
 				</ToggleGroup.Root>
 			{/if}
-			<Button variant="ghost" size="sm" class="text-muted-foreground" onclick={() => (paletteOpen = true)}>
-				<SearchIcon data-icon="inline-start" /> Search <Kbd>⌘K</Kbd>
-			</Button>
+			<SearchButton onclick={() => (paletteOpen = true)} />
 			<ThemeToggle />
 		</header>
 

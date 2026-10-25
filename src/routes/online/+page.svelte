@@ -14,17 +14,21 @@
 	import { toast } from 'svelte-sonner';
 	import { groupBySchema, sqlName } from '#lib/logic/online.js';
 	import { databaseHref } from '#lib/logic/routes.js';
+	import { matches, shortcutText, typingTarget } from '#lib/logic/shortcuts.js';
 	import { attempt, cleanMessage } from '#lib/state/feedback.svelte.js';
 	import { workspace } from '#lib/state/workspace.svelte.js';
 
 	// Components
 	import Logo from '#lib/components/app/Logo.svelte';
 	import NewDatabaseDrawer from '#lib/components/app/NewDatabaseDrawer.svelte';
+	import OnlineCommandPalette from '#lib/components/app/online/OnlineCommandPalette.svelte';
 	import OnlineDataView from '#lib/components/app/online/OnlineDataView.svelte';
+	import OnlineDiagramView from '#lib/components/app/online/OnlineDiagramView.svelte';
 	import OnlineOverview from '#lib/components/app/online/OnlineOverview.svelte';
 	import OnlineQueryView from '#lib/components/app/online/OnlineQueryView.svelte';
 	import OnlineStructureView from '#lib/components/app/online/OnlineStructureView.svelte';
 	import ProviderIcon from '#lib/components/app/ProviderIcon.svelte';
+	import SearchButton from '#lib/components/app/SearchButton.svelte';
 	import ThemeToggle from '#lib/components/app/ThemeToggle.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
@@ -43,6 +47,7 @@
 		Database as DatabaseIcon,
 		Gauge as GaugeIcon,
 		ListTree as ListTreeIcon,
+		Network as NetworkIcon,
 		RefreshCw as RefreshIcon,
 		SearchCode as SearchCodeIcon,
 		Settings as SettingsIcon,
@@ -51,7 +56,7 @@
 	} from '@lucide/svelte';
 
 	// Script
-	type Tab = 'overview' | 'data' | 'structure' | 'query';
+	type Tab = 'overview' | 'diagram' | 'data' | 'structure' | 'query';
 
 	const name = $derived(page.url.searchParams.get('name') ?? '');
 	const connection = $derived(workspace.online.find((o) => o.name === name) ?? null);
@@ -101,6 +106,12 @@
 		table = t;
 	}
 
+	/** Shows table `t` on the Data or Structure tab (from the diagram and the overview). */
+	function openTable(t: string, view: 'data' | 'structure') {
+		table = t;
+		tab = view;
+	}
+
 	async function test() {
 		const settings = connection?.settings;
 		if (!settings) return;
@@ -116,8 +127,38 @@
 	function openDatabase(db: string, online: boolean) {
 		goto(databaseHref(resolve(online ? '/online' : '/db'), db));
 	}
+
+	const TABS: Tab[] = ['overview', 'diagram', 'data', 'structure', 'query'];
+
+	let paletteOpen = $state(false);
+
+	function onKey(e: KeyboardEvent) {
+		if (e.defaultPrevented) return;
+		if (matches(e, 'mod+k')) {
+			e.preventDefault();
+			paletteOpen = !paletteOpen;
+			return;
+		}
+		const n = TABS.findIndex((_, i) => matches(e, `mod+${i + 1}`));
+		if (n >= 0) {
+			e.preventDefault();
+			tab = TABS[n];
+			return;
+		}
+		// The next or previous table, in the picker's order.
+		const step = matches(e, 'alt+arrowdown') ? 1 : matches(e, 'alt+arrowup') ? -1 : 0;
+		if (step && (tab === 'data' || tab === 'structure') && !typingTarget(e.target)) {
+			const order = groups.flatMap((g) => g.items.map((x) => x.item.name));
+			const next = order[order.indexOf(table ?? '') + step];
+			if (next) {
+				e.preventDefault();
+				show(next);
+			}
+		}
+	}
 </script>
 
+<svelte:window onkeydown={onKey} />
 <svelte:head><title>{name} · SlateDB</title></svelte:head>
 
 <div class="flex h-svh flex-col">
@@ -159,16 +200,17 @@
 
 		<Tabs.Root bind:value={tab}>
 			<Tabs.List variant="line">
-				<Tabs.Trigger value="overview"><GaugeIcon /> Overview</Tabs.Trigger>
-				<Tabs.Trigger value="data"><TableIcon /> Data</Tabs.Trigger>
-				<Tabs.Trigger value="structure"><ListTreeIcon /> Structure</Tabs.Trigger>
-				<Tabs.Trigger value="query"><SearchCodeIcon /> Query</Tabs.Trigger>
+				<Tabs.Trigger value="overview" title="Overview ({shortcutText('mod+1')})"><GaugeIcon /> Overview</Tabs.Trigger>
+				<Tabs.Trigger value="diagram" title="Diagram ({shortcutText('mod+2')})"><NetworkIcon /> Diagram</Tabs.Trigger>
+				<Tabs.Trigger value="data" title="Data ({shortcutText('mod+3')})"><TableIcon /> Data</Tabs.Trigger>
+				<Tabs.Trigger value="structure" title="Structure ({shortcutText('mod+4')})"><ListTreeIcon /> Structure</Tabs.Trigger>
+				<Tabs.Trigger value="query" title="Query ({shortcutText('mod+5')})"><SearchCodeIcon /> Query</Tabs.Trigger>
 			</Tabs.List>
 		</Tabs.Root>
 
 		{#if (tab === 'data' || tab === 'structure') && tableItems.length}
 			<Select.Root type="single" items={tableItems} bind:value={() => table ?? '', (v) => v && show(v)}>
-				<Select.Trigger size="sm" class="w-56" aria-label="Table"><Select.Value placeholder="Choose a table" /></Select.Trigger>
+				<Select.Trigger size="sm" class="w-56" aria-label="Table" title="Table (next and previous: {shortcutText('alt+arrowdown')}, {shortcutText('alt+arrowup')})"><Select.Value placeholder="Choose a table" /></Select.Trigger>
 				<Select.Content>
 					{#each groups as g (g.schema)}
 						<Select.Group>
@@ -183,7 +225,8 @@
 		{/if}
 
 		<span class="flex-1"></span>
-		<Button variant="ghost" size="icon-sm" aria-label="Reload from the server" disabled={loading} onclick={() => load(name)}><RefreshIcon /></Button>
+		<Button variant="ghost" size="icon-sm" aria-label="Reload from the server" title="Reload from the server" disabled={loading} onclick={() => load(name)}><RefreshIcon /></Button>
+		<SearchButton onclick={() => (paletteOpen = true)} />
 		<ThemeToggle />
 	</header>
 
@@ -205,7 +248,21 @@
 		{:else if loading && !info}
 			<div class="flex flex-col gap-2 p-6">{#each Array(5) as _, i (i)}<Skeleton class="h-9" />{/each}</div>
 		{:else if tab === 'overview'}
-			{#if connection?.settings && info}<OnlineOverview {connection} {info} onEdit={() => (editOpen = true)} onTest={test} />{/if}
+			{#if connection?.settings && info}
+				<OnlineOverview {connection} {info} {objects} onEdit={() => (editOpen = true)} onTest={test} onOpen={(t, view) => openTable(t, view)} onDiagram={() => (tab = 'diagram')} />
+			{:else if !workspace.loaded}
+				<div class="flex flex-col gap-2 p-6">{#each Array(4) as _, i (i)}<Skeleton class="h-9" />{/each}</div>
+			{:else}
+				<Empty.Root class="h-full">
+					<Empty.Header>
+						<Empty.Media variant="icon"><CloudOffIcon /></Empty.Media>
+						<Empty.Title>The saved connection can't be read</Empty.Title>
+						<Empty.Description>Its settings file is missing or damaged. Remove it on the home screen and add the database again.</Empty.Description>
+					</Empty.Header>
+				</Empty.Root>
+			{/if}
+		{:else if tab === 'diagram'}
+			{#key `${name}:${revision}`}<OnlineDiagramView database={name} {objects} onOpen={(t, view) => openTable(t, view)} />{/key}
 		{:else if tab === 'query'}
 			{#key `${name}:${revision}`}<OnlineQueryView database={name} {engine} initial={initialSql} />{/key}
 		{:else if !table}
@@ -225,3 +282,18 @@
 </div>
 
 <NewDatabaseDrawer bind:open={editOpen} editing={connection} onCreated={(n) => edited(n)} />
+
+<OnlineCommandPalette
+	bind:open={paletteOpen}
+	database={name}
+	{objects}
+	{tab}
+	onTab={(t) => (tab = t)}
+	onTable={(t) => openTable(t, tab === 'structure' ? 'structure' : 'data')}
+	onDatabase={openDatabase}
+	onReload={() => load(name)}
+	onTest={test}
+	onEdit={() => connection?.settings && (editOpen = true)}
+	onHome={() => goto(resolve('/'))}
+	onSettings={() => goto(resolve('/settings'))}
+/>

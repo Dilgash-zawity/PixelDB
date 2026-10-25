@@ -1,6 +1,7 @@
 <script lang="ts">
 	// Utils
 	import { toggleMode } from 'mode-watcher';
+	import { shortcutsDialog } from '#lib/state/shortcuts.svelte.js';
 	import { session } from '#lib/state/session.svelte.js';
 
 	// Components
@@ -9,6 +10,7 @@
 	// Icons
 	import {
 		ArrowLeft as ArrowLeftIcon,
+		Keyboard as KeyboardIcon,
 		Eye as EyeIcon,
 		Settings as SettingsIcon,
 		Network as NetworkIcon,
@@ -67,6 +69,7 @@
 			<Command.Item onSelect={() => run(() => session.showTab('diagram'))}><NetworkIcon /> Diagram</Command.Item>
 			<Command.Item onSelect={() => run(() => session.showTab('query'))}><SearchCodeIcon /> Query</Command.Item>
 			<Command.Item onSelect={() => run(toggleMode)}><SunMoonIcon /> Toggle light / dark</Command.Item>
+			<Command.Item value="keyboard shortcuts" onSelect={() => run(() => (shortcutsDialog.open = true))}><KeyboardIcon /> Keyboard shortcuts</Command.Item>
 			<Command.Item onSelect={() => run(onBack)}><ArrowLeftIcon /> All databases</Command.Item>
 			<Command.Item onSelect={() => run(onSettings)}><SettingsIcon /> Settings</Command.Item>
 		</Command.Group>

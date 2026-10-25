@@ -4,6 +4,7 @@ import type { TableDef } from '../api/types';
 import {
 	CARD_WIDTH,
 	autoLayout,
+	describeRules,
 	cardHeight,
 	edgeRoute,
 	fieldDesign,
@@ -221,6 +222,25 @@ describe('diagram geometry', () => {
 		expect(layout.Products.x).toBeGreaterThan(layout.Categories.x + CARD_WIDTH);
 		expect(layout.suppliers.x).toBe(layout.Categories.x);
 		expect(layout.suppliers.y).toBeGreaterThanOrEqual(layout.Categories.y + cardHeight(categories));
+	});
+
+	test('auto layout wraps a tall stack of unlinked tables into more columns', () => {
+		const many = Array.from({ length: 20 }, (_, i) => ({ ...suppliers, name: `t${i}` }));
+		const layout = autoLayout(many, []);
+		const xs = new Set(Object.values(layout).map((p) => p.x));
+		expect(xs.size).toBeGreaterThan(1);
+		expect(Math.max(...Object.values(layout).map((p) => p.y))).toBeLessThan(1600);
+	});
+
+	test('link rules read as sentences', () => {
+		const rel = { parent: 'Customers', child: 'Orders', onDelete: 'cascade' as const, onUpdate: 'cascade' as const };
+		expect(describeRules(rel)).toEqual([
+			'Deleting a Customers record deletes its Orders records too.',
+			'Changing a Customers key updates its Orders records too.'
+		]);
+		expect(describeRules({ ...rel, onDelete: 'restrict', onUpdate: 'no_action' })).toEqual([
+			"A Customers record can't be deleted while Orders records link to it."
+		]);
 	});
 
 	test('auto layout survives cycles', () => {

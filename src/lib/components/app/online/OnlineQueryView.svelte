@@ -16,10 +16,10 @@
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
-	import { Kbd } from '#lib/components/ui/kbd/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import Shortcut from '../Shortcut.svelte';
 
 	// Icons
 	import { Play as PlayIcon, Route as RouteIcon, SearchCode as SearchCodeIcon, Timer as TimerIcon } from '@lucide/svelte';
@@ -77,7 +77,7 @@
 <div class="flex h-full min-h-0 flex-col">
 	<div class="flex shrink-0 flex-wrap items-center gap-2 border-b px-3 py-2">
 		<Button size="sm" disabled={running || !sql.trim()} onclick={() => go('run')}>
-			{#if running}<Spinner data-icon="inline-start" />{:else}<PlayIcon data-icon="inline-start" />{/if} Run <Kbd>⌘↵</Kbd>
+			{#if running}<Spinner data-icon="inline-start" />{:else}<PlayIcon data-icon="inline-start" />{/if} Run <Shortcut keys="mod+enter" />
 		</Button>
 		<Button size="sm" variant="outline" disabled={running || !sql.trim()} onclick={() => go('explain')}>
 			<RouteIcon data-icon="inline-start" /> Plan
