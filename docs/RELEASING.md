@@ -63,6 +63,14 @@ certificate, export its private key as a password-protected `.p12`, and add:
 | `APPLE_PASSWORD` | Apple **app-specific** password, not your account password |
 | `APPLE_TEAM_ID` | Apple Developer team ID |
 
+Create the secret with `base64 -i certificate.p12 | tr -d '\n'` (a PEM bundle of
+the certificate and its private key also works). Before building,
+`scripts/prepare-apple-certificate.sh` checks the password, the private key and
+that the certificate's name is `APPLE_SIGNING_IDENTITY`, and re-exports the
+identity with SHA1/3DES, because the macOS keychain cannot import `.p12` files
+made with OpenSSL 3's defaults ("SecKeychainItemImport: Unable to decode the
+provided data"). A wrong secret fails that step with the reason.
+
 Tauri imports the certificate and notarizes/staples the app. CI additionally
 checks `codesign`, Gatekeeper assessment and the stapled ticket. Both Apple
 Silicon and Intel apps are built. Ad-hoc signing is not a substitute for this.

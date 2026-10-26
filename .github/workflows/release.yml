@@ -138,6 +138,19 @@ jobs:
         run: |
           cargo install artifact-signing-cli --locked
           node scripts/release.mjs windows-config
+      # Re-exports the Developer ID as a .p12 the macOS keychain can import (or
+      # fails here, in seconds, saying what is wrong with the secrets).
+      - name: Prepare the Developer ID certificate
+        if: github.event_name == 'workflow_dispatch' && runner.os == 'macOS' && needs.prepare.outputs.apple_signing == 'true'
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        shell: bash
+        run: |
+          p12=$(bash scripts/prepare-apple-certificate.sh)
+          echo "::add-mask::$p12"
+          echo "APPLE_CERTIFICATE_P12=$p12" >> "$GITHUB_ENV"
       # Pull requests never receive signing secrets or publish unsigned installers.
       - name: Build unsigned installers for a pull request
         if: github.event_name == 'pull_request'
@@ -152,7 +165,7 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           # With a Developer ID, Tauri signs and notarizes; without one, ad-hoc
           # signing keeps binary integrity (it is not Apple notarization).
-          APPLE_CERTIFICATE: ${{ runner.os == 'macOS' && needs.prepare.outputs.apple_signing == 'true' && secrets.APPLE_CERTIFICATE || '' }}
+          APPLE_CERTIFICATE: ${{ runner.os == 'macOS' && needs.prepare.outputs.apple_signing == 'true' && env.APPLE_CERTIFICATE_P12 || '' }}
           APPLE_CERTIFICATE_PASSWORD: ${{ runner.os == 'macOS' && needs.prepare.outputs.apple_signing == 'true' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
           APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && (needs.prepare.outputs.apple_signing == 'true' && secrets.APPLE_SIGNING_IDENTITY || '-') || '' }}
           APPLE_ID: ${{ runner.os == 'macOS' && needs.prepare.outputs.apple_signing == 'true' && secrets.APPLE_ID || '' }}
