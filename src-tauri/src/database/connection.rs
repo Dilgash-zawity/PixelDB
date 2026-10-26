@@ -13,6 +13,7 @@ use crate::validation::paths::{validate_existing_database_path, validate_new_dat
 
 use crate::models::{DatabaseInfo, ObjectKind};
 
+use super::journal::Journal;
 use super::{metadata, schema};
 
 /// `PRAGMA application_id` written to databases created by this application.
@@ -21,9 +22,23 @@ pub const APPLICATION_ID: i32 = 0x4D53_4143; // "MSAC"
 pub struct OpenDatabase {
     pub path: PathBuf,
     pub conn: Connection,
+    /// Record changes that can be undone (structure changes clear it).
+    pub journal: Journal,
 }
 
 impl OpenDatabase {
+    /// Runs a record change, keeping it as one undo step called `label`.
+    pub fn recorded<T>(&mut self, label: impl Into<String>, f: impl FnOnce(&Connection) -> AppResult<T>) -> AppResult<T> {
+        super::journal::record(&self.conn, &mut self.journal, label, f)
+    }
+
+    /// Runs a structure change; once it succeeds, earlier record changes can no longer be undone.
+    pub fn restructured<T>(&mut self, f: impl FnOnce(&Connection) -> AppResult<T>) -> AppResult<T> {
+        let out = f(&self.conn)?;
+        self.journal.clear();
+        Ok(out)
+    }
+
     /// Creates a new database file. Fails if the file already exists.
     pub fn create(raw_path: &str) -> AppResult<Self> {
         let path = validate_new_database_path(raw_path)?;
@@ -44,7 +59,7 @@ impl OpenDatabase {
             let conn = open_connection(&path)?;
             conn.pragma_update(None, "application_id", APPLICATION_ID)?;
             metadata::ensure(&conn)?;
-            Ok(OpenDatabase { path: path.clone(), conn })
+            Ok(OpenDatabase { path: path.clone(), conn, journal: Journal::default() })
         };
         init().inspect_err(|_| {
             // Only the empty file created above is removed.
@@ -59,7 +74,7 @@ impl OpenDatabase {
         // Forces SQLite to read the schema, detecting corrupt or encrypted files.
         conn.query_row("SELECT count(*) FROM sqlite_schema", [], |r| r.get::<_, i64>(0))
             .map_err(|e| AppError::InvalidDatabase(format!("{}: {e}", path.display())))?;
-        Ok(OpenDatabase { path, conn })
+        Ok(OpenDatabase { path, conn, journal: Journal::default() })
     }
 
     pub fn info(&self) -> AppResult<DatabaseInfo> {

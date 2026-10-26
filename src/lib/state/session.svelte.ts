@@ -9,6 +9,8 @@ import {
 	type QueryDraft,
 	type VisualQuery
 } from '../logic/query-builder';
+import { readReports, renameFieldInReports, renameTableInReports, type Reports } from '../logic/reports';
+import { readViews, renameFieldInViews, renameTableInViews, type SavedViews } from '../logic/saved-views';
 import { wizardTable } from '../logic/table-wizard';
 import { identifierProblem } from '../logic/values';
 import { databaseService } from '../services/database';
@@ -18,7 +20,10 @@ import { renameFieldInApps, renameTableInApps, syncAutoApps } from './app-sync';
 import { attempt, confirm } from './feedback.svelte';
 
 /** The tabs of the database page. */
-export type Tab = 'diagram' | 'datasheet' | 'query';
+export type Tab = 'diagram' | 'datasheet' | 'query' | 'reports';
+
+/** What the command palette can ask the open datasheet to do. */
+export type Intent = 'new-record' | 'new-field' | 'export-xlsx' | 'export-csv';
 
 /** The database open on the database page and the table being viewed. */
 class Session {
@@ -33,10 +38,16 @@ class Session {
 	query = $state<QueryDraft>(newQueryDraft());
 	/** Bumped whenever the open table's structure changes elsewhere. */
 	revision = $state(0);
+	/** The Datasheet's saved views of every table, kept in the database file. */
+	savedViews = $state<SavedViews>({});
+	/** Reports of this database, by name, kept in the database file. */
+	reports = $state<Reports>({});
+	/** The report open on the Reports tab. */
+	report = $state<string | null>(null);
 	/** One-shot requests from the command palette, read by the open view. */
-	intent = $state<{ kind: 'none' | 'new-record' | 'new-field'; n: number }>({ kind: 'none', n: 0 });
+	intent = $state<{ kind: 'none' | Intent; n: number }>({ kind: 'none', n: 0 });
 
-	request(kind: 'new-record' | 'new-field') {
+	request(kind: Intent) {
 		this.intent = { kind, n: this.intent.n + 1 };
 	}
 
@@ -51,6 +62,9 @@ class Session {
 		this.table = null;
 		this.tab = 'diagram';
 		this.query = newQueryDraft();
+		this.savedViews = {};
+		this.reports = {};
+		this.report = null;
 		this.loadError = null;
 		this.loading = true;
 		// Opens run one at a time: the backend's current database is whichever
@@ -69,6 +83,12 @@ class Session {
 			const info = await workspaceService.openDatabase(name);
 			if (this.name !== name) return;
 			this.info = info;
+			const views = await databaseService.getDocument('saved_views').catch(() => ({}));
+			if (this.name !== name) return;
+			this.savedViews = readViews(views);
+			const reports = await databaseService.getDocument('reports').catch(() => ({}));
+			if (this.name !== name) return;
+			this.reports = readReports(reports);
 			await this.refresh();
 			if (this.name === name) this.table = this.tables[0]?.name ?? this.views[0]?.name ?? null;
 		} catch (e) {
@@ -177,9 +197,33 @@ class Session {
 		if (clean) markClean(this.query);
 	}
 
+	/** Replaces the saved views and stores them in the database file. */
+	async setSavedViews(views: SavedViews): Promise<boolean> {
+		const before = this.savedViews;
+		this.savedViews = views;
+		if ((await attempt(() => databaseService.saveDocument('saved_views', views))) === undefined) {
+			this.savedViews = before;
+			return false;
+		}
+		return true;
+	}
+
+	/** Replaces the reports and stores them in the database file. */
+	async setReports(reports: Reports): Promise<boolean> {
+		const before = this.reports;
+		this.reports = reports;
+		if ((await attempt(() => databaseService.saveDocument('reports', reports))) === undefined) {
+			this.reports = before;
+			return false;
+		}
+		return true;
+	}
+
 	/** Called after field `from` of `table` was renamed. */
 	renamedField(table: string, from: string, to: string) {
 		this.updateQueryDesign((q) => renameFieldInQuery(q, table, from, to));
+		if (this.savedViews[table]) void this.setSavedViews(renameFieldInViews(this.savedViews, table, from, to));
+		if (Object.values(this.reports).some((r) => r.source === table)) void this.setReports(renameFieldInReports(this.reports, table, from, to));
 		if (this.name) renameFieldInApps(this.name, table, from, to);
 	}
 
@@ -187,6 +231,8 @@ class Session {
 		if ((await attempt(() => tableService.rename(name, newName))) === undefined) return false;
 		await this.refresh();
 		this.updateQueryDesign((q) => renameTableInQuery(q, name, newName));
+		if (this.savedViews[name]) void this.setSavedViews(renameTableInViews(this.savedViews, name, newName));
+		if (Object.values(this.reports).some((r) => r.source === name)) void this.setReports(renameTableInReports(this.reports, name, newName));
 		if (this.name) renameTableInApps(this.name, name, newName);
 		if (this.table === name) this.table = newName;
 		this.revision++;
@@ -206,6 +252,10 @@ class Session {
 		if (!ok) return false;
 		const result = await attempt(() => tableService.drop(name, true));
 		if (!result) return false;
+		if (this.savedViews[name]) {
+			const { [name]: _gone, ...rest } = this.savedViews;
+			void this.setSavedViews(rest);
+		}
 		await this.refresh();
 		if (this.table === name) this.table = this.tables[0]?.name ?? null;
 		toast.success(`Deleted “${name}”`, { description: result.warnings.join(' ') || undefined });

@@ -31,14 +31,11 @@
 		ChevronDown as ChevronDownIcon,
 		ChevronRight as ChevronRightIcon,
 		Link as LinkIcon,
-		ListChecks as ListChecksIcon,
-		Shapes as ShapesIcon,
-		Table2 as Table2Icon,
 		TriangleAlert as TriangleAlertIcon,
 	} from '@lucide/svelte';
 
 	// Script
-	/** Links two tables in three steps: which tables, what kind of link, then the details. */
+	/** Links two tables on one page: which tables, what kind of link and the details. */
 	let {
 		open = $bindable(false),
 		draft = $bindable(null),
@@ -57,11 +54,6 @@
 		onCreate: () => void;
 	} = $props();
 
-	const STEPS = [
-		{ label: 'Tables', icon: Table2Icon },
-		{ label: 'Kind', icon: ShapesIcon },
-		{ label: 'Details', icon: ListChecksIcon }
-	];
 	const NEW = '\u0000new';
 	const KINDS: LinkKind[] = ['one_to_many', 'one_to_one', 'many_to_many'];
 	const ON_DELETE: { value: FkAction; label: string }[] = [
@@ -77,14 +69,12 @@
 		{ value: 'no_action', label: 'Block (checked at end)' }
 	];
 
-	let step = $state(0);
 	/** Advanced settings stay hidden until asked for. */
 	let more = $state(false);
 
 	// Start over each time it opens.
 	$effect(() => {
 		if (open) {
-			step = 0;
 			more = false;
 		}
 	});
@@ -188,115 +178,115 @@
 
 <StepDrawer
 	bind:open
-	bind:step
 	title="Link two tables"
 	description="Connect records in one table to records in another."
-	steps={STEPS}
 	finishLabel="Link"
 	finishIcon={LinkIcon}
 	{busy}
-	disabled={!draft || (step === 0 && !!tablesProblem) || (step === STEPS.length - 1 && !!detailsProblem)}
+	disabled={!draft || !!detailsProblem}
 	onFinish={submit}
 >
 	{#if !draft}
 		<p class="text-sm text-muted-foreground">Add a table first.</p>
-	{:else if step === 0}
-		<Field.Group class="gap-4">
-			<Field.Field>
-				<Field.Label for="nl-parent">From</Field.Label>
-				{@render select('nl-parent', tableItems, draft.parent, setParent, 'Choose a table')}
-				<Field.Description>The table whose records others point to, like Customers.</Field.Description>
-			</Field.Field>
-			<Field.Field>
-				<Field.Label for="nl-child">To</Field.Label>
-				{@render select('nl-child', tableItems, draft.child, setChild, 'Choose a table')}
-				<Field.Description>The table that points to them, like Orders.</Field.Description>
-			</Field.Field>
-			{#if tablesProblem && parentDef && childDef}<Field.Error>{tablesProblem}</Field.Error>{/if}
-		</Field.Group>
-	{:else if step === 1}
-		<div class="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Kind of link">
-			{#each KINDS as kind (kind)}
-				{@const selected = draft.kind === kind}
-				{@const label = kindLabel(kind, draft.parent, draft.child)}
-				<button
-					type="button"
-					role="radio"
-					aria-checked={selected}
-					class={cn(
-						'flex flex-col items-start gap-1.5 rounded-lg border bg-card p-3 text-start outline-none transition-colors hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/40',
-						selected && 'border-primary bg-primary/5 ring-1 ring-primary'
-					)}
-					onclick={() => draft && (draft.kind = kind)}
-					ondblclick={() => draft && ((draft.kind = kind), step++)}
-				>
-					<span class="text-sm font-medium">{label.title}</span>
-					<span class="text-xs text-muted-foreground">{label.hint}</span>
-				</button>
-			{/each}
-		</div>
 	{:else}
-		<div class="flex flex-col gap-5">
-			<p class="text-sm">
-				{#if draft.kind === 'many_to_many'}
-					{kindLabel('many_to_many', draft.parent, draft.child).hint}
-				{:else}
-					{describeRelationship({ parent: draft.parent, child: draft.child, cardinality: draft.kind })}
-				{/if}
-			</p>
-			{#if draft.kind !== 'many_to_many'}
-				{#if draft.childColumn === null}
-					<Field.Field>
-						<Field.Label for="nl-field">New field in {draft.child}</Field.Label>
-						<Input id="nl-field" bind:value={draft.newField} autocomplete="off" />
-						<Field.Description>Holds which {draft.parent} record each {draft.child} record belongs to.</Field.Description>
-					</Field.Field>
-				{/if}
-				<Button variant="ghost" size="sm" class="self-start" onclick={() => (more = !more)} aria-expanded={more}>
-					{#if more}<ChevronDownIcon data-icon="inline-start" />{:else}<ChevronRightIcon data-icon="inline-start" />{/if}
-					More options
-				</Button>
-				{#if more}
-					<Field.Group class="gap-4">
+		<div class="flex flex-col gap-6">
+			<Field.Group class="grid gap-4 sm:grid-cols-2">
+				<Field.Field>
+					<Field.Label for="nl-parent">From</Field.Label>
+					{@render select('nl-parent', tableItems, draft.parent, setParent, 'Choose a table')}
+					<Field.Description>The table whose records others point to, like Customers.</Field.Description>
+				</Field.Field>
+				<Field.Field>
+					<Field.Label for="nl-child">To</Field.Label>
+					{@render select('nl-child', tableItems, draft.child, setChild, 'Choose a table')}
+					<Field.Description>The table that points to them, like Orders.</Field.Description>
+				</Field.Field>
+			</Field.Group>
+			{#if tablesProblem && parentDef && childDef}<Field.Error>{tablesProblem}</Field.Error>{/if}
+			<Field.Set>
+				<Field.Legend variant="label">Kind of link</Field.Legend>
+				<div class="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Kind of link">
+					{#each KINDS as kind (kind)}
+						{@const selected = draft.kind === kind}
+						{@const label = kindLabel(kind, draft.parent, draft.child)}
+						<button
+							type="button"
+							role="radio"
+							aria-checked={selected}
+							class={cn(
+								'flex flex-col items-start gap-1.5 rounded-lg border bg-card p-3 text-start outline-none transition-colors hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/40',
+								selected && 'border-primary bg-primary/5 ring-1 ring-primary'
+							)}
+							onclick={() => draft && (draft.kind = kind)}
+						>
+							<span class="text-sm font-medium">{label.title}</span>
+							<span class="text-xs text-muted-foreground">{label.hint}</span>
+						</button>
+					{/each}
+				</div>
+			</Field.Set>
+			<div class="flex flex-col gap-5">
+				<p class="text-sm">
+					{#if draft.kind === 'many_to_many'}
+						{kindLabel('many_to_many', draft.parent, draft.child).hint}
+					{:else}
+						{describeRelationship({ parent: draft.parent, child: draft.child, cardinality: draft.kind })}
+					{/if}
+				</p>
+				{#if draft.kind !== 'many_to_many'}
+					{#if draft.childColumn === null}
 						<Field.Field>
-							<Field.Label for="nl-key">Key field of {draft.parent}</Field.Label>
-							{@render select('nl-key', parentKeys.map((k) => ({ value: k, label: k })), draft.parentColumn, (v) => { if (draft) draft.parentColumn = v; resuggest(); }, parentKeys.length ? 'Choose a field' : 'No key fields', !parentKeys.length)}
+							<Field.Label for="nl-field">New field in {draft.child}</Field.Label>
+							<Input id="nl-field" bind:value={draft.newField} autocomplete="off" />
+							<Field.Description>Holds which {draft.parent} record each {draft.child} record belongs to.</Field.Description>
 						</Field.Field>
-						<Field.Field>
-							<Field.Label for="nl-by">Linked by</Field.Label>
-							{@render select('nl-by', childFieldItems, draft.childColumn ?? NEW, (v) => draft && (draft.childColumn = v === NEW ? null : v))}
-						</Field.Field>
-						{#if draft.childColumn === null || (childField && canBeDropdown(childField))}
-							<Field.Field orientation="horizontal">
-								<Field.Content>
-									<Field.Label for="nl-dropdown">Pick from a list</Field.Label>
-									<Field.Description>Choose a {draft.parent} record from a dropdown.</Field.Description>
-								</Field.Content>
-								<Switch id="nl-dropdown" checked={draft.asDropdown} onCheckedChange={(v) => draft && (draft.asDropdown = v)} />
+					{/if}
+					<Button variant="ghost" size="sm" class="self-start" onclick={() => (more = !more)} aria-expanded={more}>
+						{#if more}<ChevronDownIcon data-icon="inline-start" />{:else}<ChevronRightIcon data-icon="inline-start" />{/if}
+						More options
+					</Button>
+					{#if more}
+						<Field.Group class="gap-4">
+							<Field.Field>
+								<Field.Label for="nl-key">Key field of {draft.parent}</Field.Label>
+								{@render select('nl-key', parentKeys.map((k) => ({ value: k, label: k })), draft.parentColumn, (v) => { if (draft) draft.parentColumn = v; resuggest(); }, parentKeys.length ? 'Choose a field' : 'No key fields', !parentKeys.length)}
 							</Field.Field>
-						{/if}
-						<Field.Field>
-							<Field.Label for="nl-update">When a {draft.parent} key changes</Field.Label>
-							{@render select('nl-update', ON_UPDATE, draft.onUpdate, (v) => draft && (draft.onUpdate = v as FkAction))}
-						</Field.Field>
-						<Field.Field>
-							<Field.Label for="nl-delete">When a {draft.parent} record is deleted</Field.Label>
-							{@render select('nl-delete', ON_DELETE, draft.onDelete, (v) => draft && (draft.onDelete = v as FkAction))}
-						</Field.Field>
-					</Field.Group>
+							<Field.Field>
+								<Field.Label for="nl-by">Linked by</Field.Label>
+								{@render select('nl-by', childFieldItems, draft.childColumn ?? NEW, (v) => draft && (draft.childColumn = v === NEW ? null : v))}
+							</Field.Field>
+							{#if draft.childColumn === null || (childField && canBeDropdown(childField))}
+								<Field.Field orientation="horizontal">
+									<Field.Content>
+										<Field.Label for="nl-dropdown">Pick from a list</Field.Label>
+										<Field.Description>Choose a {draft.parent} record from a dropdown.</Field.Description>
+									</Field.Content>
+									<Switch id="nl-dropdown" checked={draft.asDropdown} onCheckedChange={(v) => draft && (draft.asDropdown = v)} />
+								</Field.Field>
+							{/if}
+							<Field.Field>
+								<Field.Label for="nl-update">When a {draft.parent} key changes</Field.Label>
+								{@render select('nl-update', ON_UPDATE, draft.onUpdate, (v) => draft && (draft.onUpdate = v as FkAction))}
+							</Field.Field>
+							<Field.Field>
+								<Field.Label for="nl-delete">When a {draft.parent} record is deleted</Field.Label>
+								{@render select('nl-delete', ON_DELETE, draft.onDelete, (v) => draft && (draft.onDelete = v as FkAction))}
+							</Field.Field>
+						</Field.Group>
+					{/if}
 				{/if}
-			{/if}
-			{#if mismatch || replaces}
-				<Alert.Root class="border-warning/40 bg-warning/10 *:[svg]:text-warning">
-					<TriangleAlertIcon />
-					<Alert.Title class="text-warning">Check before linking</Alert.Title>
-					<Alert.Description>
-						{#if mismatch}<p>{mismatch}</p>{/if}
-						{#if replaces}<p>“{replaces.childColumns[0]}” already links to {replaces.parent}; this replaces that link.</p>{/if}
-					</Alert.Description>
-				</Alert.Root>
-			{/if}
-			{#if detailsProblem}<p class="text-sm text-muted-foreground">{detailsProblem}</p>{/if}
+				{#if mismatch || replaces}
+					<Alert.Root class="border-warning/40 bg-warning/10 *:[svg]:text-warning">
+						<TriangleAlertIcon />
+						<Alert.Title class="text-warning">Check before linking</Alert.Title>
+						<Alert.Description>
+							{#if mismatch}<p>{mismatch}</p>{/if}
+							{#if replaces}<p>“{replaces.childColumns[0]}” already links to {replaces.parent}; this replaces that link.</p>{/if}
+						</Alert.Description>
+					</Alert.Root>
+				{/if}
+				{#if detailsProblem && !(tablesProblem && parentDef && childDef)}<p class="text-sm text-muted-foreground">{detailsProblem}</p>{/if}
+			</div>
 		</div>
 	{/if}
 </StepDrawer>

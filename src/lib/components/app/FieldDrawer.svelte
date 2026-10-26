@@ -28,15 +28,12 @@
 
 	// Icons
 	import {
-		Shapes as ShapesIcon,
-		ShieldCheck as ShieldCheckIcon,
-		TextCursorInput as TextCursorInputIcon,
 		Trash2 as TrashIcon,
 		TriangleAlert as TriangleAlertIcon,
 	} from '@lucide/svelte';
 
 	// Script
-	/** Edits one field of `table` step by step (name, type, rules); with `field` null, adds one instead (NewFieldDrawer). */
+	/** Edits one field of `table` on one page (name, type, rules); with `field` null, adds one instead (NewFieldDrawer). */
 	let {
 		open = $bindable(false),
 		table,
@@ -51,13 +48,6 @@
 	} = $props();
 
 	const SCOPE = 'field-drawer';
-	const STEPS = [
-		{ label: 'Name', icon: TextCursorInputIcon },
-		{ label: 'Type', icon: ShapesIcon },
-		{ label: 'Rules', icon: ShieldCheckIcon }
-	];
-
-	let step = $state(0);
 	let info = $state<TableInfo | null>(null);
 	let edit = $state<FieldDef | null>(null);
 	let baseline = $state('');
@@ -71,7 +61,6 @@
 	});
 
 	async function load(t: string, f: string | null) {
-		step = 0;
 		info = null;
 		edit = null;
 		const loaded = await attempt(() => tableService.get(t));
@@ -152,13 +141,11 @@
 {:else}
 <StepDrawer
 	bind:open
-	bind:step
 	title={field}
 	description="In {table}"
-	steps={STEPS}
 	finishLabel="Save"
 	{busy}
-	disabled={!edit || !!blocked || !edit.name.trim() || (step === STEPS.length - 1 && !dirty)}
+	disabled={!edit || !!blocked || !edit.name.trim() || !dirty}
 	onFinish={save}
 	scope={SCOPE}
 >
@@ -170,7 +157,7 @@
 	{#if !edit}
 		<div class="flex flex-col gap-3">{#each [1, 2] as i (i)}<Skeleton class="h-9" />{/each}</div>
 	{:else}
-		<div class="flex flex-col gap-5">
+		<div class="flex flex-col gap-6">
 			{#if blocked}
 				<Alert.Root class="border-warning/40 bg-warning/10 *:[svg]:text-warning">
 					<TriangleAlertIcon />
@@ -178,13 +165,13 @@
 					<Alert.Description>{blocked}</Alert.Description>
 				</Alert.Root>
 			{/if}
-			{#if step === 0}
-				<Field.Field>
-					<Field.Label for="fd-name">Name</Field.Label>
-					<Input id="fd-name" bind:value={edit.name} autocomplete="off" disabled={!!blocked} />
-					<Field.Description>Renaming keeps the data and updates links and apps that use it.</Field.Description>
-				</Field.Field>
-			{:else if step === 1}
+			<Field.Field>
+				<Field.Label for="fd-name">Name</Field.Label>
+				<Input id="fd-name" bind:value={edit.name} autocomplete="off" disabled={!!blocked} />
+				<Field.Description>Renaming keeps the data and updates links and apps that use it.</Field.Description>
+			</Field.Field>
+			<Field.Set>
+				<Field.Legend variant="label">Type</Field.Legend>
 				{#if edit.field_type.type === 'auto_number' || edit.field_type.type === 'lookup'}
 					<p class="text-sm text-muted-foreground">
 						{edit.field_type.type === 'lookup'
@@ -197,12 +184,13 @@
 						exclude={['auto_number', 'lookup']}
 						disabled={!!blocked}
 						onChange={setType}
-						onPick={() => (step = 2)}
 					/>
 				{/if}
-			{:else}
+			</Field.Set>
+			<Field.Set>
+				<Field.Legend variant="label">Rules</Field.Legend>
 				<FieldProperties field={edit} disabled={!!blocked} />
-			{/if}
+			</Field.Set>
 		</div>
 	{/if}
 </StepDrawer>

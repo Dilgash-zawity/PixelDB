@@ -1,0 +1,5 @@
+# The bundled SQLite is built with the session extension, which record undo
+# (src-tauri/src/database/journal.rs) uses. Here rather than in src-tauri so
+# `cargo --manifest-path src-tauri/Cargo.toml` from the repository root sees it too.
+[env]
+LIBSQLITE3_FLAGS = "-DSQLITE_ENABLE_SESSION -DSQLITE_ENABLE_PREUPDATE_HOOK"

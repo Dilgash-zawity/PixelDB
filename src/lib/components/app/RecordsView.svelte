@@ -2,17 +2,22 @@
 	// Services
 	import { recordService } from '#lib/services/records.js';
 	import { tableService } from '#lib/services/tables.js';
+	import { transferService } from '#lib/services/transfer.js';
 
 	// Types
-	import type { FieldDef, FieldTypeName, JsonValue, RecordKey, RecordPage, RecordRow, SortSpec, TableDef } from '#lib/api/types.js';
+	import type { ExportFormat, FieldDef, FieldTypeName, JsonValue, RecordKey, UndoState, RecordPage, RecordRow, SortSpec, TableDef } from '#lib/api/types.js';
 
 	// Utils
 	import { onDestroy, tick } from 'svelte';
 	import { toast } from 'svelte-sonner';
+	import { MAX_BATCH, cellText, isBlock, parseClipboard, planFill, planPaste, toClipboard } from '#lib/logic/bulk-edit.js';
 	import { FIELD_TYPES, NUMERIC_TYPES, isReadOnlyType, makeFieldType } from '#lib/logic/field-types.js';
+	import { localDateOrder } from '#lib/logic/import.js';
 	import { toFilterSpecs, type FilterRow } from '#lib/logic/filters.js';
 	import { loadLookups, lookupLabel, type LookupOption } from '#lib/logic/lookups.js';
 	import * as rb from '#lib/logic/record-buffer.js';
+	import { matches, shortcutText, typingTarget } from '#lib/logic/shortcuts.js';
+	import { putView, removeView, showsView, viewNameProblem, type SavedView } from '#lib/logic/saved-views.js';
 	import { nextFreeName } from '#lib/logic/table-draft.js';
 	import { displayValue, formatBytes, identifierProblem, isBlobSummary } from '#lib/logic/values.js';
 	import { attempt, confirm } from '#lib/state/feedback.svelte.js';
@@ -38,7 +43,9 @@
 	import FilterPopover from './FilterPopover.svelte';
 	import NameDialog from './NameDialog.svelte';
 	import FieldDrawer from './FieldDrawer.svelte';
+	import ImportDrawer from './ImportDrawer.svelte';
 	import RecordDrawer from './RecordDrawer.svelte';
+	import ReplaceDialog from './ReplaceDialog.svelte';
 
 	// Icons
 	import {
@@ -47,11 +54,20 @@
 		ArrowUp as ArrowUpIcon,
 		ArrowUpNarrowWide as ArrowUpNarrowWideIcon,
 		Asterisk as AsteriskIcon,
+		Bookmark as BookmarkIcon,
+		BookmarkPlus as BookmarkPlusIcon,
+		Check as CheckIcon,
 		ChevronDown as ChevronDownIcon,
 		ChevronFirst as ChevronFirstIcon,
 		ChevronLast as ChevronLastIcon,
 		ChevronLeft as ChevronLeftIcon,
 		ChevronRight as ChevronRightIcon,
+		ClipboardPaste as ClipboardPasteIcon,
+		Copy as CopyIcon,
+		CopyCheck as CopyCheckIcon,
+		Download as DownloadIcon,
+		FileSpreadsheet as FileSpreadsheetIcon,
+		FileText as FileTextIcon,
 		ListFilter as FilterIcon,
 		FunnelX as FilterXIcon,
 		KeyRound as KeyRoundIcon,
@@ -60,10 +76,14 @@
 		Pencil as PencilIcon,
 		Settings2 as Settings2Icon,
 		Plus as PlusIcon,
+		Redo2 as Redo2Icon,
 		RefreshCw as RefreshCwIcon,
+		Replace as ReplaceIcon,
 		Save as SaveIcon,
 		Search as SearchIcon,
 		Trash2 as TrashIcon,
+		Undo2 as Undo2Icon,
+		Upload as UploadIcon,
 		X as XIcon,
 	} from '@lucide/svelte';
 
@@ -93,6 +113,16 @@
 	let selected = $state<Record<string, RecordKey>>({});
 	let lookups = $state<Record<string, LookupOption[]>>({});
 	let sheetOpen = $state(false);
+	let importOpen = $state(false);
+	let savingView = $state(false);
+	let replacing = $state(false);
+	/** The field Find and replace starts on (from a cell's menu). */
+	let replaceField = $state<string | null>(null);
+	/** The saved view last chosen or saved, while it is still what's shown. */
+	let viewName = $state<string | null>(null);
+	let exporting = $state(false);
+	/** What Undo and Redo would do (saved record changes, from the backend's journal). */
+	let history = $state<UndoState>({ undo: null, redo: null });
 	/** The field drawer: which field (null for a new one) and whether it is open. */
 	let fieldDrawer = $state<{ open: boolean; field: string | null }>({ open: false, field: null });
 	let sheetRow = $state<RecordRow | null>(null);
@@ -162,6 +192,7 @@
 			data = page;
 		});
 		if (stale()) return;
+		if (!isView) history = (await recordService.undoState().catch(() => null)) ?? history;
 		selected = {};
 		if (typeof current === 'number' && data && current >= data.rows.length) current = data.rows.length ? data.rows.length - 1 : null;
 		loading = false;
@@ -322,6 +353,23 @@
 		if (e.key === 'Delete' && !col && selectedKeys.length) {
 			e.preventDefault();
 			deleteRecords();
+			return;
+		}
+		if (typingTarget(e.target)) return;
+		if (matches(e, 'mod+c')) {
+			e.preventDefault();
+			copyCells();
+		} else if (matches(e, 'mod+v') && !isView) {
+			// Let the paste event bring the text; read the clipboard only if it doesn't come.
+			pasteSeen = false;
+			setTimeout(async () => {
+				if (pasteSeen) return;
+				const text = await navigator.clipboard.readText().catch(() => '');
+				if (text) pasteCells(text);
+			}, 50);
+		} else if (matches(e, 'mod+d') && typeof current === 'number' && currentCol) {
+			e.preventDefault();
+			fillSelected(current, currentCol);
 		}
 	}
 
@@ -353,7 +401,7 @@
 		}
 		const ok = await confirm({
 			title: `Delete ${keys.length === 1 ? 'this record' : `${keys.length} records`}?`,
-			description: "If you continue, you won't be able to undo this.",
+			description: `You can bring ${keys.length === 1 ? 'it' : 'them'} back with Undo (${shortcutText('mod+z')}) until the table's fields change.`,
 			action: 'Delete',
 			destructive: true
 		});
@@ -420,6 +468,185 @@
 
 	async function refresh() {
 		if (await commitRow()) await load(true);
+	}
+
+	// ----- undo -----
+
+	/** Undoes (or redoes) the latest saved change to this database's records. */
+	async function undoRedo(redo = false) {
+		if (isView || (redo ? !history.redo : !history.undo)) return;
+		// Unsaved typing in a row is undone with Esc, not here.
+		if (buf && rb.isDirty(buf)) {
+			toast('Save or undo the row first', { description: 'Press Esc to undo what you typed in it.' });
+			return;
+		}
+		buf = null;
+		editRow = null;
+		const label = await attempt(() => (redo ? recordService.redo() : recordService.undo()));
+		await load();
+		if (label) toast.success(`${redo ? 'Redid' : 'Undid'}: ${label}`);
+	}
+
+	// ----- many records at once -----
+
+	/** Pastes a block of cells (from a spreadsheet or this datasheet) at the current cell: rows below become new records. */
+	async function pasteCells(text: string) {
+		if (isView || !def || !data) return;
+		if (!(await commitRow())) return;
+		if (!data) return;
+		const cells = parseClipboard(text);
+		const start = typeof current === 'number' ? current : data.rows.length;
+		const col = currentCol ?? firstEditable() ?? columns[0];
+		const plan = planPaste({
+			cells,
+			rows: data.rows,
+			start,
+			columns,
+			startCol: Math.max(0, columns.indexOf(col)),
+			fields: def.fields,
+			editable,
+			order: localDateOrder(),
+			lookups
+		});
+		if (plan.problems.length) {
+			toast.error(`${plan.problems.length} pasted ${plan.problems.length === 1 ? 'value doesn’t' : 'values don’t'} fit`, {
+				description: plan.problems.slice(0, 3).map((p) => `Row ${p.row}, ${p.column}: ${p.message}`).join(' · ')
+			});
+			return;
+		}
+		if (!plan.ops.length) {
+			toast('Nothing to paste here', { description: 'The cells landed on fields that can’t be edited.' });
+			return;
+		}
+		if (plan.ops.length > MAX_BATCH) {
+			toast.error('Too many rows', { description: `Paste at most ${MAX_BATCH.toLocaleString()} rows at a time, or use Import.` });
+			return;
+		}
+		if (plan.ops.length > 1) {
+			const parts = [plan.updated && `change ${plan.updated} ${plan.updated === 1 ? 'record' : 'records'}`, plan.added && `add ${plan.added}`].filter(Boolean);
+			const skipped = plan.skippedColumns
+				? ` ${plan.skippedColumns} ${plan.skippedColumns === 1 ? 'column fell on a field that can’t be edited and is' : 'columns fell on fields that can’t be edited and are'} left out.`
+				: '';
+			const ok = await confirm({
+				title: `Paste ${cells.length} ${cells.length === 1 ? 'row' : 'rows'}?`,
+				description: `This will ${parts.join(' and ')}.${skipped}`,
+				action: 'Paste'
+			});
+			if (!ok) return;
+		}
+		const result = await attempt(() => recordService.batch(table, plan.ops, false, undefined, `Paste ${cells.length} ${cells.length === 1 ? 'row' : 'rows'}`));
+		if (!result) return;
+		await load();
+		const done = [result.updated && `changed ${result.updated}`, result.inserted.length && `added ${result.inserted.length}`].filter(Boolean).join(' and ');
+		toast.success(`Pasted: ${done} ${plan.ops.length === 1 ? 'record' : 'records'}`);
+	}
+
+	/** Copies the ticked records (with a header row), or else the current cell, as text spreadsheets understand. */
+	async function copyCells() {
+		if (!data) return;
+		const rowsToCopy = selectedKeys.length ? data.rows.filter((r) => keyId(r.key) in selected) : [];
+		let text: string;
+		if (rowsToCopy.length) {
+			text = toClipboard([columns, ...rowsToCopy.map((r) => columns.map((c, i) => cellText(r.values[i], fieldFor(c), lookups[c])))]);
+		} else if (typeof current === 'number' && currentCol) {
+			const i = columns.indexOf(currentCol);
+			text = cellText(data.rows[current]?.values[i], fieldFor(currentCol), lookups[currentCol]);
+		} else return;
+		try {
+			await navigator.clipboard.writeText(text);
+			toast.success(rowsToCopy.length ? `Copied ${rowsToCopy.length} ${rowsToCopy.length === 1 ? 'record' : 'records'}` : 'Copied');
+		} catch {
+			toast.error('Couldn’t copy to the clipboard');
+		}
+	}
+
+	/** Puts the value of field `col` in row `index` into every ticked record. */
+	async function fillSelected(index: number, col: string) {
+		if (!data || !editable(col) || !selectedKeys.length) return;
+		if (fieldFor(col)?.field_type.type === 'attachment') return;
+		if (!(await commitRow())) return;
+		const value = data.rows[index]?.values[columns.indexOf(col)] ?? null;
+		const keys = selectedKeys.filter((k) => keyId(k) !== keyId(data?.rows[index]?.key));
+		if (!keys.length) return;
+		const ok = await confirm({
+			title: `Fill ${keys.length} ${keys.length === 1 ? 'record' : 'records'}?`,
+			description: `“${col}” of the ticked records becomes “${cellText(value, fieldFor(col), lookups[col]) || 'empty'}”.`,
+			action: 'Fill'
+		});
+		if (!ok) return;
+		const result = await attempt(() => recordService.batch(table, planFill(keys, col, value), false, undefined, `Fill ${keys.length} ${col}`));
+		if (!result) return;
+		await load();
+		toast.success(`Filled ${result.updated} ${result.updated === 1 ? 'record' : 'records'}`);
+	}
+
+	/** Set when a paste event reached the grid, so Ctrl+V on the grid itself doesn't read the clipboard a second time. */
+	let pasteSeen = false;
+	function onPaste(e: ClipboardEvent) {
+		const text = e.clipboardData?.getData('text/plain') ?? '';
+		const t = e.target as HTMLElement;
+		const inField = t.tagName === 'INPUT' || t.tagName === 'TEXTAREA';
+		pasteSeen = true;
+		if (!text || (inField && !isBlock(text)) || t.closest('[role=listbox],[role=menu],[role=dialog]')) return;
+		e.preventDefault();
+		pasteCells(text);
+	}
+
+	/** Opens Find and replace on `field` (the current column by default). */
+	async function openReplace(field: string | null = currentCol) {
+		if (!(await commitRow())) return;
+		replaceField = field;
+		replacing = true;
+	}
+
+	// ----- saved views -----
+
+	const views = $derived(session.savedViews[table] ?? []);
+	const shownNow = $derived({ sort, filters: filterRows, search: appliedSearch });
+	const activeView = $derived(views.find((v) => showsView(v, shownNow)) ?? null);
+	const editedView = $derived(viewName && !activeView ? (views.find((v) => v.name === viewName) ?? null) : null);
+
+	async function applyView(v: SavedView | null) {
+		if (!(await commitRow())) return;
+		// Conditions on fields that were since deleted are left out.
+		filterRows = (v?.filters ?? []).filter((f) => columns.includes(f.column)).map((f) => ({ ...f }));
+		sort = v?.sort && columns.includes(v.sort.column) ? { ...v.sort } : null;
+		search = appliedSearch = v?.search ?? '';
+		viewName = v?.name ?? null;
+		offset = 0;
+		current = null;
+		await load();
+	}
+
+	async function saveView(name: string): Promise<boolean> {
+		const view: SavedView = { name: name.trim(), sort, filters: $state.snapshot(filterRows), search: appliedSearch };
+		if (!(await session.setSavedViews(putView(session.savedViews, table, view)))) return false;
+		viewName = view.name;
+		toast.success(`Saved the view “${view.name}”`);
+		return true;
+	}
+
+	async function deleteView(name: string) {
+		if (!(await session.setSavedViews(removeView(session.savedViews, table, name)))) return;
+		if (viewName === name) viewName = null;
+		toast.success(`Deleted the view “${name}”`);
+	}
+
+	/** Exports the records shown (with the filter, search and sort, on every page) to a file. */
+	async function exportRecords(format: ExportFormat) {
+		if (!(await commitRow())) return;
+		exporting = true;
+		try {
+			const result = await attempt(() =>
+				transferService.exportRecords(table, { sort: sort ? [sort] : [], filters, search: appliedSearch || null }, format)
+			);
+			if (!result) return;
+			toast.success(`Exported ${result.rows} ${result.rows === 1 ? 'record' : 'records'}`, {
+				description: result.truncated ? `Saved as ${result.file_name}. Only the first ${result.rows.toLocaleString()} fit in one file.` : `Saved as ${result.file_name}.`
+			});
+		} finally {
+			exporting = false;
+		}
 	}
 
 	// ----- fields -----
@@ -497,12 +724,22 @@
 		lastIntent = n;
 		if (kind === 'new-record' && !isView) newRecord();
 		if (kind === 'new-field' && !isView) fieldDrawer = { open: true, field: null };
+		if (kind === 'export-xlsx') exportRecords('xlsx');
+		if (kind === 'export-csv') exportRecords('csv');
 	});
 
 	function onWindowKey(e: KeyboardEvent) {
 		if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's' && !sheetOpen) {
 			e.preventDefault();
 			commitRow();
+		} else if (matches(e, 'mod+h') && !isView && !sheetOpen && !e.defaultPrevented) {
+			e.preventDefault();
+			openReplace();
+		} else if ((matches(e, 'mod+z') || matches(e, 'shift+mod+z')) && !isView && !sheetOpen && !e.defaultPrevented && !typingTarget(e.target)) {
+			// Typing keeps its own undo; outside a text box this undoes saved changes.
+			if ((e.target as HTMLElement).closest?.('[role=dialog],[role=menu]')) return;
+			e.preventDefault();
+			undoRedo(e.shiftKey);
 		}
 	}
 
@@ -545,7 +782,76 @@
 			{@render toolButton('Remove sort', XIcon, () => applySort(null), !sort)}
 		</ButtonGroup.Root>
 		<FilterPopover bind:open={filterOpen} {columns} active={filters.length} initial={filterRows} onApply={applyFilters} />
+		<DropdownMenu.Root>
+			<DropdownMenu.Trigger>
+				{#snippet child({ props })}
+					<Button {...props} variant={activeView ? 'secondary' : 'outline'} size="sm" class="max-w-56">
+						<BookmarkIcon data-icon="inline-start" />
+						<span class="truncate">{activeView?.name ?? (editedView ? `${editedView.name} (changed)` : 'Views')}</span>
+						<ChevronDownIcon data-icon="inline-end" />
+					</Button>
+				{/snippet}
+			</DropdownMenu.Trigger>
+			<DropdownMenu.Content align="start" class="w-64">
+				<DropdownMenu.Group>
+					<DropdownMenu.Label>Saved views of {table}</DropdownMenu.Label>
+					{#each views as v (v.name)}
+						<DropdownMenu.Item onclick={() => applyView(v)}>
+							{#if activeView?.name === v.name}<CheckIcon />{:else}<BookmarkIcon />{/if}
+							<span class="truncate">{v.name}</span>
+						</DropdownMenu.Item>
+					{:else}
+						<DropdownMenu.Item disabled>No saved views yet</DropdownMenu.Item>
+					{/each}
+				</DropdownMenu.Group>
+				<DropdownMenu.Separator />
+				<DropdownMenu.Group>
+					<DropdownMenu.Item disabled={!!activeView} onclick={() => (savingView = true)}><BookmarkPlusIcon /> Save as a new view…</DropdownMenu.Item>
+					{#if editedView}
+						{@const name = editedView.name}
+						<DropdownMenu.Item onclick={() => saveView(name)}><SaveIcon /> Update “{name}”</DropdownMenu.Item>
+					{/if}
+					<DropdownMenu.Item disabled={!filterRows.length && !sort && !appliedSearch} onclick={() => applyView(null)}><FilterXIcon /> Show everything</DropdownMenu.Item>
+				</DropdownMenu.Group>
+				{#if activeView || editedView}
+					{@const name = (activeView ?? editedView)!.name}
+					<DropdownMenu.Separator />
+					<DropdownMenu.Group>
+						<DropdownMenu.Item variant="destructive" onclick={() => deleteView(name)}><TrashIcon /> Delete “{name}”</DropdownMenu.Item>
+					</DropdownMenu.Group>
+				{/if}
+			</DropdownMenu.Content>
+		</DropdownMenu.Root>
+		{#if !isView}
+			<ButtonGroup.Root>
+				{@render toolButton(history.undo ? `Undo: ${history.undo} (${shortcutText('mod+z')})` : 'Nothing to undo', Undo2Icon, () => undoRedo(), !history.undo)}
+				{@render toolButton(history.redo ? `Redo: ${history.redo} (${shortcutText('shift+mod+z')})` : 'Nothing to redo', Redo2Icon, () => undoRedo(true), !history.redo)}
+			</ButtonGroup.Root>
+		{/if}
 		{@render toolButton('Refresh', RefreshCwIcon, refresh)}
+	{#if !isView}{@render toolButton(`Find and replace (${shortcutText('mod+h')})`, ReplaceIcon, () => openReplace())}{/if}
+		<DropdownMenu.Root>
+			<DropdownMenu.Trigger>
+				{#snippet child({ props })}
+					<Button {...props} variant="outline" size="sm" disabled={exporting}>
+						<DownloadIcon data-icon="inline-start" /> Import / Export <ChevronDownIcon data-icon="inline-end" />
+					</Button>
+				{/snippet}
+			</DropdownMenu.Trigger>
+			<DropdownMenu.Content align="start">
+				{#if !isView}
+					<DropdownMenu.Group>
+						<DropdownMenu.Item onclick={() => (importOpen = true)}><UploadIcon /> Import from a file…</DropdownMenu.Item>
+					</DropdownMenu.Group>
+					<DropdownMenu.Separator />
+				{/if}
+				<DropdownMenu.Group>
+					<DropdownMenu.Label>{filters.length || appliedSearch ? 'Export the matching records' : 'Export all records'}</DropdownMenu.Label>
+					<DropdownMenu.Item onclick={() => exportRecords('xlsx')}><FileSpreadsheetIcon /> Excel workbook (.xlsx)</DropdownMenu.Item>
+					<DropdownMenu.Item onclick={() => exportRecords('csv')}><FileTextIcon /> CSV file (.csv)</DropdownMenu.Item>
+				</DropdownMenu.Group>
+			</DropdownMenu.Content>
+		</DropdownMenu.Root>
 		<span class="flex-1"></span>
 		{#if sort}
 			<Badge variant="secondary">
@@ -569,11 +875,13 @@
 				<div
 					{...props}
 					bind:this={gridEl}
-					class="min-h-0 flex-1 overflow-auto outline-none"
+					class="min-h-0 flex-1 overflow-auto outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:ring-inset"
 					role="grid"
+					aria-label="{table} records"
 					tabindex="0"
 					onkeydown={onGridKey}
 					oncontextmenucapture={onContextMenu}
+					onpaste={onPaste}
 				>
 					{#if loading}
 						<div class="flex flex-col gap-2 p-4">
@@ -751,6 +1059,39 @@
 					<ContextMenu.Item onclick={() => openForm(t.index)}><PanelBottomIcon /> Open as form</ContextMenu.Item>
 					<ContextMenu.Item onclick={newRecord}><PlusIcon /> New record</ContextMenu.Item>
 				</ContextMenu.Group>
+				<ContextMenu.Separator />
+				<ContextMenu.Group>
+					<ContextMenu.Item onclick={copyCells}>
+						<CopyIcon /> {selectedKeys.length ? `Copy ${selectedKeys.length} ${selectedKeys.length === 1 ? 'record' : 'records'}` : 'Copy'}
+						<ContextMenu.Shortcut>{shortcutText('mod+c')}</ContextMenu.Shortcut>
+					</ContextMenu.Item>
+					<ContextMenu.Item
+						onclick={async () => {
+							const text = await navigator.clipboard.readText().catch(() => '');
+							if (text) pasteCells(text);
+							else toast(`Press ${shortcutText('mod+v')} to paste`, { description: 'The clipboard can only be read from the keyboard here.' });
+						}}
+					>
+						<ClipboardPasteIcon /> Paste here
+						<ContextMenu.Shortcut>{shortcutText('mod+v')}</ContextMenu.Shortcut>
+					</ContextMenu.Item>
+					{#if t.col && editable(t.col) && selectedKeys.length}
+						{@const col = t.col}
+						<ContextMenu.Item onclick={() => fillSelected(t.index, col)}>
+							<CopyCheckIcon /> Fill ticked records with this {col}
+							<ContextMenu.Shortcut>{shortcutText('mod+d')}</ContextMenu.Shortcut>
+						</ContextMenu.Item>
+					{/if}
+					{#if t.col}
+						{@const col = t.col}
+						<ContextMenu.Item
+							onclick={() => openReplace(col)}
+						>
+							<ReplaceIcon /> Find and replace…
+							<ContextMenu.Shortcut>{shortcutText('mod+h')}</ContextMenu.Shortcut>
+						</ContextMenu.Item>
+					{/if}
+				</ContextMenu.Group>
 				{#if t.col}
 					<ContextMenu.Separator />
 					<ContextMenu.Group>
@@ -849,6 +1190,17 @@
 
 {#if def && !isView}
 	<FieldDrawer bind:open={fieldDrawer.open} {table} field={fieldDrawer.field} onSaved={() => load(true)} />
+	<ImportDrawer bind:open={importOpen} {table} onImported={() => load(true)} />
+	<ReplaceDialog
+		bind:open={replacing}
+		{table}
+		fields={def.fields}
+		{filters}
+		search={appliedSearch}
+		{sort}
+		initialField={replaceField}
+		onReplaced={() => load()}
+	/>
 	<RecordDrawer bind:open={sheetOpen} {table} {def} columns={columns} row={sheetRow} {lookups} onSaved={() => load()} />
 {/if}
 
@@ -860,6 +1212,16 @@
 	submitLabel="Add field"
 	validate={(v) => nameProblem(v)}
 	onSubmit={addColumn}
+/>
+
+<NameDialog
+	bind:open={savingView}
+	title="Save view"
+	description="Keeps this filter, search and sort under a name, in the database file."
+	initial={nextFreeName('View', views.map((v) => v.name))}
+	submitLabel="Save view"
+	validate={(v) => viewNameProblem(session.savedViews, table, v)}
+	onSubmit={saveView}
 />
 
 <NameDialog

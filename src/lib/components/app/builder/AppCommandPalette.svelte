@@ -1,7 +1,9 @@
 <script lang="ts">
+	import { workspace } from '#lib/state/workspace.svelte.js';
 	// Utils
 	import { toggleMode } from 'mode-watcher';
 	import { shortcutsDialog } from '#lib/state/shortcuts.svelte.js';
+	import { tour } from '#lib/state/tour.svelte.js';
 	import { widgetLabel, WIDGET_TYPES, type WidgetType } from '#lib/logic/app-def.js';
 	import { appSession } from '#lib/state/app.svelte.js';
 
@@ -14,6 +16,7 @@
 	import {
 		ArrowLeft as ArrowLeftIcon,
 		Keyboard as KeyboardIcon,
+		GraduationCap as GraduationCapIcon,
 		ClipboardPaste as ClipboardPasteIcon,
 		FilePlus as FilePlusIcon,
 		PanelLeft as PanelLeftIcon,
@@ -22,8 +25,9 @@
 		Play as PlayIcon,
 		Printer as PrinterIcon,
 		RefreshCw as RefreshCwIcon,
+		Share as ShareIcon,
 		SunMoon as SunMoonIcon,
-	} from '@lucide/svelte';
+} from '@lucide/svelte';
 
 	// Script
 	let {
@@ -96,8 +100,13 @@
 			<Command.Item onSelect={() => run(() => appSession.toggleSidebar())}><PanelLeftIcon /> Toggle the sidebar</Command.Item>
 			<Command.Item onSelect={() => run(() => appSession.run({ do: 'refresh' }))}><RefreshCwIcon /> Reload the data</Command.Item>
 			<Command.Item onSelect={() => run(() => setTimeout(() => window.print(), 100))}><PrinterIcon /> Print this page</Command.Item>
+			{#if appSession.name}
+				{@const name = appSession.name}
+				<Command.Item value="share this app as a file export package" onSelect={() => run(() => workspace.shareApp(name))}><ShareIcon /> Share this app as a file…</Command.Item>
+			{/if}
 			<Command.Item onSelect={() => run(toggleMode)}><SunMoonIcon /> Toggle light / dark</Command.Item>
 			<Command.Item value="keyboard shortcuts" onSelect={() => run(() => (shortcutsDialog.open = true))}><KeyboardIcon /> Keyboard shortcuts</Command.Item>
+			<Command.Item value="getting started tour help" onSelect={() => run(() => (tour.open = true))}><GraduationCapIcon /> Getting started tour</Command.Item>
 			<Command.Item onSelect={() => run(onBack)}><ArrowLeftIcon /> Home</Command.Item>
 			<Command.Item onSelect={() => run(onSettings)}><SettingsIcon /> Settings</Command.Item>
 		</Command.Group>

@@ -5,6 +5,7 @@ use super::{on_online, target};
 use crate::online::SecretStore;
 use crate::online_data::OnlinePools;
 use crate::online_records;
+use crate::database::journal::{self, UndoState};
 use crate::database::{DbManager, records};
 use crate::errors::AppResult;
 use crate::models::{
@@ -41,6 +42,23 @@ pub async fn aggregate_records(
 ) -> AppResult<AggregateResult> {
     on_online!(store, secrets, pools, database, |o| online_records::aggregate(&o, &table, &query));
     state.run_on(target(&store, database)?, move |db| records::aggregate(&db.conn, &table, &query)).await
+}
+
+/// What the database page can undo and redo.
+#[tauri::command]
+pub async fn undo_state(state: State<'_, DbManager>) -> AppResult<UndoState> {
+    state.run(|db| Ok(db.journal.state())).await
+}
+
+/// Undoes the latest record change in the database page's database.
+#[tauri::command]
+pub async fn undo_records(state: State<'_, DbManager>) -> AppResult<Option<String>> {
+    state.run(|db| journal::undo(&db.conn, &mut db.journal)).await
+}
+
+#[tauri::command]
+pub async fn redo_records(state: State<'_, DbManager>) -> AppResult<Option<String>> {
+    state.run(|db| journal::redo(&db.conn, &mut db.journal)).await
 }
 
 #[tauri::command]
@@ -88,7 +106,11 @@ pub async fn insert_record(
     values: RecordValues,
 ) -> AppResult<RecordKey> {
     on_online!(store, secrets, pools, database, |o| online_records::insert_record(&o, &table, &values));
-    state.run_on(target(&store, database)?, move |db| records::insert_record(&db.conn, &table, &values)).await
+    state
+        .run_on(target(&store, database)?, move |db| {
+            db.recorded(format!("Add a {table} record"), |c| records::insert_record(c, &table, &values))
+        })
+        .await
 }
 
 #[tauri::command]
@@ -105,7 +127,9 @@ pub async fn update_record(
 ) -> AppResult<RecordKey> {
     on_online!(store, secrets, pools, database, |o| online_records::update_record(&o, &table, &key, &values));
     state
-        .run_on(target(&store, database)?, move |db| records::update_record(&db.conn, &table, &key, &values))
+        .run_on(target(&store, database)?, move |db| {
+            db.recorded(format!("Edit a {table} record"), |c| records::update_record(c, &table, &key, &values))
+        })
         .await
 }
 
@@ -123,7 +147,13 @@ pub async fn delete_records(
 ) -> AppResult<usize> {
     on_online!(store, secrets, pools, database, |o| online_records::delete_records(&o, &table, &keys, confirm));
     state
-        .run_on(target(&store, database)?, move |db| records::delete_records(&db.conn, &table, &keys, confirm))
+        .run_on(target(&store, database)?, move |db| {
+            let label = match keys.len() {
+                1 => format!("Delete a {table} record"),
+                n => format!("Delete {n} {table} records"),
+            };
+            db.recorded(label, |c| records::delete_records(c, &table, &keys, confirm))
+        })
         .await
 }
 
@@ -138,9 +168,14 @@ pub async fn batch_records(
     table: String,
     ops: Vec<BatchOp>,
     confirm_deletes: bool,
+    // What the change was, for Undo (e.g. "Paste 12 rows").
+    label: Option<String>,
 ) -> AppResult<BatchResult> {
     on_online!(store, secrets, pools, database, |o| online_records::batch(&o, &table, &ops, confirm_deletes));
     state
-        .run_on(target(&store, database)?, move |db| records::batch(&db.conn, &table, &ops, confirm_deletes))
+        .run_on(target(&store, database)?, move |db| {
+            let label = label.map(|l| l.chars().take(80).collect()).unwrap_or_else(|| format!("Change {} {table} records", ops.len()));
+            db.recorded(label, |c| records::batch(c, &table, &ops, confirm_deletes))
+        })
         .await
 }

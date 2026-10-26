@@ -19,12 +19,12 @@
 	--secondary: oklch(0.97 0 0);
 	--secondary-foreground: oklch(0.205 0 0);
 	--muted: oklch(0.97 0 0);
-	--muted-foreground: oklch(0.556 0 0);
+	--muted-foreground: oklch(0.53 0 0);
 	--accent: oklch(0.97 0 0);
 	--accent-foreground: oklch(0.205 0 0);
 	--destructive: oklch(0.577 0.245 27.325);
-	--warning: oklch(0.666 0.179 58.318);
-	--success: oklch(0.627 0.194 149.214);
+	--warning: oklch(0.555 0.163 48.998);
+	--success: oklch(0.527 0.154 150.069);
 	--border: oklch(0.922 0 0);
 	--input: oklch(0.922 0 0);
 	--ring: oklch(0.708 0 0);
@@ -348,6 +348,18 @@ html[data-reduce-motion] ::after {
 	animation-iteration-count: 1 !important;
 	transition-duration: 0.01ms !important;
 }
+/* The system's "reduce motion" counts too, whatever the setting says. */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	::before,
+	::after {
+		animation-duration: 0.01ms !important;
+		animation-delay: 0s !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}
 
 @theme inline {
 	--font-sans: 'Geist Variable', sans-serif;
@@ -408,5 +420,22 @@ html[data-reduce-motion] ::after {
 	}
 	html {
 		@apply font-sans;
+	}
+}
+
+/* Printing a report (ReportsView): only its copy at the end of <body> is printed. */
+[data-print-area] {
+	display: none;
+}
+@media print {
+	html[data-printing] body > :not([data-print-area]) {
+		display: none !important;
+	}
+	html[data-printing] [data-print-area] {
+		display: block;
+	}
+	html[data-printing],
+	html[data-printing] body {
+		background: white;
 	}
 }

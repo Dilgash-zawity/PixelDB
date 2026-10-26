@@ -163,6 +163,54 @@ pub fn save_layout(conn: &Connection, layout: &DiagramLayout) -> AppResult<()> {
     Ok(())
 }
 
+/// Documents the frontend keeps in the database file: the Datasheet's saved
+/// views and the reports. Each is the frontend's own JSON object, only kept,
+/// never interpreted; an unknown key is refused.
+pub const DOCUMENT_KEYS: &[&str] = &["saved_views", "reports"];
+
+fn document_key(key: &str) -> AppResult<&'static str> {
+    DOCUMENT_KEYS
+        .iter()
+        .find(|k| **k == key)
+        .copied()
+        .ok_or_else(|| AppError::Validation(format!("unknown document {key:?}")))
+}
+
+/// The stored document `key`; an empty object when none was saved.
+pub fn load_document(conn: &Connection, key: &str) -> AppResult<JsonValue> {
+    let key = document_key(key)?;
+    if !meta_exists(conn)? {
+        return Ok(JsonValue::Object(Default::default()));
+    }
+    let raw: Option<String> = conn
+        .query_row(&format!("SELECT value FROM {META_TABLE} WHERE key = ?1"), [key], |r| r.get(0))
+        .optional()?;
+    Ok(raw
+        .and_then(|json| serde_json::from_str::<JsonValue>(&json).ok())
+        .filter(JsonValue::is_object)
+        .unwrap_or_else(|| JsonValue::Object(Default::default())))
+}
+
+pub fn save_document(conn: &Connection, key: &str, value: &JsonValue) -> AppResult<()> {
+    let key = document_key(key)?;
+    if !value.is_object() {
+        return Err(AppError::Validation("the document must be an object".into()));
+    }
+    let json = serde_json::to_string(value)?;
+    if json.len() > MAX_DESIGN_BYTES {
+        return Err(AppError::Validation("the document is too large".into()));
+    }
+    ensure(conn)?;
+    conn.execute(
+        &format!(
+            "INSERT INTO {META_TABLE} (key, value) VALUES (?1, ?2)
+             ON CONFLICT(key) DO UPDATE SET value = excluded.value"
+        ),
+        params![key, json],
+    )?;
+    Ok(())
+}
+
 /// Stores the visual design a saved query was built from, together with the
 /// SQL it produced; `None` forgets any earlier design. The design is the
 /// frontend's own JSON and is only kept, never interpreted.

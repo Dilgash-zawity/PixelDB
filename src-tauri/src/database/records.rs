@@ -287,12 +287,30 @@ fn display_sort(conn: &Connection, src: &Source, col: &str) -> Option<String> {
 
 pub fn list_records(conn: &Connection, table: &str, q: &RecordQuery) -> AppResult<RecordPage> {
     let src = Source::load(conn, table)?;
-    let (where_sql, params) = build_where(&src, q)?;
+    let limit = match q.limit {
+        0 => DEFAULT_PAGE_SIZE,
+        n => n.min(MAX_PAGE_SIZE),
+    };
+    let (total, rows) = select_rows(conn, &src, q, limit, q.offset)?;
+    Ok(RecordPage { columns: src.columns.clone(), types: src.types.clone(), rows, total, offset: q.offset, limit })
+}
+
+/// Every record matching `q`'s filters, search and sort (its paging is
+/// ignored), up to `max`; for exports. `total` tells whether some were left out.
+pub fn list_all(conn: &Connection, table: &str, q: &RecordQuery, max: u64) -> AppResult<RecordPage> {
+    let src = Source::load(conn, table)?;
+    let (total, rows) = select_rows(conn, &src, q, max, 0)?;
+    Ok(RecordPage { columns: src.columns.clone(), types: src.types.clone(), rows, total, offset: 0, limit: max })
+}
+
+/// The number of records matching `q` and the `limit` of them from `offset`.
+fn select_rows(conn: &Connection, src: &Source, q: &RecordQuery, limit: u64, offset: u64) -> AppResult<(i64, Vec<RecordRow>)> {
+    let (where_sql, params) = build_where(src, q)?;
     let mut order: Vec<String> = Vec::new();
     for s in &q.sort {
         let col = src.column(&s.column)?;
         let dir = if s.descending { "DESC" } else { "ASC" };
-        if let Some(shown) = display_sort(conn, &src, &col) {
+        if let Some(shown) = display_sort(conn, src, &col) {
             order.push(format!("{shown} {dir}"));
         }
         order.push(format!("{} {dir}", quote_ident(&col)));
@@ -303,10 +321,6 @@ pub fn list_records(conn: &Connection, table: &str, q: &RecordQuery) -> AppResul
         KeyKind::None => {}
     }
     let order_sql = if order.is_empty() { String::new() } else { format!(" ORDER BY {}", order.join(", ")) };
-    let limit = match q.limit {
-        0 => DEFAULT_PAGE_SIZE,
-        n => n.min(MAX_PAGE_SIZE),
-    };
     let from = quote_ident(&src.name);
 
     let total: i64 = conn.query_row(
@@ -315,16 +329,16 @@ pub fn list_records(conn: &Connection, table: &str, q: &RecordQuery) -> AppResul
         |r| r.get(0),
     )?;
     let mut page_params = params.clone();
-    page_params.push(Value::Integer(limit as i64));
-    page_params.push(Value::Integer(q.offset.min(i64::MAX as u64) as i64));
+    page_params.push(Value::Integer(limit.min(i64::MAX as u64) as i64));
+    page_params.push(Value::Integer(offset.min(i64::MAX as u64) as i64));
     let mut stmt = conn.prepare(&format!(
         "SELECT {} FROM {from}{where_sql}{order_sql} LIMIT ? OFFSET ?",
-        select_list(&src)
+        select_list(src)
     ))?;
     let rows = stmt
-        .query_map(params_from_iter(page_params.iter()), |row| read_row(&src, row))?
+        .query_map(params_from_iter(page_params.iter()), |row| read_row(src, row))?
         .collect::<Result<Vec<_>, _>>()?;
-    Ok(RecordPage { columns: src.columns.clone(), types: src.types.clone(), rows, total, offset: q.offset, limit })
+    Ok((total, rows))
 }
 
 pub const MAX_SERIES: usize = 20;
@@ -623,6 +637,23 @@ pub fn delete_records(conn: &Connection, table: &str, keys: &[RecordKey], confir
             delete_one(tx, &src, key).map_err(|e| e.context(format!("record #{}", i + 1)))?;
         }
         Ok(keys.len())
+    })
+}
+
+pub const MAX_IMPORT_RECORDS: usize = 200_000;
+
+/// Inserts imported records, all or none. An error names the row (counting
+/// from 1) so the user can find it in their file.
+pub fn import(conn: &Connection, table: &str, rows: &[RecordValues]) -> AppResult<usize> {
+    if rows.len() > MAX_IMPORT_RECORDS {
+        return Err(AppError::Validation(format!("at most {MAX_IMPORT_RECORDS} records per import")));
+    }
+    let src = Source::load(conn, table)?;
+    with_transaction(conn, |tx| {
+        for (i, values) in rows.iter().enumerate() {
+            insert_one(tx, &src, values).map_err(|e| e.context(format!("row {}", i + 1)))?;
+        }
+        Ok(rows.len())
     })
 }
 

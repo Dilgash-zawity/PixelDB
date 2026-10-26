@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       version:
-        description: 'Version on main to publish (OS publisher verification is not included)'
+        description: 'Version on main to publish (macOS and Windows are signed when their credentials are configured)'
         required: true
         type: string
 
@@ -30,6 +30,8 @@ jobs:
     outputs:
       version: ${{ steps.draft.outputs.version }}
       release_id: ${{ steps.draft.outputs.release_id }}
+      apple_signing: ${{ steps.os-signing.outputs.apple }}
+      windows_signing: ${{ steps.os-signing.outputs.windows }}
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       GH_REPO: ${{ github.repository }}
@@ -44,6 +46,34 @@ jobs:
         run: |
           test -n "$TAURI_SIGNING_PRIVATE_KEY"
           test -n "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
+      # Publisher signing turns on per platform once all of its credentials exist
+      # (docs/RELEASING.md); a partial set fails rather than shipping half-signed.
+      - name: Check macOS and Windows signing credentials
+        id: os-signing
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZURE_CERTIFICATE_PROFILE: ${{ vars.AZURE_CERTIFICATE_PROFILE }}
+        run: |
+          check() {
+            local platform=$1; shift
+            local set=0
+            for name in "$@"; do [ -n "${!name}" ] && set=$((set + 1)); done
+            if [ "$set" -eq "$#" ]; then echo "$platform=true" >> "$GITHUB_OUTPUT"; echo "$platform: signed" >> "$GITHUB_STEP_SUMMARY"
+            elif [ "$set" -eq 0 ]; then echo "$platform=false" >> "$GITHUB_OUTPUT"; echo "$platform: not signed (no credentials)" >> "$GITHUB_STEP_SUMMARY"
+            else echo "Some but not all $platform signing credentials are set: $*"; exit 1; fi
+          }
+          check apple APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID
+          check windows AZURE_CLIENT_ID AZURE_CLIENT_SECRET AZURE_TENANT_ID AZURE_SIGNING_ENDPOINT AZURE_SIGNING_ACCOUNT AZURE_CERTIFICATE_PROFILE
       - name: Create the versioned draft release
         id: draft
         run: |
@@ -98,6 +128,16 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - run: bun install --frozen-lockfile
+      - name: Configure Windows Artifact Signing
+        if: github.event_name == 'workflow_dispatch' && runner.os == 'Windows' && needs.prepare.outputs.windows_signing == 'true'
+        env:
+          AZURE_SIGNING_ENDPOINT: ${{ vars.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ vars.AZURE_SIGNING_ACCOUNT }}
+          AZURE_CERTIFICATE_PROFILE: ${{ vars.AZURE_CERTIFICATE_PROFILE }}
+        shell: bash
+        run: |
+          cargo install artifact-signing-cli --locked
+          node scripts/release.mjs windows-config
       # Pull requests never receive signing secrets or publish unsigned installers.
       - name: Build unsigned installers for a pull request
         if: github.event_name == 'pull_request'
@@ -110,14 +150,45 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-          # Ad-hoc signing preserves binary integrity; it is not Apple notarization.
-          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && '-' || '' }}
+          # With a Developer ID, Tauri signs and notarizes; without one, ad-hoc
+          # signing keeps binary integrity (it is not Apple notarization).
+          APPLE_CERTIFICATE: ${{ runner.os == 'macOS' && needs.prepare.outputs.apple_signing == 'true' && secrets.APPLE_CERTIFICATE || '' }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ runner.os == 'macOS' && needs.prepare.outputs.apple_signing == 'true' && secrets.APPLE_CERTIFICATE_PASSWORD || '' }}
+          APPLE_SIGNING_IDENTITY: ${{ runner.os == 'macOS' && (needs.prepare.outputs.apple_signing == 'true' && secrets.APPLE_SIGNING_IDENTITY || '-') || '' }}
+          APPLE_ID: ${{ runner.os == 'macOS' && needs.prepare.outputs.apple_signing == 'true' && secrets.APPLE_ID || '' }}
+          APPLE_PASSWORD: ${{ runner.os == 'macOS' && needs.prepare.outputs.apple_signing == 'true' && secrets.APPLE_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ runner.os == 'macOS' && needs.prepare.outputs.apple_signing == 'true' && secrets.APPLE_TEAM_ID || '' }}
+          AZURE_CLIENT_ID: ${{ runner.os == 'Windows' && needs.prepare.outputs.windows_signing == 'true' && secrets.AZURE_CLIENT_ID || '' }}
+          AZURE_CLIENT_SECRET: ${{ runner.os == 'Windows' && needs.prepare.outputs.windows_signing == 'true' && secrets.AZURE_CLIENT_SECRET || '' }}
+          AZURE_TENANT_ID: ${{ runner.os == 'Windows' && needs.prepare.outputs.windows_signing == 'true' && secrets.AZURE_TENANT_ID || '' }}
         with:
           releaseId: ${{ needs.prepare.outputs.release_id }}
-          args: ${{ matrix.args }}
+          args: ${{ matrix.args }} ${{ runner.os == 'Windows' && needs.prepare.outputs.windows_signing == 'true' && '--config tauri-signing.windows.json' || '' }}
           tauriScript: bun run tauri
           # The publish job writes the manifest once to avoid concurrent writes.
           includeUpdaterJson: false
+      - name: Verify macOS signature and notarization
+        if: github.event_name == 'workflow_dispatch' && runner.os == 'macOS' && needs.prepare.outputs.apple_signing == 'true'
+        shell: bash
+        run: |
+          count=0
+          while IFS= read -r -d '' app; do
+            codesign --verify --deep --strict --verbose=2 "$app"
+            spctl --assess --type execute --verbose=2 "$app"
+            xcrun stapler validate "$app"
+            count=$((count + 1))
+          done < <(find src-tauri/target -path '*/bundle/macos/SlateDB.app' -type d -prune -print0)
+          [ "$count" -gt 0 ]
+      - name: Verify Windows Authenticode signatures
+        if: github.event_name == 'workflow_dispatch' && runner.os == 'Windows' && needs.prepare.outputs.windows_signing == 'true'
+        shell: pwsh
+        run: |
+          $files = @(Get-Item src-tauri/target/release/SlateDB.exe) + @(Get-ChildItem src-tauri/target/release/bundle/nsis/*-setup.exe)
+          if ($files.Count -lt 2) { throw 'Expected the app and installer' }
+          foreach ($file in $files) {
+            $signature = Get-AuthenticodeSignature $file.FullName
+            if ($signature.Status -ne 'Valid') { throw "Invalid signature: $($file.Name)" }
+          }
 
   publish:
     needs: [prepare, build]

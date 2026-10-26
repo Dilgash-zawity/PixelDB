@@ -55,3 +55,14 @@ pub async fn release_databases(state: State<'_, DbManager>) -> AppResult<()> {
     let mgr = state.inner().clone();
     DbManager::run_detached(move || mgr.close_others()).await
 }
+
+/// A document the frontend keeps in the database file (`metadata::DOCUMENT_KEYS`).
+#[tauri::command]
+pub async fn get_document(state: State<'_, DbManager>, key: String) -> AppResult<serde_json::Value> {
+    state.run(move |db| metadata::load_document(&db.conn, &key)).await
+}
+
+#[tauri::command]
+pub async fn save_document(state: State<'_, DbManager>, key: String, value: serde_json::Value) -> AppResult<()> {
+    state.run(move |db| metadata::save_document(&db.conn, &key, &value)).await
+}

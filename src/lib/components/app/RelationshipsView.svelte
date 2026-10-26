@@ -31,7 +31,9 @@
 		unlinkDesign,
 		updateLinkDesign
 	} from '#lib/logic/relationships.js';
+	import { History } from '#lib/logic/history.js';
 	import { WHEEL_ZOOM_RATE } from '#lib/logic/pinch.js';
+	import { matches, shortcutText } from '#lib/logic/shortcuts.js';
 	import { jsonClone } from '#lib/logic/values.js';
 	import { attempt, confirm } from '#lib/state/feedback.svelte.js';
 	import { session } from '#lib/state/session.svelte.js';
@@ -47,6 +49,7 @@
 	import NameDialog from './NameDialog.svelte';
 	import FieldDrawer from './FieldDrawer.svelte';
 	import NewLinkDrawer from './NewLinkDrawer.svelte';
+	import ImportDrawer from './ImportDrawer.svelte';
 	import NewTableDrawer from './NewTableDrawer.svelte';
 	import RelationshipPanel, { type Selection } from './RelationshipPanel.svelte';
 	import Shortcut from './Shortcut.svelte';
@@ -59,6 +62,9 @@
 		Minus as MinusIcon,
 		Pencil as PencilIcon,
 		Plus as PlusIcon,
+		Redo2 as Redo2Icon,
+		Undo2 as Undo2Icon,
+		Upload as UploadIcon,
 		Rows3 as Rows3Icon,
 		Table2 as Table2Icon,
 		Trash2 as TrashIcon,
@@ -76,6 +82,10 @@
 	let zoom = $state(1);
 	let pan = $state<Point>({ x: 0, y: 0 });
 	let selection = $state<Selection>(null);
+	/** Undo for moving and tidying the cards (structure changes are made with confirmation instead). */
+	const moves = new History<DiagramLayout>(50);
+	let canUndoMove = $state(false);
+	let canRedoMove = $state(false);
 	/** The field drawer: which table and field (null for a new one). */
 	let fieldDrawer = $state<{ open: boolean; table: string; field: string | null }>({ open: false, table: '', field: null });
 	let renamingTable = $state<string | null>(null);
@@ -88,6 +98,7 @@
 	let dropTarget = $state<{ table: string; field: string | null } | null>(null);
 	let viewport = $state<HTMLDivElement | null>(null);
 	let addingTable = $state(false);
+	let importing = $state(false);
 	/** Where a table added from the right-click menu goes; null lets it be placed automatically. */
 	let newTableAt = $state<Point | null>(null);
 	/** What was right-clicked, and where (in diagram coordinates). */
@@ -260,14 +271,34 @@
 	function startCardDrag(e: PointerEvent, name: string) {
 		if (e.button !== 0) return;
 		const origin = { ...layout[name] };
+		const before = jsonClone(layout);
 		drag(
 			e,
 			(dx, dy) => (layout[name] = { x: Math.round(origin.x + dx / zoom), y: Math.round(origin.y + dy / zoom) }),
 			(moved) => {
-				if (moved) saveLayoutSoon();
-				else selectTable(name);
+				if (moved) {
+					rememberMove(before);
+					saveLayoutSoon();
+				} else selectTable(name);
 			}
 		);
+	}
+
+	function rememberMove(before: DiagramLayout) {
+		moves.record(before);
+		canUndoMove = moves.canUndo;
+		canRedoMove = moves.canRedo;
+	}
+
+	/** Puts the cards back where they were before the last move or tidy-up (or forward again). */
+	function undoMove(redo = false) {
+		const next = redo ? moves.redo(jsonClone(layout)) : moves.undo(jsonClone(layout));
+		canUndoMove = moves.canUndo;
+		canRedoMove = moves.canRedo;
+		if (!next) return;
+		// Tables added since keep their place.
+		layout = { ...layout, ...Object.fromEntries(Object.entries(next).filter(([n]) => byName.has(n))) };
+		saveLayoutSoon();
 	}
 
 	// ── Drag a field onto another table to link ──
@@ -468,6 +499,7 @@
 	}
 
 	function arrange() {
+		rememberMove(jsonClone(layout));
 		layout = autoLayout(defs, rels);
 		saveLayoutNow();
 		tick().then(fit);
@@ -507,7 +539,10 @@
 	function onKey(e: KeyboardEvent) {
 		const typing = (e.target as Element | null)?.closest('input, textarea, select, [contenteditable], [role="dialog"], [role="menu"], [role="listbox"]');
 		if (typing) return;
-		if (e.key === 'Escape') {
+		if (matches(e, 'mod+z') || matches(e, 'shift+mod+z')) {
+			e.preventDefault();
+			undoMove(e.shiftKey);
+		} else if (e.key === 'Escape') {
 			selection = null;
 		} else if ((e.key === 'Delete' || e.key === 'Backspace') && selectedRel) {
 			e.preventDefault();
@@ -630,6 +665,10 @@
 				</div>
 				<div data-toolbar class="absolute right-3 bottom-3">
 					<ButtonGroup.Root>
+						<Button size="icon-sm" variant="outline" class="bg-background" aria-label="Undo moving tables" title="Undo moving tables ({shortcutText('mod+z')})" disabled={!canUndoMove} onclick={() => undoMove()}><Undo2Icon /></Button>
+						<Button size="icon-sm" variant="outline" class="bg-background" aria-label="Redo moving tables" title="Redo ({shortcutText('shift+mod+z')})" disabled={!canRedoMove} onclick={() => undoMove(true)}><Redo2Icon /></Button>
+					</ButtonGroup.Root>
+					<ButtonGroup.Root>
 						<Button size="icon-sm" variant="outline" class="bg-background" aria-label="Zoom out" onclick={() => zoomTo(zoom / 1.2)}><MinusIcon /></Button>
 						<Button size="sm" variant="outline" class="w-14 bg-background tabular-nums" aria-label="Fit to screen" title="Fit to screen" onclick={fit}>
 							{Math.round(zoom * 100)}%
@@ -652,6 +691,14 @@
 				{@const at = menu.at}
 				<ContextMenu.Group>
 					<ContextMenu.Item onclick={() => openAddTable(at)}><PlusIcon /> New table…</ContextMenu.Item>
+					<ContextMenu.Item
+						onclick={() => {
+							newTableAt = at;
+							importing = true;
+						}}
+					>
+						<UploadIcon /> Import from a file…
+					</ContextMenu.Item>
 					<ContextMenu.Item disabled={!defs.length} onclick={() => startLink()}><LinkIcon /> Link tables…</ContextMenu.Item>
 				</ContextMenu.Group>
 				<ContextMenu.Separator />
@@ -708,6 +755,7 @@
 	onStartLink={startLink}
 	onRenameTable={(t) => (renamingTable = t)}
 	onDeleteTable={deleteTable}
+	onIndexesChanged={() => load()}
 />
 
 <FieldDrawer
@@ -729,6 +777,14 @@
 <NewLinkDrawer bind:open={linking} bind:draft {defs} {infos} {rels} {busy} onCreate={create} />
 
 <NewTableDrawer bind:open={addingTable} initial={suggestedTableName()} onCreate={addTable} />
+<ImportDrawer
+	bind:open={importing}
+	onImported={async (name) => {
+		if (newTableAt && !layout[name]) layout[name] = newTableAt;
+		await load();
+		saveLayoutSoon();
+	}}
+/>
 
 <style>
 	/* A lit relationship's dashes march from the key to the linking field. */

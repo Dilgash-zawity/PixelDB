@@ -35,14 +35,11 @@
 		Rows3 as Rows3Icon,
 		Square as SquareIcon,
 		Table2 as Table2Icon,
-		Shapes as ShapesIcon,
-		ShieldCheck as ShieldCheckIcon,
-		TextCursorInput as TextCursorInputIcon,
 		TriangleAlert as TriangleAlertIcon,
 	} from '@lucide/svelte';
 
 	// Script
-	/** Adds a field to `table` in three steps: name, type, then optional rules (or, for a relationship, the table it points to). */
+	/** Adds a field to `table` on one page: name, type, then optional rules (or, for a relationship, the table it points to). */
 	let {
 		open = $bindable(false),
 		table,
@@ -53,7 +50,7 @@
 		onSaved?: (name: string) => void;
 	} = $props();
 
-	// A relationship is offered here too: its last step picks the table instead of the rules.
+	// A relationship is offered here too: it picks the table instead of the rules.
 	const EXCLUDED = WIZARD_EXCLUDED_TYPES.filter((t) => t !== 'lookup');
 	const KINDS: { value: Cardinality; label: string; hint: (child: string, parent: string) => string }[] = [
 		{
@@ -68,7 +65,6 @@
 		}
 	];
 
-	let step = $state(0);
 	let info = $state<TableInfo | null>(null);
 	let edit = $state<FieldDef | null>(null);
 	let touched = $state(false);
@@ -79,16 +75,6 @@
 	let parentDef = $state<TableDef | null>(null);
 
 	const isLink = $derived(edit?.field_type.type === 'lookup');
-	const steps = $derived([
-		{ label: 'Name', icon: TextCursorInputIcon },
-		{ label: 'Type', icon: ShapesIcon },
-		...(isLink
-			? [
-					{ label: 'Table', icon: Table2Icon },
-					{ label: 'Link', icon: LinkIcon }
-				]
-			: [{ label: 'Rules', icon: ShieldCheckIcon }])
-	]);
 	const parentKey = $derived(parentDef ? keyColumns(parentDef)[0] : undefined);
 	const linkProblem = $derived.by(() => {
 		if (!link.parent) return 'Choose the table this field points to';
@@ -105,7 +91,6 @@
 	});
 
 	async function load(t: string) {
-		step = 0;
 		touched = false;
 		info = null;
 		edit = null;
@@ -129,7 +114,13 @@
 	);
 
 	function setType(v: FieldTypeName) {
-		if (edit && edit.field_type.type !== v) edit.field_type = makeFieldType(v);
+		if (!edit || edit.field_type.type === v) return;
+		edit.field_type = makeFieldType(v);
+		// Suggest another table to point to, else this one (e.g. an employee's manager).
+		if (v === 'lookup' && !link.parent) {
+			const other = session.tables.find((t) => t.name !== table) ?? session.tables[0];
+			if (other) setParent(other.name);
+		}
 	}
 
 	async function setParent(name: string) {
@@ -137,24 +128,6 @@
 		parentDef = null;
 		const loaded = await attempt(() => tableService.get(name));
 		if (loaded && link.parent === name) parentDef = loaded.definition;
-	}
-
-	function next(at: number) {
-		if (at === 0) {
-			touched = true;
-			if (nameProblem) return false;
-		}
-		// Suggest another table to point to, else this one (e.g. an employee's manager).
-		if (at === 1 && isLink && !link.parent) {
-			const other = session.tables.find((t) => t.name !== table) ?? session.tables[0];
-			if (other) setParent(other.name);
-		}
-		if (at === 2 && isLink && (linkProblem || !parentDef)) return false;
-	}
-
-	function pickTable(name: string, andGo = false) {
-		if (name !== link.parent) setParent(name);
-		if (andGo) step = 3;
 	}
 
 	async function save(design: ReturnType<typeof fieldDesign>, name: string, message: string) {
@@ -176,6 +149,8 @@
 
 	async function submit() {
 		if (!info || !edit || blocked || busy) return;
+		touched = true;
+		if (nameProblem) return nameInput?.focus();
 		const name = edit.name.trim();
 		if (!isLink) {
 			const f = jsonClone(edit);
@@ -201,15 +176,12 @@
 
 <StepDrawer
 	bind:open
-	bind:step
 	title="New field"
 	description="In {table}"
-	{steps}
 	finishLabel={isLink ? 'Link' : 'Add field'}
 	finishIcon={isLink ? LinkIcon : undefined}
 	{busy}
-	disabled={!edit || !!blocked || (step >= 2 && isLink && (!!linkProblem || !parentDef))}
-	onNext={next}
+	disabled={!edit || !!blocked || (isLink && (!!linkProblem || !parentDef))}
 	onFinish={submit}
 >
 	{#if !edit}
@@ -220,102 +192,101 @@
 			<Alert.Title class="text-warning">Read-only</Alert.Title>
 			<Alert.Description>{blocked}</Alert.Description>
 		</Alert.Root>
-	{:else if step === 0}
-		<Field.Field data-invalid={touched && !!nameProblem}>
-			<Field.Label for="nf-name">What should this field be called?</Field.Label>
-			<Input id="nf-name" bind:ref={nameInput} bind:value={edit.name} placeholder="e.g. Email" autocomplete="off" aria-invalid={touched && !!nameProblem} />
-			{#if touched && nameProblem}
-				<Field.Error>{nameProblem}</Field.Error>
-			{:else}
-				<Field.Description>Short and clear, like “Email” or “Due date”.</Field.Description>
-			{/if}
-		</Field.Field>
-	{:else if step === 1}
-		<FieldTypeCards
-			value={edit.field_type.type}
-			exclude={EXCLUDED}
-			onChange={setType}
-			onPick={() => next(1) !== false && (step = 2)}
-		/>
-	{:else if isLink && step === 2}
-		<Field.Set>
-			<Field.Legend>Which table does “{edit.name.trim()}” point to?</Field.Legend>
-			<Field.Description>Each {table} record picks one record from it. Double-click a table to choose it and go on.</Field.Description>
-			<div class="grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Table to point to">
-				{#each session.tables as t (t.name)}
-					{@const selected = link.parent === t.name}
-					<button
-						type="button"
-						role="radio"
-						aria-checked={selected}
-						class={cn(
-							'flex items-center gap-2.5 rounded-lg border bg-card p-3 text-start outline-none transition-colors hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/40',
-							selected && 'border-primary bg-primary/5 ring-1 ring-primary'
-						)}
-						onclick={() => pickTable(t.name)}
-						ondblclick={() => pickTable(t.name, true)}
-					>
-						<span class={cn('flex size-8 shrink-0 items-center justify-center rounded-md bg-muted', selected && 'bg-primary text-primary-foreground')}>
-							<Table2Icon class="size-4" />
-						</span>
-						<span class="flex min-w-0 flex-col">
-							<span class="truncate text-sm font-medium">{t.name}</span>
-							{#if t.name === table}<span class="text-xs text-muted-foreground">This table</span>{/if}
-						</span>
-					</button>
-				{/each}
-			</div>
-			{#if link.parent && linkProblem}
-				<Field.Error>{linkProblem}</Field.Error>
-			{/if}
-		</Field.Set>
-	{:else if isLink}
-		<div class="flex flex-col gap-5">
+	{:else}
+		<div class="flex flex-col gap-6">
+			<Field.Field data-invalid={touched && !!nameProblem}>
+				<Field.Label for="nf-name">Name</Field.Label>
+				<Input id="nf-name" bind:ref={nameInput} bind:value={edit.name} placeholder="e.g. Email" autocomplete="off" aria-invalid={touched && !!nameProblem} onblur={() => (touched = true)} />
+				{#if touched && nameProblem}
+					<Field.Error>{nameProblem}</Field.Error>
+				{:else}
+					<Field.Description>Short and clear, like “Email” or “Due date”.</Field.Description>
+				{/if}
+			</Field.Field>
 			<Field.Set>
-				<Field.Legend>How many {table} records can pick the same {link.parent} record?</Field.Legend>
-				<div class="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Kind of link">
-					{#each KINDS as k (k.value)}
-						{@const selected = link.kind === k.value}
+				<Field.Legend variant="label">Type</Field.Legend>
+				<FieldTypeCards value={edit.field_type.type} exclude={EXCLUDED} onChange={setType} />
+			</Field.Set>
+			{#if isLink}
+			<Field.Set>
+				<Field.Legend variant="label">Which table does “{edit.name.trim()}” point to?</Field.Legend>
+				<Field.Description>Each {table} record picks one record from it.</Field.Description>
+				<div class="grid grid-cols-2 gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Table to point to">
+					{#each session.tables as t (t.name)}
+						{@const selected = link.parent === t.name}
 						<button
 							type="button"
 							role="radio"
 							aria-checked={selected}
 							class={cn(
-								'flex flex-col items-start gap-2 rounded-lg border bg-card p-3 text-start outline-none transition-colors hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/40',
+								'flex items-center gap-2.5 rounded-lg border bg-card p-3 text-start outline-none transition-colors hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/40',
 								selected && 'border-primary bg-primary/5 ring-1 ring-primary'
 							)}
-							onclick={() => (link.kind = k.value)}
+							onclick={() => link.parent !== t.name && setParent(t.name)}
 						>
-							<!-- A small picture of the link: many boxes to one, or one to one. -->
-							<span class={cn('flex items-center gap-1.5 rounded-md bg-muted px-2 py-1.5 text-muted-foreground', selected && 'bg-primary text-primary-foreground')} aria-hidden="true">
-								{#if k.value === 'one_to_many'}
-									<Rows3Icon class="size-4" /><ArrowRightIcon class="size-3.5" /><SquareIcon class="size-4" />
-								{:else}
-									<SquareIcon class="size-4" /><ArrowRightLeftIcon class="size-3.5" /><SquareIcon class="size-4" />
-								{/if}
+							<span class={cn('flex size-8 shrink-0 items-center justify-center rounded-md bg-muted', selected && 'bg-primary text-primary-foreground')}>
+								<Table2Icon class="size-4" />
 							</span>
-							<span class="text-sm font-medium">{k.label}</span>
-							<span class="text-xs text-muted-foreground">{k.hint(table, link.parent)}</span>
+							<span class="flex min-w-0 flex-col">
+								<span class="truncate text-sm font-medium">{t.name}</span>
+								{#if t.name === table}<span class="text-xs text-muted-foreground">This table</span>{/if}
+							</span>
 						</button>
 					{/each}
 				</div>
+				{#if link.parent && linkProblem}
+					<Field.Error>{linkProblem}</Field.Error>
+				{/if}
 			</Field.Set>
-			<Field.Field orientation="horizontal" class="rounded-lg border p-3">
-				<Field.Content>
-					<Field.Label for="nf-required">Required</Field.Label>
-					<Field.Description>Every {table} record must pick one.</Field.Description>
-				</Field.Content>
-				<Switch id="nf-required" checked={link.required} onCheckedChange={(v) => (link.required = v)} />
-			</Field.Field>
-			<p class="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
-				<LinkIcon class="mt-0.5 size-4 shrink-0" />
-				{describeRelationship({ parent: link.parent, child: table, cardinality: link.kind })}
-			</p>
-		</div>
-	{:else}
-		<div class="flex flex-col gap-4">
-			<p class="text-sm text-muted-foreground">All optional — click “Add field” to keep the defaults.</p>
-			<FieldProperties field={edit} />
+			{#if link.parent}
+				<Field.Set>
+					<Field.Legend variant="label">How many {table} records can pick the same {link.parent} record?</Field.Legend>
+					<div class="grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Kind of link">
+						{#each KINDS as k (k.value)}
+							{@const selected = link.kind === k.value}
+							<button
+								type="button"
+								role="radio"
+								aria-checked={selected}
+								class={cn(
+									'flex flex-col items-start gap-2 rounded-lg border bg-card p-3 text-start outline-none transition-colors hover:bg-accent/50 focus-visible:ring-3 focus-visible:ring-ring/40',
+									selected && 'border-primary bg-primary/5 ring-1 ring-primary'
+								)}
+								onclick={() => (link.kind = k.value)}
+							>
+								<!-- A small picture of the link: many boxes to one, or one to one. -->
+								<span class={cn('flex items-center gap-1.5 rounded-md bg-muted px-2 py-1.5 text-muted-foreground', selected && 'bg-primary text-primary-foreground')} aria-hidden="true">
+									{#if k.value === 'one_to_many'}
+										<Rows3Icon class="size-4" /><ArrowRightIcon class="size-3.5" /><SquareIcon class="size-4" />
+									{:else}
+										<SquareIcon class="size-4" /><ArrowRightLeftIcon class="size-3.5" /><SquareIcon class="size-4" />
+									{/if}
+								</span>
+								<span class="text-sm font-medium">{k.label}</span>
+								<span class="text-xs text-muted-foreground">{k.hint(table, link.parent)}</span>
+							</button>
+						{/each}
+					</div>
+				</Field.Set>
+				<Field.Field orientation="horizontal" class="rounded-lg border p-3">
+					<Field.Content>
+						<Field.Label for="nf-required">Required</Field.Label>
+						<Field.Description>Every {table} record must pick one.</Field.Description>
+					</Field.Content>
+					<Switch id="nf-required" checked={link.required} onCheckedChange={(v) => (link.required = v)} />
+				</Field.Field>
+				<p class="flex items-start gap-2 rounded-lg bg-muted/50 p-3 text-sm text-muted-foreground">
+					<LinkIcon class="mt-0.5 size-4 shrink-0" />
+					{describeRelationship({ parent: link.parent, child: table, cardinality: link.kind })}
+				</p>
+			{/if}
+			{:else}
+			<Field.Set>
+				<Field.Legend variant="label">Rules</Field.Legend>
+				<Field.Description>All optional — click “Add field” to keep the defaults.</Field.Description>
+				<FieldProperties field={edit} />
+			</Field.Set>
+			{/if}
 		</div>
 	{/if}
 </StepDrawer>

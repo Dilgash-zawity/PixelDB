@@ -78,6 +78,27 @@ export interface IndexInfo {
 	columns: string[];
 }
 
+/** A CSV or spreadsheet file read for import (models/transfer.rs): every cell as text. */
+export interface ImportFile {
+	file_name: string;
+	sheets: ImportSheet[];
+}
+
+export interface ImportSheet {
+	name: string;
+	/** Rows of cells, the header row (if any) included; rows may differ in length. */
+	rows: string[][];
+	truncated: boolean;
+}
+
+export type ExportFormat = 'csv' | 'xlsx';
+
+export interface ExportResult {
+	file_name: string;
+	rows: number;
+	truncated: boolean;
+}
+
 export interface TableInfo {
 	definition: TableDef;
 	managed: boolean;
@@ -180,6 +201,12 @@ export interface QueryResult {
 export interface SavedQuery {
 	sql: string;
 	design: unknown | null;
+}
+
+/** What can be undone and redone (database/journal.rs), by label. */
+export interface UndoState {
+	undo: string | null;
+	redo: string | null;
 }
 
 export type BatchOp =
@@ -356,4 +383,13 @@ export interface AppFile {
 	description: string;
 	accent: string;
 	valid: boolean;
+}
+
+/** What opening a shared app package added (package.rs `ImportedPackage`). */
+export interface ImportedPackage {
+	app: string;
+	/** [name in the package, name it got here] */
+	databases: [string, string][];
+	/** Online databases the app expects; not included in the package. */
+	online: string[];
 }

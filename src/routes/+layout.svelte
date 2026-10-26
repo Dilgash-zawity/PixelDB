@@ -14,14 +14,17 @@
 	import { matches, typingTarget } from '#lib/logic/shortcuts.js';
 	import { startPinchZoom } from '#lib/services/pinch.js';
 	import { appSession } from '#lib/state/app.svelte.js';
+	import { logError } from '#lib/state/feedback.svelte.js';
 	import { session } from '#lib/state/session.svelte.js';
 	import { shortcutsDialog } from '#lib/state/shortcuts.svelte.js';
+	import { tour } from '#lib/state/tour.svelte.js';
 	import { settings } from '#lib/state/settings.svelte.js';
 	import { updates } from '#lib/state/updates.svelte.js';
 
 	// Components
 	import ConfirmHost from '#lib/components/app/ConfirmHost.svelte';
 	import ShortcutsDialog from '#lib/components/app/ShortcutsDialog.svelte';
+	import TourDialog from '#lib/components/app/TourDialog.svelte';
 	import { Toaster } from '#lib/components/ui/sonner/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 
@@ -30,6 +33,17 @@
 	onMount(() => updates.start());
 	// Touchpad pinches zoom the canvases.
 	onMount(() => startPinchZoom());
+	// Errors nothing caught go to the log file, for bug reports.
+	onMount(() => {
+		const onError = (e: ErrorEvent) => logError('uncaught', e.error ?? e.message);
+		const onRejection = (e: PromiseRejectionEvent) => logError('unhandled promise', e.reason);
+		window.addEventListener('error', onError);
+		window.addEventListener('unhandledrejection', onRejection);
+		return () => {
+			window.removeEventListener('error', onError);
+			window.removeEventListener('unhandledrejection', onRejection);
+		};
+	});
 	let announcedVersion: string | null = null;
 	$effect(() => {
 		const update = updates.current;
@@ -83,3 +97,4 @@
 <Toaster richColors position="bottom-right" offset={{ bottom: 72, right: 24 }} />
 <ConfirmHost />
 <ShortcutsDialog bind:open={shortcutsDialog.open} />
+<TourDialog bind:open={tour.open} />

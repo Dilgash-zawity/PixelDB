@@ -5,6 +5,7 @@
 	// Utils
 	import { toggleMode } from 'mode-watcher';
 	import { shortcutsDialog } from '#lib/state/shortcuts.svelte.js';
+	import { tour } from '#lib/state/tour.svelte.js';
 	import { workspace } from '#lib/state/workspace.svelte.js';
 
 	// Components
@@ -19,6 +20,7 @@
 		Eye as EyeIcon,
 		Gauge as GaugeIcon,
 		Keyboard as KeyboardIcon,
+		GraduationCap as GraduationCapIcon,
 		ListTree as ListTreeIcon,
 		Network as NetworkIcon,
 		PlugZap as PlugZapIcon,
@@ -120,6 +122,7 @@
 			<Command.Item value="edit connection" onSelect={() => run(onEdit)}><Settings2Icon /> Edit the connection…</Command.Item>
 			<Command.Item onSelect={() => run(toggleMode)}><SunMoonIcon /> Toggle light / dark</Command.Item>
 			<Command.Item value="keyboard shortcuts" onSelect={() => run(() => (shortcutsDialog.open = true))}><KeyboardIcon /> Keyboard shortcuts</Command.Item>
+			<Command.Item value="getting started tour help" onSelect={() => run(() => (tour.open = true))}><GraduationCapIcon /> Getting started tour</Command.Item>
 			<Command.Item value="home all databases" onSelect={() => run(onHome)}><ArrowLeftIcon /> Home</Command.Item>
 			<Command.Item onSelect={() => run(onSettings)}><SettingsIcon /> Settings</Command.Item>
 		</Command.Group>

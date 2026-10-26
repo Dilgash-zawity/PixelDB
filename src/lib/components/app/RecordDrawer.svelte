@@ -7,11 +7,10 @@
 	import type { LookupOption } from '#lib/logic/lookups.js';
 
 	// Utils
+	import { tick } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { fieldTypeLabel } from '#lib/logic/field-types.js';
-	import { lookupLabel } from '#lib/logic/lookups.js';
 	import * as rb from '#lib/logic/record-buffer.js';
-	import { displayValue } from '#lib/logic/values.js';
 	import { attempt, confirm } from '#lib/state/feedback.svelte.js';
 	import { cn } from '#lib/utils.js';
 
@@ -22,15 +21,10 @@
 	import StepDrawer from './StepDrawer.svelte';
 
 	// Icons
-	import {
-		CheckCheck as CheckCheckIcon,
-		ListTodo as ListTodoIcon,
-		Trash2 as TrashIcon,
-		Undo2 as Undo2Icon,
-	} from '@lucide/svelte';
+	import { Trash2 as TrashIcon, Undo2 as Undo2Icon } from '@lucide/svelte';
 
 	// Script
-	/** Adds or edits one record, a few fields per step, then a last look before saving. */
+	/** Adds or edits one record, every field on one page. */
 	let {
 		open = $bindable(false),
 		table,
@@ -61,14 +55,12 @@
 	let buf = $state<rb.RecordBuffer | null>(null);
 	let submitted = $state(false);
 	let saving = $state(false);
-	let step = $state(0);
 
 	// Load the record each time the drawer opens.
 	$effect(() => {
 		if (open) {
 			buf = fresh();
 			submitted = false;
-			step = 0;
 		}
 	});
 
@@ -81,14 +73,13 @@
 	const isNew = $derived(row === null);
 	const dirty = $derived(buf ? rb.isDirty(buf) : false);
 	const missing = $derived(buf ? rb.missingRequired(buf, def) : []);
-	const pages = $derived(rb.fieldPages(def.fields));
-	const steps = $derived([
-		...pages.map((p, i) => ({ label: pages.length === 1 ? 'Details' : (p[0]?.name ?? `Part ${i + 1}`), icon: ListTodoIcon })),
-		{ label: 'Review', icon: CheckCheckIcon }
-	]);
+	/** Wide inputs take the whole row of the form. */
+	const wide = (f: FieldDef) => ['long_text', 'attachment', 'calculated'].includes(f.field_type.type);
 
-	function shown(f: FieldDef, v: JsonValue | undefined): string {
-		return (f.field_type.type === 'lookup' ? lookupLabel(lookups[f.name], v ?? null) : null) ?? displayValue(v, f.field_type);
+	function focusField(name: string) {
+		const el = document.getElementById(`record-field-${name}`);
+		el?.scrollIntoView({ block: 'center' });
+		el?.focus();
 	}
 
 	async function requestClose(next: boolean) {
@@ -115,8 +106,8 @@
 		if (!buf || saving) return;
 		submitted = true;
 		if (missing.length) {
-			// Go back to the step with the first missing field.
-			step = Math.max(0, pages.findIndex((p) => p.some((f) => f.name === missing[0])));
+			await tick();
+			focusField(missing[0]);
 			return;
 		}
 		const b = buf;
@@ -134,7 +125,9 @@
 		if (addAnother) {
 			buf = fresh();
 			submitted = false;
-			step = 0;
+			await tick();
+			const first = def.fields.find((f) => f.field_type.type !== 'auto_number');
+			if (first) focusField(first.name);
 		} else {
 			open = false;
 		}
@@ -169,7 +162,7 @@
 	{@const id = `record-field-${f.name}`}
 	{@const invalid = submitted && missing.includes(f.name)}
 	{@const changed = JSON.stringify(b.current[f.name]) !== JSON.stringify(b.original[f.name])}
-	<Field.Field data-invalid={invalid || undefined} orientation={f.field_type.type === 'yes_no' ? 'horizontal' : 'vertical'}>
+	<Field.Field data-invalid={invalid || undefined} orientation={f.field_type.type === 'yes_no' ? 'horizontal' : 'vertical'} class={cn(wide(f) && 'sm:col-span-2', f.field_type.type === 'yes_no' && 'self-end')}>
 		{#if f.field_type.type === 'yes_no'}
 			<FieldInput {id} field={f} value={b.current[f.name]} onchange={(v) => rb.setValue(b, f.name, v)} />
 			<Field.Content>
@@ -202,13 +195,11 @@
 
 <StepDrawer
 	bind:open={() => open, requestClose}
-	bind:step
 	title={isNew ? 'New record' : 'Edit record'}
 	description={isNew ? `Add a record to ${table}.` : `Make changes to this ${table} record.`}
-	{steps}
 	finishLabel={isNew ? 'Add record' : 'Save'}
 	busy={saving}
-	disabled={!buf || (step === steps.length - 1 && !isNew && !dirty)}
+	disabled={!buf || (!isNew && !dirty)}
 	onFinish={() => save()}
 	scope="record-drawer"
 	onkeydown={onKey}
@@ -227,28 +218,8 @@
 	{/snippet}
 	{#if buf}
 		{@const b = buf}
-		{#if step < pages.length}
-			<Field.Group>
-				{#each pages[step] as f (f.name)}{@render fieldRow(b, f)}{/each}
-			</Field.Group>
-		{:else}
-			<ul class="flex flex-col divide-y rounded-lg border text-sm">
-				{#each def.fields as f, i (f.name)}
-					{@const isMissing = submitted && missing.includes(f.name)}
-					<li>
-						<button
-							type="button"
-							class="flex w-full items-center gap-3 px-3 py-2 text-start hover:bg-accent"
-							onclick={() => (step = Math.floor(i / (pages[0]?.length || 1)))}
-						>
-							<span class="w-40 shrink-0 truncate text-muted-foreground">{f.name}</span>
-							<span class={cn('min-w-0 flex-1 truncate', isMissing && 'text-destructive')}>
-								{#if isMissing}Required{:else if isNew && f.field_type.type === 'auto_number'}Assigned automatically{:else}{shown(f, b.current[f.name]) || '—'}{/if}
-							</span>
-						</button>
-					</li>
-				{/each}
-			</ul>
-		{/if}
+		<div class="grid gap-x-6 gap-y-5 sm:grid-cols-2">
+			{#each def.fields as f (f.name)}{@render fieldRow(b, f)}{/each}
+		</div>
 	{/if}
 </StepDrawer>

@@ -30,6 +30,7 @@
 	import * as Item from '#lib/components/ui/item/index.js';
 	import * as Select from '#lib/components/ui/select/index.js';
 	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
+	import IndexList from './IndexList.svelte';
 	import StepDrawer from './StepDrawer.svelte';
 
 	// Icons
@@ -37,18 +38,15 @@
 		ArrowRight as ArrowRightIcon,
 		KeyRound as KeyRoundIcon,
 		Link as LinkIcon,
-		ListTree as ListTreeIcon,
 		Pencil as PencilIcon,
 		Plus as PlusIcon,
 		Rows3 as Rows3Icon,
-		ShieldCheck as ShieldCheckIcon,
-		Table2 as Table2Icon,
 		Trash2 as TrashIcon,
 		TriangleAlert as TriangleAlertIcon,
 	} from '@lucide/svelte';
 
 	// Script
-	/** The Diagram's details drawer: a table (overview, fields, links) or a relationship (kind, rules), step by step. */
+	/** The Diagram's details drawer, one page: a table (overview, fields, links, indexes) or a relationship (kind and rules). */
 	let {
 		defs,
 		infos,
@@ -62,7 +60,8 @@
 		onOpen,
 		onStartLink,
 		onRenameTable,
-		onDeleteTable
+		onDeleteTable,
+		onIndexesChanged
 	}: {
 		defs: TableDef[];
 		infos: Record<string, TableInfo>;
@@ -78,18 +77,11 @@
 		onStartLink: (parent?: string) => void;
 		onRenameTable: (table: string) => void;
 		onDeleteTable: (table: string) => void;
+		/** After an index was added or removed. */
+		onIndexesChanged: () => void;
 	} = $props();
 
 	const KIND_NAMES: Record<LinkKind, string> = { one_to_many: 'One to many', one_to_one: 'One to one', many_to_many: 'Many to many' };
-	const TABLE_STEPS = [
-		{ label: 'Table', icon: Table2Icon },
-		{ label: 'Fields', icon: ListTreeIcon },
-		{ label: 'Links', icon: LinkIcon }
-	];
-	const LINK_STEPS = [
-		{ label: 'Kind', icon: LinkIcon },
-		{ label: 'Rules', icon: ShieldCheckIcon }
-	];
 	const ON_DELETE: { value: FkAction; label: string }[] = [
 		{ value: 'restrict', label: 'Block the delete' },
 		{ value: 'cascade', label: 'Delete linked records too' },
@@ -106,13 +98,6 @@
 	const byName = $derived(new Map(defs.map((d) => [d.name, d])));
 	const rel = $derived(selection?.kind === 'relationship' ? (rels.find((r) => r.id === selection.id) ?? null) : null);
 	const table = $derived(selection?.kind === 'table' ? (byName.get(selection.name) ?? null) : null);
-
-	let step = $state(0);
-	// Start at the first step whenever something else is selected.
-	$effect(() => {
-		void (selection?.kind === 'table' ? selection.name : selection?.kind === 'relationship' ? selection.id : null);
-		step = 0;
-	});
 
 	// Editable copy of the selected relationship's options.
 	let edit = $state<{ cardinality: Cardinality; onUpdate: FkAction; onDelete: FkAction } | null>(null);
@@ -190,13 +175,11 @@
 	{@const blocked = blockedReason(rel.child)}
 	<StepDrawer
 		bind:open={() => true, (o) => !o && onSelect(null)}
-		bind:step
 		title="Relationship"
 		description="{rel.parent} → {rel.child}"
-		steps={LINK_STEPS}
 		finishLabel="Save"
 		{busy}
-		disabled={step === LINK_STEPS.length - 1 && (!editDirty || !!blocked)}
+		disabled={!editDirty || !!blocked}
 		onFinish={() => edit && onUpdate(rel, $state.snapshot(edit))}
 		{scope}
 	>
@@ -205,7 +188,7 @@
 				<TrashIcon data-icon="inline-start" /> Unlink
 			</Button>
 		{/snippet}
-		<div class="flex flex-col gap-5">
+		<div class="flex flex-col gap-6">
 			{#if blocked}
 				<Alert.Root class="border-warning/40 bg-warning/10 *:[svg]:text-warning">
 					<TriangleAlertIcon />
@@ -213,28 +196,25 @@
 					<Alert.Description>{blocked}</Alert.Description>
 				</Alert.Root>
 			{/if}
-			{#if step === 0}
-				<Item.Root variant="outline" size="sm">
-					<Item.Content>
-						<Item.Title>{rel.parent}</Item.Title>
-						<Item.Description>{rel.parentColumns.join(', ')}</Item.Description>
-					</Item.Content>
-					<Item.Media><ArrowRightIcon /></Item.Media>
-					<Item.Content class="text-end">
-						<Item.Title class="ms-auto">{rel.child}</Item.Title>
-						<Item.Description>{rel.childColumns.join(', ')}</Item.Description>
-					</Item.Content>
-				</Item.Root>
-				{#if rel.childColumns.length === 1}
-					<Field.Field>
-						{@render kinds(edit.cardinality, (v) => edit && (edit.cardinality = v as Cardinality), rel.parent, rel.child, ['one_to_many', 'one_to_one'])}
-					</Field.Field>
-				{:else}
-					<p class="text-sm text-muted-foreground">{describeRelationship({ ...rel, cardinality: edit.cardinality })}</p>
-				{/if}
+			<Item.Root variant="outline" size="sm">
+				<Item.Content>
+					<Item.Title>{rel.parent}</Item.Title>
+					<Item.Description>{rel.parentColumns.join(', ')}</Item.Description>
+				</Item.Content>
+				<Item.Media><ArrowRightIcon /></Item.Media>
+				<Item.Content class="text-end">
+					<Item.Title class="ms-auto">{rel.child}</Item.Title>
+					<Item.Description>{rel.childColumns.join(', ')}</Item.Description>
+				</Item.Content>
+			</Item.Root>
+			{#if rel.childColumns.length === 1}
+				<Field.Field>
+					{@render kinds(edit.cardinality, (v) => edit && (edit.cardinality = v as Cardinality), rel.parent, rel.child, ['one_to_many', 'one_to_one'])}
+				</Field.Field>
 			{:else}
-				{@render integrity(edit.onUpdate, edit.onDelete, (v) => edit && (edit.onUpdate = v), (v) => edit && (edit.onDelete = v), rel.parent)}
+				<p class="text-sm text-muted-foreground">{describeRelationship({ ...rel, cardinality: edit.cardinality })}</p>
 			{/if}
+			{@render integrity(edit.onUpdate, edit.onDelete, (v) => edit && (edit.onUpdate = v), (v) => edit && (edit.onDelete = v), rel.parent)}
 		</div>
 	</StepDrawer>
 {:else if table}
@@ -242,27 +222,27 @@
 	{@const links = rels.filter((r) => r.parent === table.name || r.child === table.name)}
 	<StepDrawer
 		bind:open={() => true, (o) => !o && onSelect(null)}
-		bind:step
 		title={table.name}
 		description={table.description ?? 'A table on the Diagram'}
-		steps={TABLE_STEPS}
 		finishLabel="Done"
 		onFinish={() => onSelect(null)}
 		{scope}
 	>
-		<div class="flex flex-col gap-5">
-			{#if step === 0}
+		<div class="flex flex-col gap-6">
+			<div class="flex flex-col gap-3">
 				<div class="flex flex-wrap gap-1.5">
 					<Badge variant="secondary">{table.fields.length} {table.fields.length === 1 ? 'field' : 'fields'}</Badge>
 					{#if info}<Badge variant="secondary">{info.row_count.toLocaleString()} {info.row_count === 1 ? 'record' : 'records'}</Badge>{/if}
 					<Badge variant="secondary">{links.length} {links.length === 1 ? 'link' : 'links'}</Badge>
 				</div>
-				<div class="flex flex-col gap-2">
-					<Button variant="outline" class="justify-start" onclick={() => onOpen(table.name)}><Rows3Icon data-icon="inline-start" /> Open datasheet</Button>
-					<Button variant="outline" class="justify-start" onclick={() => onRenameTable(table.name)}><PencilIcon data-icon="inline-start" /> Rename table</Button>
-					<Button variant="destructive" class="justify-start" onclick={() => onDeleteTable(table.name)}><TrashIcon data-icon="inline-start" /> Delete table</Button>
+				<div class="flex flex-wrap gap-2">
+					<Button variant="outline" onclick={() => onOpen(table.name)}><Rows3Icon data-icon="inline-start" /> Open datasheet</Button>
+					<Button variant="outline" onclick={() => onRenameTable(table.name)}><PencilIcon data-icon="inline-start" /> Rename table</Button>
+					<Button variant="destructive" onclick={() => onDeleteTable(table.name)}><TrashIcon data-icon="inline-start" /> Delete table</Button>
 				</div>
-			{:else if step === 1}
+			</div>
+			<Field.Set>
+				<Field.Legend variant="label">Fields</Field.Legend>
 				<ul class="flex flex-col rounded-md border text-sm">
 					{#each table.fields as f (f.name)}
 						<li class="border-b last:border-b-0">
@@ -277,7 +257,9 @@
 				<Button variant="outline" class="self-start" onclick={() => onSelect({ kind: 'field', table: table.name, field: null })}>
 					<PlusIcon data-icon="inline-start" /> Add field
 				</Button>
-			{:else}
+			</Field.Set>
+			<Field.Set>
+				<Field.Legend variant="label">Links</Field.Legend>
 				{#if links.length}
 					<Item.Group class="gap-1.5">
 						{#each links as r (r.id)}
@@ -300,7 +282,11 @@
 				<Button variant="outline" class="self-start" onclick={() => onStartLink(table.name)}>
 					<PlusIcon data-icon="inline-start" /> Link {table.name} to…
 				</Button>
-			{/if}
+			</Field.Set>
+			<Field.Set>
+				<Field.Legend variant="label">Indexes</Field.Legend>
+				<IndexList {table} indexes={info?.indexes ?? []} onChanged={onIndexesChanged} />
+			</Field.Set>
 		</div>
 	</StepDrawer>
 {/if}

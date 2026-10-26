@@ -4,6 +4,7 @@
 	import { resolve } from '$app/paths';
 	import { toggleMode } from 'mode-watcher';
 	import { shortcutsDialog } from '#lib/state/shortcuts.svelte.js';
+	import { tour } from '#lib/state/tour.svelte.js';
 	import { workspace } from '#lib/state/workspace.svelte.js';
 
 	// Components
@@ -16,12 +17,14 @@
 	import {
 		FolderOpen as FolderOpenIcon,
 		Keyboard as KeyboardIcon,
+		GraduationCap as GraduationCapIcon,
 		LayoutGrid as LayoutGridIcon,
 		Maximize as MaximizeIcon,
 		Plus as PlusIcon,
 		Settings as SettingsIcon,
+		PackageOpen as PackageOpenIcon,
 		SunMoon as SunMoonIcon
-	} from '@lucide/svelte';
+} from '@lucide/svelte';
 
 	// Script
 	/** Search on the home screen: open an app or a database, or make one. */
@@ -32,7 +35,8 @@
 		onNewDatabase,
 		onNewApp,
 		onTidy,
-		onFit
+		onFit,
+		onOpenShared
 	}: {
 		open?: boolean;
 		canOpen: (kind: 'app' | 'db', name: string) => boolean;
@@ -41,6 +45,7 @@
 		onNewApp: () => void;
 		onTidy: () => void;
 		onFit: () => void;
+		onOpenShared: () => void;
 	} = $props();
 
 	function run(action: () => void) {
@@ -82,6 +87,7 @@
 		<Command.Group heading="Create">
 			<Command.Item value="new database" onSelect={() => run(onNewDatabase)}><PlusIcon /> New database… <Command.Shortcut><Shortcut keys="n" /></Command.Shortcut></Command.Item>
 			<Command.Item value="new app" onSelect={() => run(onNewApp)}><PlusIcon /> New app… <Command.Shortcut><Shortcut keys="shift+n" /></Command.Shortcut></Command.Item>
+			<Command.Item value="open a shared app package import" onSelect={() => run(onOpenShared)}><PackageOpenIcon /> Open a shared app…</Command.Item>
 		</Command.Group>
 		<Command.Group heading="Map">
 			<Command.Item value="tidy up arrange" onSelect={() => run(onTidy)}><LayoutGridIcon /> Tidy up</Command.Item>
@@ -91,6 +97,7 @@
 			<Command.Item value="change workspace folder" onSelect={() => run(() => workspace.chooseFolder())}><FolderOpenIcon /> Change the folder…</Command.Item>
 			<Command.Item onSelect={() => run(toggleMode)}><SunMoonIcon /> Toggle light / dark</Command.Item>
 			<Command.Item value="keyboard shortcuts" onSelect={() => run(() => (shortcutsDialog.open = true))}><KeyboardIcon /> Keyboard shortcuts</Command.Item>
+			<Command.Item value="getting started tour help" onSelect={() => run(() => (tour.open = true))}><GraduationCapIcon /> Getting started tour</Command.Item>
 			<Command.Item onSelect={() => run(() => goto(resolve('/settings')))}><SettingsIcon /> Settings</Command.Item>
 		</Command.Group>
 	</Command.List>

@@ -60,6 +60,10 @@ impl AppError {
 
 impl Serialize for AppError {
     fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        // Unexpected failures (not the user's input) are kept in the log file.
+        if matches!(self, AppError::Sqlite(_) | AppError::Io(_) | AppError::Internal(_) | AppError::InvalidDatabase(_)) {
+            log::warn!("{self}");
+        }
         let mut s = serializer.serialize_struct("AppError", 2)?;
         s.serialize_field("kind", self.kind())?;
         s.serialize_field("message", &self.to_string())?;

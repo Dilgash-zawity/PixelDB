@@ -1,6 +1,6 @@
 import { call, on } from '../api/client';
 import { databaseService } from './database';
-import type { FieldDef, SchemaChangeResult, TableDef, TableDesign, TableInfo } from '../api/types';
+import type { FieldDef, IndexInfo, SchemaChangeResult, TableDef, TableDesign, TableInfo } from '../api/types';
 
 type Listener = () => void;
 const listeners = new Set<Listener>();
@@ -33,6 +33,11 @@ export const tableService = {
 		call<void>('rename_field', { table, name, newName }),
 	dropField: (table: string, name: string, confirm: boolean) =>
 		changed(call<SchemaChangeResult>('drop_field', { table, name, confirm })),
+	/** Adds an index on `columns` (a unique one keeps their combination unique). */
+	createIndex: (table: string, columns: string[], unique: boolean) =>
+		call<IndexInfo>('create_index', { table, columns, unique }),
+	/** Drops an index added with `createIndex`; no data is lost. */
+	dropIndex: (table: string, name: string) => call<void>('drop_index', { table, name }),
 	/** Definitions of every table of a workspace database, in listing order, and the names of its saved queries. */
 	async listSchema(database: string): Promise<{ tables: TableDef[]; views: string[] }> {
 		const objects = await databaseService.listObjects(database);

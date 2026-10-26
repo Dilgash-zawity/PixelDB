@@ -24,31 +24,22 @@ For release setup and download verification, see [RELEASING.md](docs/RELEASING.m
 
 ## Using it
 
-1. On first launch, choose a folder. Every database is one SQLite file in it,
-   and the folder is remembered.
-2. Create a database (or open one from the list). Each database has its own
-   page with a sidebar of tables.
-3. Create a table. It opens in **Datasheet view**: type straight into the
-   grid, use the `*` row for new records, and “Click to Add” for new fields.
-   A record is saved when you leave its row (or press Shift+Enter); Esc undoes
-   the field, then the whole record. Right-click rows and headers for more.
-4. Switch to **Design view** to edit fields in a grid (name, data type,
-   description) with Field Properties below; save the design when done.
-   Relations (lookups) to other tables are set on the Lookup tab.
+The **[user guide](docs/user-guide.md)** covers everything. In short:
 
-5. Create an **app** from the home screen to build screens for your data:
-   pages of tables, forms, charts, number cards, filters, buttons and text,
-   over one or more databases. Start blank or from a template (Contacts,
-   Shop), which also creates a database with sample records. In **Edit**
-   mode you add widgets, drag them on a 12-column grid and set them up in the
-   panel on the right; **Run** mode is for using the app. Variables connect
-   widgets: a filter control or a row click sets one, and other widgets
-   filter by it (e.g. pick a company, see its people). Apps are saved as
-   files in the folder's `Apps` subfolder.
+1. On first launch, choose a folder. Databases are SQLite files in its `DB`
+   subfolder and apps are files in `Apps`. Try the sample shop to explore.
+2. A database has four tabs: **Diagram** (tables, fields and links),
+   **Datasheet** (records, spreadsheet-style, with paste from Excel, find and
+   replace, saved views and undo), **Query** (a visual designer or SQL) and
+   **Reports** (grouped, totalled, printable to PDF).
+3. Import CSV and Excel files, and export tables and queries to Excel or CSV.
+4. Build **apps** over one or more databases: pages of tables, forms, boards,
+   charts, filters and buttons, made by hand or built for each table. Share
+   an app with its databases as one `.slatepkg` file.
+5. Connect **online** PostgreSQL, MySQL and libSQL databases and use them in
+   apps like local ones.
 
-Shortcuts: ⌘/Ctrl+K search and actions, ⌘/Ctrl+S save, Shift+Enter save the
-record, Esc undo. “Open as form” edits one record in a side panel. Light,
-dark and system themes are available (dark by default).
+Press Ctrl/⌘+K anywhere to search, and ? for keyboard shortcuts.
 
 ## Status
 
@@ -63,6 +54,12 @@ dark and system themes are available (dark by default).
   autosave, master-detail through variables, charts and totals, and
   templates. Renaming a table or field (or a database) updates the apps that
   use it; a widget whose table or field is gone says so instead of failing.
+- Data in and out: CSV/Excel import with a column check before writing,
+  Excel/CSV export, undo and redo of saved record changes, bulk paste, fill
+  and find & replace, saved views, indexes, reports, and app packages.
+- Checked at 100,000 records (`cargo test --release --test performance --
+  --ignored --nocapture`): pages, sorting and filtering stay well under a
+  second.
 
 ## Development
 
@@ -71,6 +68,7 @@ bun install
 bun run tauri dev        # run the desktop app
 bun run test             # TypeScript (bun test) + Rust tests
 bun run check            # svelte-check / TypeScript
+bun run test:ui          # UI tests in Chrome against a fake backend (Playwright)
 ```
 
 ## Field types

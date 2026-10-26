@@ -9,6 +9,7 @@ import { tableService } from '../services/tables';
 import { pickFolder } from '../services/dialogs';
 import { onlineService } from '../services/online';
 import { workspaceService } from '../services/workspace';
+import { toast } from 'svelte-sonner';
 import { attempt, confirm } from './feedback.svelte';
 
 /** The folder of databases shown on the home screen. */
@@ -193,6 +194,36 @@ class WorkspaceState {
 		const ok = (await attempt(() => appService.duplicate(name, newName))) !== undefined;
 		await this.refresh();
 		return ok;
+	}
+
+	/** Saves app `name` with copies of its databases as one file to give to someone else. */
+	async shareApp(name: string): Promise<void> {
+		const file = await attempt(() => appService.exportPackage(name));
+		if (!file) return;
+		const online = this.apps.find((a) => a.name === name)?.databases.filter((d) => this.online.some((o) => o.name === d)) ?? [];
+		toast.success(`Saved “${file}”`, {
+			description: online.length
+				? `Online databases (${online.join(', ')}) aren’t included; whoever opens it needs their own connection with the same name.`
+				: 'Open it in SlateDB with “Open a shared app…” on the home screen.'
+		});
+	}
+
+	/** Opens a shared app package into this workspace; the new app's name, or null. */
+	async openSharedApp(): Promise<string | null> {
+		const got = await attempt(() => appService.importPackage());
+		await this.refresh();
+		if (!got) return null;
+		const renamed = got.databases.filter(([from, to]) => from !== to).map(([from, to]) => `“${from}” is “${to}” here`);
+		toast.success(`Added the app “${got.app}”`, {
+			description: [
+				got.databases.length ? `With ${got.databases.length === 1 ? 'its database' : `${got.databases.length} databases`}.` : '',
+				renamed.length ? `${renamed.join(', ')}, as the name was taken.` : '',
+				got.online.length ? `It also uses online databases (${got.online.join(', ')}); add connections with those names.` : ''
+			]
+				.filter(Boolean)
+				.join(' ')
+		});
+		return got.app;
 	}
 
 	/** Adds `database` to an app's sources; returns true on success. */

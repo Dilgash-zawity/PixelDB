@@ -11,6 +11,13 @@ Apple and Windows signing credentials have not been provisioned, so releases are
 community releases: all four platforms are built and update-signed, but the
 installers are not notarized or Authenticode-signed. Never claim publisher
 verification for them.
+
+The workflow is ready for both: its first job checks which credentials exist
+and turns on macOS notarization and Windows Authenticode **per platform** once
+every secret and variable for it (listed below) is set, then verifies the
+signatures after building. A platform with only some of them set fails the run
+instead of shipping half-signed. The run's summary says which platforms were
+signed; update the signing status in `docs/community-release-notes.md` to match.
 An update signature alone does **not** remove macOS Gatekeeper or Windows
 SmartScreen warnings. Existing unsigned downloads are not repaired retroactively.
 
@@ -66,10 +73,10 @@ completed by the account owner.
 
 ## Windows: Authenticode
 
-The current release workflow does not sign Windows installers. When credentials exist,
-restore the Azure Artifact Signing steps (`artifact-signing-cli`, as documented by Tauri)
-from the history of `release.yml`. Provision a public-trust signing account and
-certificate profile and authorize an Azure application to sign with that profile.
+Windows installers are signed with Azure Artifact Signing (`artifact-signing-cli`,
+as documented by Tauri) once the credentials below exist. Provision a public-trust
+signing account and certificate profile and authorize an Azure application to sign
+with that profile.
 Service availability depends on the identity and region; if unavailable, use a
 trusted code-signing provider with a compatible custom Tauri `signCommand`.
 
@@ -117,8 +124,9 @@ a partial draft or replace artifacts of a published version. Use a new version
 for fixes. Older installations check the stable `latest.json` URL over HTTPS;
 only newer versions with valid signatures can be installed.
 
-Mac bundles are ad-hoc signed for integrity. Gatekeeper and SmartScreen warnings
-may remain. Update signatures remain mandatory on every platform.
+Without a Developer ID, Mac bundles are ad-hoc signed for integrity, and without
+Azure credentials Windows installers are unsigned; Gatekeeper and SmartScreen
+warnings may then remain. Update signatures remain mandatory on every platform.
 
 ## Download verification
 

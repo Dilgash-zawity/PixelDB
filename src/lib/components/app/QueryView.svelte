@@ -2,6 +2,7 @@
 	// Services
 	import { queryService } from '#lib/services/queries.js';
 	import { tableService } from '#lib/services/tables.js';
+	import { transferService } from '#lib/services/transfer.js';
 
 	// Types
 	import type { FilterOp, TableDef, TableInfo } from '#lib/api/types.js';
@@ -53,7 +54,10 @@
 	import {
 		Check as CheckIcon,
 		Code as CodeIcon,
+		Download as DownloadIcon,
 		Eye as EyeIcon,
+		FileSpreadsheet as FileSpreadsheetIcon,
+		FileText as FileTextIcon,
 		FilePlus as FilePlusIcon,
 		FolderOpen as FolderOpenIcon,
 		Search as SearchIcon,
@@ -187,6 +191,23 @@
 				// The designer knows totals' types; the backend knows plain columns'.
 				types: result.columns.map((_, i) => designed[i] ?? result.types[i] ?? undefined)
 			};
+		}
+	}
+
+	let exporting = $state(false);
+
+	/** Runs the query again for every row (not just the 1000 shown) and saves them to a file. */
+	async function exportResults(format: 'csv' | 'xlsx') {
+		const sql = currentSql.trim();
+		if (!sql) return;
+		exporting = true;
+		try {
+			const result = await attempt(() => transferService.exportQuery(sql, draft.saved ?? 'Query', format));
+			if (result) {
+				toast.success(`Exported ${result.rows} ${result.rows === 1 ? 'row' : 'rows'}`, { description: `Saved as ${result.file_name}.` });
+			}
+		} finally {
+			exporting = false;
 		}
 	}
 
@@ -380,6 +401,22 @@
 				{#if draft.result.truncated}
 					<Badge variant="outline" class="border-warning/40 bg-warning/10 text-warning">First {draft.result.rows.length} rows</Badge>
 				{/if}
+				<DropdownMenu.Root>
+					<DropdownMenu.Trigger>
+						{#snippet child({ props })}
+							<Button {...props} variant="outline" size="sm" disabled={exporting || !draft.result?.columns.length}>
+								<DownloadIcon data-icon="inline-start" /> Export
+							</Button>
+						{/snippet}
+					</DropdownMenu.Trigger>
+					<DropdownMenu.Content align="end">
+						<DropdownMenu.Group>
+							<DropdownMenu.Label>Every row of the result</DropdownMenu.Label>
+							<DropdownMenu.Item onclick={() => exportResults('xlsx')}><FileSpreadsheetIcon /> Excel workbook (.xlsx)</DropdownMenu.Item>
+							<DropdownMenu.Item onclick={() => exportResults('csv')}><FileTextIcon /> CSV file (.csv)</DropdownMenu.Item>
+						</DropdownMenu.Group>
+					</DropdownMenu.Content>
+				</DropdownMenu.Root>
 			{/if}
 		</div>
 

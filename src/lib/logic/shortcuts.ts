@@ -42,7 +42,9 @@ export const SHORTCUTS: Shortcut[] = [
 	{ keys: 'mod+1', label: 'Diagram', scope: 'database' },
 	{ keys: 'mod+2', label: 'Datasheet', scope: 'database' },
 	{ keys: 'mod+3', label: 'Query', scope: 'database' },
+	{ keys: 'mod+4', label: 'Reports', scope: 'database' },
 	{ keys: 'mod+enter', label: 'Run the query', scope: 'database' },
+	{ keys: 'mod+z', label: 'Diagram: undo moving or tidying tables', scope: 'database' },
 
 	{ keys: 'arrowdown', label: 'Same field in the next row (↑ for the previous)', scope: 'datasheet' },
 	{ keys: 'enter', label: 'Next cell', scope: 'datasheet' },
@@ -50,6 +52,12 @@ export const SHORTCUTS: Shortcut[] = [
 	{ keys: 'escape', label: 'Undo the edit', scope: 'datasheet' },
 	{ keys: 'mod+s', label: 'Save the record', scope: 'datasheet' },
 	{ keys: 'delete', label: 'Delete the selected records', scope: 'datasheet' },
+	{ keys: 'mod+c', label: 'Copy the current cell, or the ticked records', scope: 'datasheet' },
+	{ keys: 'mod+v', label: 'Paste cells copied from a spreadsheet', scope: 'datasheet' },
+	{ keys: 'mod+d', label: 'Fill the ticked records with the current cell’s value', scope: 'datasheet' },
+	{ keys: 'mod+h', label: 'Find and replace', scope: 'datasheet' },
+	{ keys: 'mod+z', label: 'Undo the last saved change', scope: 'datasheet' },
+	{ keys: 'shift+mod+z', label: 'Redo', scope: 'datasheet' },
 
 	{ keys: 'mod+k', label: 'Search tables, tabs and actions', scope: 'online' },
 	{ keys: 'mod+1', label: 'Overview', scope: 'online' },

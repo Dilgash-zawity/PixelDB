@@ -3,10 +3,12 @@
 
 pub mod apps;
 pub mod database;
+pub mod diagnostics;
 pub mod online;
 pub mod queries;
 pub mod records;
 pub mod tables;
+pub mod transfer;
 pub mod workspace;
 
 use std::path::PathBuf;

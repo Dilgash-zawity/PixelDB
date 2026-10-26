@@ -85,6 +85,16 @@ pub fn run_query_with(
     sql: &str,
     params: &serde_json::Map<String, JsonValue>,
 ) -> AppResult<QueryResult> {
+    run_query_capped(conn, sql, params, MAX_QUERY_ROWS)
+}
+
+/// Like `run_query_with`, returning at most `max_rows` rows (exports read more).
+pub fn run_query_capped(
+    conn: &Connection,
+    sql: &str,
+    params: &serde_json::Map<String, JsonValue>,
+    max_rows: usize,
+) -> AppResult<QueryResult> {
     let body = normalize(sql)?;
     let started = Instant::now();
     let mut stmt = conn.prepare(body).map_err(prepare_error)?;
@@ -119,7 +129,7 @@ pub fn run_query_with(
         let mut rows = stmt.raw_query();
         let mut out = Vec::new();
         while let Some(row) = rows.next()? {
-            if out.len() == MAX_QUERY_ROWS {
+            if out.len() == max_rows {
                 return Ok((out, true));
             }
             out.push((0..columns.len()).map(|i| row.get_ref(i).map(sql_to_json)).collect::<Result<_, _>>()?);

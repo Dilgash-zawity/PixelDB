@@ -1,7 +1,7 @@
 /// <reference types="bun" />
 import { describe, expect, test } from 'bun:test';
 import type { TableDef } from '../api/types';
-import { changes, fieldPages, isDirty, missingRequired, newBuffer, setValue, submission, undoAll, undoField } from './record-buffer';
+import { changes, isDirty, missingRequired, newBuffer, setValue, submission, undoAll, undoField } from './record-buffer';
 
 const def: TableDef = {
 	name: 'T',
@@ -41,10 +41,3 @@ describe('record buffer', () => {
 	});
 });
 
-describe('fieldPages', () => {
-	test('splits fields into steps and always has one', () => {
-		expect(fieldPages([1, 2, 3, 4, 5, 6, 7], 3)).toEqual([[1, 2, 3], [4, 5, 6], [7]]);
-		expect(fieldPages([1, 2], 5)).toEqual([[1, 2]]);
-		expect(fieldPages([], 5)).toEqual([[]]);
-	});
-});

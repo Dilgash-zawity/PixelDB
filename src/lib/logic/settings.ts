@@ -18,6 +18,8 @@ export interface Settings {
 	canvasHints: boolean;
 	/** Check GitHub for signed releases on launch and periodically while open. */
 	automaticUpdates: boolean;
+	/** The Getting started tour was shown (it opens by itself once, with the first database). */
+	tourSeen: boolean;
 }
 
 /** Also read by the inline script in app.html, which applies these before first paint. */
@@ -30,7 +32,8 @@ export const DEFAULT_SETTINGS: Settings = {
 	textSize: 'default',
 	reduceMotion: false,
 	canvasHints: true,
-	automaticUpdates: true
+	automaticUpdates: true,
+	tourSeen: false
 };
 
 const pick = <T extends string>(options: readonly T[], value: unknown, fallback: T): T =>
@@ -49,7 +52,8 @@ export function readSettings(raw: unknown): Settings {
 		textSize: pick(TEXT_SIZES, r.textSize, d.textSize),
 		reduceMotion: typeof r.reduceMotion === 'boolean' ? r.reduceMotion : d.reduceMotion,
 		canvasHints: typeof r.canvasHints === 'boolean' ? r.canvasHints : d.canvasHints,
-		automaticUpdates: typeof r.automaticUpdates === 'boolean' ? r.automaticUpdates : d.automaticUpdates
+		automaticUpdates: typeof r.automaticUpdates === 'boolean' ? r.automaticUpdates : d.automaticUpdates,
+		tourSeen: typeof r.tourSeen === 'boolean' ? r.tourSeen : d.tourSeen
 	};
 }
 

@@ -1,6 +1,8 @@
 import { toast } from 'svelte-sonner';
 import { ApiError } from '../api/client';
+import { formatDetails, screenOf } from '../logic/diagnostics';
 import { humanizeError } from '../logic/messages';
+import { diagnosticsService, type Diagnostics } from '../services/diagnostics';
 
 const ERROR_TITLES: Record<string, string> = {
 	validation: 'Check the values',
@@ -24,12 +26,50 @@ export function cleanMessage(message: string): string {
 	);
 }
 
-export function reportError(e: unknown) {
-	if (e instanceof ApiError) {
-		toast.error(ERROR_TITLES[e.kind] ?? 'Something went wrong', { description: humanizeError(cleanMessage(e.message)) });
-	} else {
-		toast.error('Something went wrong', { description: e instanceof Error ? e.message : String(e) });
+let facts: Promise<Diagnostics | null> | null = null;
+/** App version and system, read once. */
+export function diagnostics(): Promise<Diagnostics | null> {
+	facts ??= diagnosticsService.get().catch(() => null);
+	return facts;
+}
+
+/** Copies a bug-report-ready description of an error. */
+async function copyDetails(title: string, message: string, kind?: string) {
+	const d = await diagnostics();
+	const text = formatDetails({
+		title,
+		message,
+		kind,
+		screen: screenOf(location.pathname),
+		version: d?.version,
+		os: d ? `${d.os} ${d.arch}, SQLite ${d.sqlite}` : navigator.userAgent
+	});
+	try {
+		await navigator.clipboard.writeText(text);
+		toast.success('Copied the details', { description: 'Paste them into your bug report.' });
+	} catch {
+		toast.error('Couldn’t copy', { description: text });
 	}
+}
+
+/** Kinds that mean something went wrong in the app rather than with what the user typed; they go to the log file. */
+const UNEXPECTED = ['ipc', 'sqlite', 'io', 'internal', 'invalid_database'];
+
+export function reportError(e: unknown) {
+	const kind = e instanceof ApiError ? e.kind : undefined;
+	const title = (kind && ERROR_TITLES[kind]) ?? 'Something went wrong';
+	const message = e instanceof ApiError ? humanizeError(cleanMessage(e.message)) : e instanceof Error ? e.message : String(e);
+	if (!kind || UNEXPECTED.includes(kind)) logError(kind ?? 'error', e);
+	toast.error(title, {
+		description: message,
+		action: { label: 'Copy details', onClick: () => void copyDetails(title, message, kind) }
+	});
+}
+
+/** Writes an unexpected error to the app's log file (never sent anywhere). */
+export function logError(context: string, e: unknown) {
+	const message = e instanceof Error ? `${e.message}${e.stack ? `\n${e.stack}` : ''}` : String(e);
+	diagnosticsService.logError(`${screenOf(location.pathname)} ${context}`, message).catch(() => {});
 }
 
 /** Runs an action and reports failures as a toast; returns undefined on error. */

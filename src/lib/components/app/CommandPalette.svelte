@@ -2,6 +2,7 @@
 	// Utils
 	import { toggleMode } from 'mode-watcher';
 	import { shortcutsDialog } from '#lib/state/shortcuts.svelte.js';
+	import { tour } from '#lib/state/tour.svelte.js';
 	import { session } from '#lib/state/session.svelte.js';
 
 	// Components
@@ -10,7 +11,10 @@
 	// Icons
 	import {
 		ArrowLeft as ArrowLeftIcon,
+		FileSpreadsheet as FileSpreadsheetIcon,
+		FileText as FileTextIcon,
 		Keyboard as KeyboardIcon,
+		GraduationCap as GraduationCapIcon,
 		Eye as EyeIcon,
 		Settings as SettingsIcon,
 		Network as NetworkIcon,
@@ -19,17 +23,20 @@
 		Settings2 as Settings2Icon,
 		SunMoon as SunMoonIcon,
 		Table2 as TableIcon,
+		Upload as UploadIcon,
 	} from '@lucide/svelte';
 
 	// Script
 	let {
 		open = $bindable(false),
 		onNewTable,
+		onImport,
 		onBack,
 		onSettings
-	}: { open?: boolean; onNewTable: () => void; onBack: () => void; onSettings: () => void } = $props();
+	}: { open?: boolean; onNewTable: () => void; onImport: () => void; onBack: () => void; onSettings: () => void } = $props();
 
-	const canEdit = $derived(session.tab === 'datasheet' && !!session.table && !session.isView(session.table));
+	const onSheet = $derived(session.tab === 'datasheet' && !!session.table);
+	const canEdit = $derived(onSheet && !session.isView(session.table));
 
 	function run(action: () => void) {
 		open = false;
@@ -51,6 +58,12 @@
 				</Command.Item>
 			</Command.Group>
 		{/if}
+		{#if onSheet}
+			<Command.Group heading="Export {session.table}">
+				<Command.Item value="export excel xlsx" onSelect={() => run(() => session.request('export-xlsx'))}><FileSpreadsheetIcon /> Export to Excel</Command.Item>
+				<Command.Item value="export csv" onSelect={() => run(() => session.request('export-csv'))}><FileTextIcon /> Export to CSV</Command.Item>
+			</Command.Group>
+		{/if}
 		<Command.Group heading="Tables">
 			{#each session.tables as t (t.name)}
 				<Command.Item value={`table ${t.name}`} onSelect={() => run(() => session.select(t.name))}>
@@ -66,10 +79,13 @@
 		<Command.Separator />
 		<Command.Group heading="General">
 			<Command.Item onSelect={() => run(onNewTable)}><PlusIcon /> New table</Command.Item>
+			<Command.Item value="import from a file csv excel" onSelect={() => run(onImport)}><UploadIcon /> Import from a file…</Command.Item>
 			<Command.Item onSelect={() => run(() => session.showTab('diagram'))}><NetworkIcon /> Diagram</Command.Item>
 			<Command.Item onSelect={() => run(() => session.showTab('query'))}><SearchCodeIcon /> Query</Command.Item>
+			<Command.Item onSelect={() => run(() => session.showTab('reports'))}><FileTextIcon /> Reports</Command.Item>
 			<Command.Item onSelect={() => run(toggleMode)}><SunMoonIcon /> Toggle light / dark</Command.Item>
 			<Command.Item value="keyboard shortcuts" onSelect={() => run(() => (shortcutsDialog.open = true))}><KeyboardIcon /> Keyboard shortcuts</Command.Item>
+			<Command.Item value="getting started tour help" onSelect={() => run(() => (tour.open = true))}><GraduationCapIcon /> Getting started tour</Command.Item>
 			<Command.Item onSelect={() => run(onBack)}><ArrowLeftIcon /> All databases</Command.Item>
 			<Command.Item onSelect={() => run(onSettings)}><SettingsIcon /> Settings</Command.Item>
 		</Command.Group>

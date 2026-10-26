@@ -19,13 +19,14 @@
 	/**
 	 * The one drawer shape of the app: full screen, from the bottom, one step at a time.
 	 * Next walks the steps (unless `onNext` says no); the last step's button calls `onFinish`.
+	 * Without `steps` it is a single page: no stepper, just the finish button.
 	 */
 	let {
 		open = $bindable(false),
 		step = $bindable(0),
 		title,
 		description,
-		steps,
+		steps = [],
 		finishLabel,
 		finishIcon,
 		nextLabel = 'Next',
@@ -49,7 +50,7 @@
 		step?: number;
 		title: string;
 		description?: string;
-		steps: { label: string; icon: Component }[];
+		steps?: { label: string; icon: Component }[];
 		finishLabel: string;
 		finishIcon?: Component;
 		nextLabel?: string;
@@ -112,7 +113,7 @@
 					<Drawer.Title>{title}</Drawer.Title>
 					{#if description}<Drawer.Description>{description}</Drawer.Description>{/if}
 				</div>
-				<Stepper {steps} current={step} onjump={(i) => (step = i)} />
+				{#if steps.length > 1}<Stepper {steps} current={step} onjump={(i) => (step = i)} />{/if}
 			</Drawer.Header>
 
 			<div class="min-h-0 flex-1 overflow-y-auto px-4 pb-2">

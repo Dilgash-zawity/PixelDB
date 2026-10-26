@@ -2,6 +2,8 @@
 //! of Tauri types so they can be tested directly.
 
 pub mod connection;
+pub mod indexes;
+pub mod journal;
 pub mod metadata;
 pub mod migrations;
 pub mod queries;

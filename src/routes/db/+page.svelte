@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { t } from '#lib/i18n/index.js';
 	// Utils
 	import { goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
@@ -6,16 +7,20 @@
 	import { databaseHref } from '#lib/logic/routes.js';
 	import { matches, shortcutText } from '#lib/logic/shortcuts.js';
 	import { session, type Tab } from '#lib/state/session.svelte.js';
+	import { settings } from '#lib/state/settings.svelte.js';
+	import { tour } from '#lib/state/tour.svelte.js';
 	import { workspace } from '#lib/state/workspace.svelte.js';
 
 	// Components
 	import CommandPalette from '#lib/components/app/CommandPalette.svelte';
 	import Logo from '#lib/components/app/Logo.svelte';
+	import ImportDrawer from '#lib/components/app/ImportDrawer.svelte';
 	import NewTableDrawer from '#lib/components/app/NewTableDrawer.svelte';
 	import NewDatabaseDrawer from '#lib/components/app/NewDatabaseDrawer.svelte';
 	import ProviderIcon from '#lib/components/app/ProviderIcon.svelte';
 	import QueryView from '#lib/components/app/QueryView.svelte';
 	import RecordsView from '#lib/components/app/RecordsView.svelte';
+	import ReportsView from '#lib/components/app/ReportsView.svelte';
 	import RelationshipsView from '#lib/components/app/RelationshipsView.svelte';
 	import SearchButton from '#lib/components/app/SearchButton.svelte';
 	import ThemeToggle from '#lib/components/app/ThemeToggle.svelte';
@@ -34,12 +39,14 @@
 		Check as CheckIcon,
 		ChevronDown as ChevronDownIcon,
 		Database as DatabaseIcon,
+		FileText as FileTextIcon,
 		Settings as SettingsIcon,
 		Network as NetworkIcon,
 		Plus as PlusIcon,
 		SearchCode as SearchCodeIcon,
 		Table2 as TableIcon,
 		TriangleAlert as TriangleAlertIcon,
+		Upload as UploadIcon,
 	} from '@lucide/svelte';
 
 	// Script
@@ -47,6 +54,12 @@
 	let paletteOpen = $state(false);
 	let creatingDatabase = $state(false);
 	let creatingTable = $state(false);
+	let importing = $state(false);
+
+	// The first database opened shows the Getting started tour once.
+	$effect(() => {
+		if (session.info && session.name === name && !settings.current.tourSeen) tour.open = true;
+	});
 
 	const tableItems = $derived(session.objects.map((o) => ({ value: o.name, label: o.name })));
 
@@ -79,7 +92,7 @@
 		return `Table ${n}`;
 	}
 
-	const TABS: Tab[] = ['diagram', 'datasheet', 'query'];
+	const TABS: Tab[] = ['diagram', 'datasheet', 'query', 'reports'];
 
 	function onKey(e: KeyboardEvent) {
 		if (matches(e, 'mod+k')) {
@@ -152,9 +165,10 @@
 
 			<Tabs.Root bind:value={() => session.tab, (v) => session.showTab(v as Tab)}>
 				<Tabs.List variant="line">
-					<Tabs.Trigger value="diagram" title="Diagram ({shortcutText('mod+1')})"><NetworkIcon /> Diagram</Tabs.Trigger>
-					<Tabs.Trigger value="datasheet" title="Datasheet ({shortcutText('mod+2')})"><TableIcon /> Datasheet</Tabs.Trigger>
-					<Tabs.Trigger value="query" title="Query ({shortcutText('mod+3')})"><SearchCodeIcon /> Query</Tabs.Trigger>
+					<Tabs.Trigger value="diagram" title="Diagram ({shortcutText('mod+1')})"><NetworkIcon /> {t('tabs.diagram')}</Tabs.Trigger>
+					<Tabs.Trigger value="datasheet" title="Datasheet ({shortcutText('mod+2')})"><TableIcon /> {t('tabs.datasheet')}</Tabs.Trigger>
+					<Tabs.Trigger value="query" title="Query ({shortcutText('mod+3')})"><SearchCodeIcon /> {t('tabs.query')}</Tabs.Trigger>
+					<Tabs.Trigger value="reports" title="Reports ({shortcutText('mod+4')})"><FileTextIcon /> {t('tabs.reports')}</Tabs.Trigger>
 				</Tabs.List>
 			</Tabs.Root>
 
@@ -192,6 +206,8 @@
 				<RelationshipsView />
 			{:else if session.tab === 'query'}
 				<QueryView />
+			{:else if session.tab === 'reports'}
+				<ReportsView />
 			{:else if !session.table}
 				<Empty.Root class="h-full">
 					<Empty.Header>
@@ -200,7 +216,10 @@
 						<Empty.Description>A table holds one kind of thing, like customers or orders.</Empty.Description>
 					</Empty.Header>
 					<Empty.Content>
-						<Button onclick={() => (creatingTable = true)}><PlusIcon data-icon="inline-start" /> New table</Button>
+						<div class="flex flex-wrap justify-center gap-2">
+							<Button onclick={() => (creatingTable = true)}><PlusIcon data-icon="inline-start" /> New table</Button>
+							<Button variant="outline" onclick={() => (importing = true)}><UploadIcon data-icon="inline-start" /> Import from a file…</Button>
+						</div>
 					</Empty.Content>
 				</Empty.Root>
 			{:else}
@@ -212,7 +231,16 @@
 	</div>
 {/if}
 
-<CommandPalette bind:open={paletteOpen} onNewTable={() => (creatingTable = true)} onBack={back} onSettings={openSettings} />
+<CommandPalette bind:open={paletteOpen} onNewTable={() => (creatingTable = true)} onImport={() => (importing = true)} onBack={back} onSettings={openSettings} />
+
+<ImportDrawer
+	bind:open={importing}
+	table={session.tab === 'datasheet' ? session.table : null}
+	onImported={(t) => {
+		session.revision++;
+		session.select(t);
+	}}
+/>
 
 <NewDatabaseDrawer
 	bind:open={creatingDatabase}

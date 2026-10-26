@@ -3,6 +3,7 @@
 	import { onlineService } from '#lib/services/online.js';
 	import { recordService } from '#lib/services/records.js';
 	import { tableService } from '#lib/services/tables.js';
+	import { transferService } from '#lib/services/transfer.js';
 
 	// Types
 	import type { FieldType, JsonValue, OnlineTable, RecordKey, RecordPage, RecordRow, SortSpec, TableInfo } from '#lib/api/types.js';
@@ -20,6 +21,7 @@
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
@@ -33,6 +35,9 @@
 		ArrowUp as ArrowUpIcon,
 		ChevronLeft as ChevronLeftIcon,
 		ChevronRight as ChevronRightIcon,
+		Download as DownloadIcon,
+		FileSpreadsheet as FileSpreadsheetIcon,
+		FileText as FileTextIcon,
 		Lock as LockIcon,
 		Plus as PlusIcon,
 		RefreshCw as RefreshIcon,
@@ -107,6 +112,19 @@
 		const r = request;
 		untrack(() => load(r));
 	});
+
+	let exporting = $state(false);
+
+	/** Saves every row matching the search, in the current order, to a file. */
+	async function exportRows(format: 'csv' | 'xlsx') {
+		exporting = true;
+		try {
+			const result = await attempt(() => transferService.exportRecords(table, { sort: sort ? [sort] : [], search: term || null }, format, database));
+			if (result) toast.success(`Exported ${result.rows} ${result.rows === 1 ? 'row' : 'rows'}`, { description: `Saved as ${result.file_name}.` });
+		} finally {
+			exporting = false;
+		}
+	}
 
 	async function load(r: string) {
 		loading = true;
@@ -226,6 +244,20 @@
 			<Button size="sm" variant="destructive" onclick={deleteSelected}><TrashIcon data-icon="inline-start" /> Delete {selected.length}</Button>
 		{/if}
 		<Button size="icon-sm" variant="ghost" aria-label="Reload rows" disabled={loading} onclick={() => revision++}><RefreshIcon /></Button>
+		<DropdownMenu.Root>
+			<DropdownMenu.Trigger>
+				{#snippet child({ props })}
+					<Button {...props} size="sm" variant="outline" disabled={exporting}><DownloadIcon data-icon="inline-start" /> Export</Button>
+				{/snippet}
+			</DropdownMenu.Trigger>
+			<DropdownMenu.Content align="end">
+				<DropdownMenu.Group>
+					<DropdownMenu.Label>{term ? 'The matching rows' : 'Every row'}</DropdownMenu.Label>
+					<DropdownMenu.Item onclick={() => exportRows('xlsx')}><FileSpreadsheetIcon /> Excel workbook (.xlsx)</DropdownMenu.Item>
+					<DropdownMenu.Item onclick={() => exportRows('csv')}><FileTextIcon /> CSV file (.csv)</DropdownMenu.Item>
+				</DropdownMenu.Group>
+			</DropdownMenu.Content>
+		</DropdownMenu.Root>
 		{#if editable && info}
 			<Button size="sm" title="New record (N)" onclick={() => openRow(null)}><PlusIcon data-icon="inline-start" /> New record</Button>
 		{/if}

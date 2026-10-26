@@ -5,12 +5,14 @@ pub mod field;
 pub mod query;
 pub mod record;
 pub mod table;
+pub mod transfer;
 
 pub use database::*;
 pub use field::*;
 pub use query::*;
 pub use record::*;
 pub use table::*;
+pub use transfer::*;
 
 #[cfg(test)]
 mod wire_format_tests {

@@ -4,9 +4,9 @@ use super::{on_online, target};
 use crate::online::SecretStore;
 use crate::online_data::OnlinePools;
 use crate::online_records;
-use crate::database::{DbManager, migrations, schema};
+use crate::database::{DbManager, indexes, migrations, schema};
 use crate::errors::AppResult;
-use crate::models::{FieldDef, SchemaChangeResult, TableDef, TableDesign, TableInfo};
+use crate::models::{FieldDef, IndexInfo, SchemaChangeResult, TableDef, TableDesign, TableInfo};
 use crate::workspace::WorkspaceStore;
 
 #[tauri::command]
@@ -26,7 +26,7 @@ pub async fn get_table(
 pub async fn create_table(state: State<'_, DbManager>, definition: TableDef) -> AppResult<TableInfo> {
     state
         .run(move |db| {
-            let def = migrations::create_table(&db.conn, &definition)?;
+            let def = db.restructured(|c| migrations::create_table(c, &definition))?;
             schema::table_info(&db.conn, &def.name)
         })
         .await
@@ -34,12 +34,12 @@ pub async fn create_table(state: State<'_, DbManager>, definition: TableDef) -> 
 
 #[tauri::command]
 pub async fn rename_table(state: State<'_, DbManager>, name: String, new_name: String) -> AppResult<()> {
-    state.run(move |db| migrations::rename_table(&db.conn, &name, &new_name)).await
+    state.run(move |db| db.restructured(|c| migrations::rename_table(c, &name, &new_name))).await
 }
 
 #[tauri::command]
 pub async fn drop_table(state: State<'_, DbManager>, name: String, confirm: bool) -> AppResult<SchemaChangeResult> {
-    state.run(move |db| migrations::drop_table(&db.conn, &name, confirm)).await
+    state.run(move |db| db.restructured(|c| migrations::drop_table(c, &name, confirm))).await
 }
 
 #[tauri::command]
@@ -50,7 +50,7 @@ pub async fn save_table_design(
     confirm_data_loss: bool,
 ) -> AppResult<SchemaChangeResult> {
     state
-        .run(move |db| migrations::save_table_design(&db.conn, &name, &design, confirm_data_loss))
+        .run(move |db| db.restructured(|c| migrations::save_table_design(c, &name, &design, confirm_data_loss)))
         .await
 }
 
@@ -61,7 +61,7 @@ pub async fn add_field(
     field: FieldDef,
     position: Option<usize>,
 ) -> AppResult<SchemaChangeResult> {
-    state.run(move |db| migrations::add_field(&db.conn, &table, field, position)).await
+    state.run(move |db| db.restructured(|c| migrations::add_field(c, &table, field, position))).await
 }
 
 #[tauri::command]
@@ -71,12 +71,12 @@ pub async fn modify_field(
     name: String,
     field: FieldDef,
 ) -> AppResult<SchemaChangeResult> {
-    state.run(move |db| migrations::modify_field(&db.conn, &table, &name, field)).await
+    state.run(move |db| db.restructured(|c| migrations::modify_field(c, &table, &name, field))).await
 }
 
 #[tauri::command]
 pub async fn rename_field(state: State<'_, DbManager>, table: String, name: String, new_name: String) -> AppResult<()> {
-    state.run(move |db| migrations::rename_field(&db.conn, &table, &name, &new_name)).await
+    state.run(move |db| db.restructured(|c| migrations::rename_field(c, &table, &name, &new_name))).await
 }
 
 #[tauri::command]
@@ -86,5 +86,20 @@ pub async fn drop_field(
     name: String,
     confirm: bool,
 ) -> AppResult<SchemaChangeResult> {
-    state.run(move |db| migrations::drop_field(&db.conn, &table, &name, confirm)).await
+    state.run(move |db| db.restructured(|c| migrations::drop_field(c, &table, &name, confirm))).await
+}
+
+#[tauri::command]
+pub async fn create_index(
+    state: State<'_, DbManager>,
+    table: String,
+    columns: Vec<String>,
+    unique: bool,
+) -> AppResult<IndexInfo> {
+    state.run(move |db| indexes::create_index(&db.conn, &table, &columns, unique)).await
+}
+
+#[tauri::command]
+pub async fn drop_index(state: State<'_, DbManager>, table: String, name: String) -> AppResult<()> {
+    state.run(move |db| indexes::drop_index(&db.conn, &table, &name)).await
 }

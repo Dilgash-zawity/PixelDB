@@ -13,6 +13,7 @@
 	import { appHref, databaseHref } from '#lib/logic/routes.js';
 	import { connectionSummary, provider as providerOf } from '#lib/logic/online.js';
 	import { WHEEL_ZOOM_RATE } from '#lib/logic/pinch.js';
+	import { TEMPLATES } from '#lib/logic/templates.js';
 	import { matches, nearestInDirection } from '#lib/logic/shortcuts.js';
 	import { databaseNameProblem, formatBytes } from '#lib/logic/values.js';
 	import {
@@ -39,6 +40,7 @@
 	// Components
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import * as ButtonGroup from '#lib/components/ui/button-group/index.js';
 	import * as ContextMenu from '#lib/components/ui/context-menu/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
@@ -55,6 +57,8 @@
 	// Icons
 	import {
 		Copy as CopyIcon,
+		PackageOpen as PackageOpenIcon,
+		Share as ShareIcon,
 		Database as DatabaseIcon,
 		EllipsisVertical as EllipsisVerticalIcon,
 		ExternalLink as ExternalLinkIcon,
@@ -71,6 +75,7 @@
 		Trash2 as TrashIcon,
 		TriangleAlert as TriangleAlertIcon,
 		Unlink as UnlinkIcon,
+		Sparkles as SparklesIcon,
 	} from '@lucide/svelte';
 
 	// Script
@@ -391,6 +396,27 @@
 		creatingApp = true;
 	}
 
+	async function openShared() {
+		const app = await workspace.openSharedApp();
+		if (app) open('app', app);
+	}
+
+	let makingSample = $state(false);
+
+	/** Makes the shop template (a database with sample records and an app over it) and opens its database. */
+	async function trySample() {
+		const template = TEMPLATES.find((t) => t.id === 'shop') ?? TEMPLATES[0];
+		if (!template || makingSample) return;
+		let name = template.suggestedName;
+		for (let n = 2; workspace.nameTaken(name) || workspace.appNameTaken(name); n++) name = `${template.suggestedName} ${n}`;
+		makingSample = true;
+		try {
+			if (await workspace.createFromTemplate(template, name)) goto(databaseHref(resolve('/db'), name));
+		} finally {
+			makingSample = false;
+		}
+	}
+
 	/** Puts a just-created card where the menu was opened, or in the middle of the view. */
 	function placeCreated(kind: NodeKind, name: string) {
 		const key = nodeKey(kind, name);
@@ -581,6 +607,9 @@
 		<Item disabled={!canOpen(kind, name)} onclick={() => open(kind, name)}><ExternalLinkIcon /> Open</Item>
 		<Item onclick={() => (renaming = { kind, name })}><PencilIcon /> Rename…</Item>
 		<Item disabled={!canOpen(kind, name)} onclick={() => startDuplicate(kind, name)}><CopyIcon /> Duplicate…</Item>
+		{#if kind === 'app'}
+			<Item disabled={!canOpen(kind, name)} onclick={() => workspace.shareApp(name)}><ShareIcon /> Share as a file…</Item>
+		{/if}
 	{/if}
 {/snippet}
 
@@ -749,10 +778,15 @@
 							<Empty.Description>Create a database to hold your tables, then an app with screens over it — or start an app from a template.</Empty.Description>
 						</Empty.Header>
 						<Empty.Content>
-							<div class="flex justify-center gap-2">
+							<div class="flex flex-wrap justify-center gap-2">
 								<Button onclick={() => newDatabase()}><PlusIcon data-icon="inline-start" /> New database</Button>
 								<Button variant="outline" onclick={() => newApp()}><PlusIcon data-icon="inline-start" /> New app</Button>
+								<Button variant="secondary" disabled={makingSample} onclick={trySample}>
+									{#if makingSample}<Spinner data-icon="inline-start" />{:else}<SparklesIcon data-icon="inline-start" />{/if}
+									Try a sample shop
+								</Button>
 							</div>
+							<p class="text-xs text-muted-foreground">The sample has customers, products and orders to explore, and an app over them.</p>
 							<FocusModeSwitch class="mt-6" />
 						</Empty.Content>
 					</Empty.Root>
@@ -857,6 +891,7 @@
 			<ContextMenu.Group>
 				<ContextMenu.Item onclick={() => newDatabase(menu.at)}><DatabaseIcon /> New database here…</ContextMenu.Item>
 				<ContextMenu.Item onclick={() => newApp(menu.at)}><LayoutDashboardIcon /> New app here…</ContextMenu.Item>
+				<ContextMenu.Item onclick={openShared}><PackageOpenIcon /> Open a shared app…</ContextMenu.Item>
 			</ContextMenu.Group>
 			<ContextMenu.Separator />
 			<ContextMenu.Group>
@@ -917,6 +952,7 @@
 	{canOpen}
 	onOpen={open}
 	onNewDatabase={() => newDatabase()}
+	onOpenShared={openShared}
 	onNewApp={() => newApp()}
 	onTidy={arrange}
 	onFit={fit}

@@ -8,6 +8,11 @@ describe('settings', () => {
 		expect(readSettings({ automaticUpdates: false }).automaticUpdates).toBe(false);
 		expect(readSettings({ automaticUpdates: 'no' }).automaticUpdates).toBe(true);
 	});
+	test('the tour shows once', () => {
+		expect(readSettings(null).tourSeen).toBe(false);
+		expect(readSettings({ tourSeen: true }).tourSeen).toBe(true);
+	});
+
 	test('fills defaults and ignores unknown values', () => {
 		expect(readSettings(null)).toEqual(DEFAULT_SETTINGS);
 		expect(readSettings({ accent: 'pink', radius: 'large', reduceMotion: 'yes', extra: 1 })).toEqual({
