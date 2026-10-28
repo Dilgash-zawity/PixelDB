@@ -130,7 +130,7 @@
 
 			<p class="flex items-start gap-2 text-xs text-muted-foreground">
 				<InfoIcon class="mt-0.5 size-3.5 shrink-0" />
-				The structure of an online database is changed with the server's own tools. SlateDB picks up changes within about 20 seconds, or when you reload.
+				The structure of an online database is changed with the server's own tools. PixelDB picks up changes within about 20 seconds, or when you reload.
 			</p>
 		{/if}
 	</div>

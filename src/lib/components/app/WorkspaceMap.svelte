@@ -961,7 +961,7 @@
 <NameDialog
 	bind:open={() => renaming !== null, (o) => !o && (renaming = null)}
 	title={renaming?.kind === 'app' ? 'Rename app' : 'Rename database'}
-	description={renaming?.kind === 'db' ? (onlineByName.has(renaming.name) ? 'Only the name SlateDB shows changes; the database on the server keeps its own.' : 'The database file in your folder is renamed too, and apps using it follow.') : undefined}
+	description={renaming?.kind === 'db' ? (onlineByName.has(renaming.name) ? 'Only the name PixelDB shows changes; the database on the server keeps its own.' : 'The database file in your folder is renamed too, and apps using it follow.') : undefined}
 	initial={renaming?.name ?? ''}
 	submitLabel="Rename"
 	validate={(v) => (renaming?.kind === 'app' ? appNameProblem(v, renaming.name) : dbNameProblem(v, renaming?.name))}

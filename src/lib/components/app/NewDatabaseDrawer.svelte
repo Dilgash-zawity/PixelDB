@@ -455,7 +455,7 @@
 			{:else if kind === 'local'}
 				<Field.Description>Saved as “{name.trim() || '…'}.db” in the DB folder of your workspace. Double-click it on the map to add tables.</Field.Description>
 			{:else}
-				<Field.Description>The name SlateDB shows for it; the database on the server keeps its own.</Field.Description>
+				<Field.Description>The name PixelDB shows for it; the database on the server keeps its own.</Field.Description>
 			{/if}
 		</Field.Field>
 	{/if}

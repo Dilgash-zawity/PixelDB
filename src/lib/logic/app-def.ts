@@ -536,7 +536,7 @@ export function readApp(raw: unknown): AppDef {
 		throw new Error('This file is not an app definition.');
 	}
 	if (raw.version > APP_FORMAT_VERSION) {
-		throw new Error('This app was made by a newer version of SlateDB.');
+		throw new Error('This app was made by a newer version of PixelDB.');
 	}
 	const pages: Page[] = arr(raw.pages)
 		.filter(isObj)

@@ -1,6 +1,6 @@
-# SlateDB user guide
+# PixelDB user guide
 
-SlateDB keeps your information in **databases** and lets you build **apps** —
+PixelDB keeps your information in **databases** and lets you build **apps** —
 screens of lists, forms, boards and charts — on top of them. Everything is
 stored in ordinary files on your computer; nothing is sent anywhere unless you
 connect an online database yourself.
@@ -11,7 +11,7 @@ search for anything.
 
 ## Getting started
 
-1. On first launch, **choose a folder**. SlateDB keeps databases in its `DB`
+1. On first launch, **choose a folder**. PixelDB keeps databases in its `DB`
    subfolder and apps in `Apps`. You can change the folder later in
    **Settings → Workspace**.
 2. The home screen is a map of your apps (black tiles) and databases (grey
@@ -39,7 +39,7 @@ Each card is a table, like *Customers* or *Orders*.
 - **Add or change a field**: click a field, or *Add field* on a card. Name,
   type and rules (required, unique, default value, a check) are all on one page.
 - **Link tables**: drag a field's dot onto another table, choose the kind
-  (each order has one customer, or many-to-many), and SlateDB adds the linking
+  (each order has one customer, or many-to-many), and PixelDB adds the linking
   field. Click a line to change or remove a link.
 - **Indexes** make sorting and filtering large tables faster: click a table,
   then *Indexes* in its details.
@@ -82,7 +82,7 @@ it; <kbd>Esc</kbd> cancels the change you are typing.
 
 ### Query: questions about your data
 
-Pick tables and fields in the designer — SlateDB joins them along their
+Pick tables and fields in the designer — PixelDB joins them along their
 links — and add criteria, sorting and totals. Or switch to SQL and write a
 `SELECT` yourself (queries only ever read; they never change data). **Save**
 a query to use it like a table in the Datasheet, reports and apps.
@@ -99,7 +99,7 @@ uses your system's print dialog. Reports are saved inside the database file.
 
 An app is a set of pages over one or more databases.
 
-- **New app** on the home map: start from a template, or let SlateDB **build a
+- **New app** on the home map: start from a template, or let PixelDB **build a
   page for each table** — a list, a form and the linked records underneath.
 - Switch between **Edit** and **Run** in the top bar. In Edit mode, add widgets
   from the right panel (table, form, board, chart, number, filter, button,
@@ -115,10 +115,10 @@ An app is a set of pages over one or more databases.
 ### Sharing an app
 
 Right-click an app on the home map → **Share as a file…** (or *Share this
-app as a file* in the app's search palette). SlateDB saves one `.slatepkg`
+app as a file* in the app's search palette). PixelDB saves one `.slatepkg`
 file with the app and a copy of each local database it uses. Whoever receives
 it chooses **Open a shared app…** from the home map's right-click menu or
-search palette; if a name is already taken there, SlateDB picks a free one and
+search palette; if a name is already taken there, PixelDB picks a free one and
 points the app at it. Online databases are not included — the other person
 needs their own connection with the same name.
 
@@ -137,9 +137,9 @@ Apps use online databases just like local ones.
 - **Workspace**: the folder, and resetting the home map's layout.
 - **Appearance**: light/dark, **Focus mode** (a plain grey look), accent
   colour, corners and text size.
-- **Behaviour**: reduce motion (SlateDB also follows your system's setting),
+- **Behaviour**: reduce motion (PixelDB also follows your system's setting),
   canvas hints, the tour, and resetting everything.
-- **Updates**: SlateDB checks for signed updates from its official releases
+- **Updates**: PixelDB checks for signed updates from its official releases
   and installs them when you say so.
 - **About**: the version, **Copy system info** and **Open log folder** for bug
   reports.

@@ -1,6 +1,6 @@
 # Signed releases and automatic updates
 
-SlateDB's source and downloads are free under the [MIT license](../LICENSE).
+PixelDB's source and downloads are free under the [MIT license](../LICENSE).
 Releases are hosted at <https://github.com/Dilgash-zawity/SlateDB/releases>.
 The repository must be public for downloads and update checks without a GitHub
 account. Never embed a GitHub token in the application.
@@ -119,7 +119,7 @@ One workflow, **Build and release** (`.github/workflows/release.yml`), does both
 To publish:
 
 1. Update `package.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` (the
-   SlateDB package), and `src-tauri/tauri.conf.json` to the same new version.
+   PixelDB package), and `src-tauri/tauri.conf.json` to the same new version.
 2. Update `docs/community-release-notes.md` with that version's changes, download
    filenames, and accurate signing status. Merge to `main`.
 3. Run **Actions → Build and release → Run workflow** from `main`, entering the
@@ -152,7 +152,7 @@ sha256sum -c SHA256SUMS --ignore-missing
 For releases with GitHub build attestations:
 
 ```sh
-gh attestation verify SlateDB_VERSION_amd64.AppImage --repo Dilgash-zawity/SlateDB
+gh attestation verify PixelDB_VERSION_amd64.AppImage --repo Dilgash-zawity/SlateDB
 ```
 
 For independent update-signature verification, download `updater.pub` and the

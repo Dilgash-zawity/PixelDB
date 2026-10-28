@@ -283,7 +283,7 @@ export interface OnlineColumn {
 	name: string;
 	/** The server's own type, e.g. `character varying(80)`. */
 	server_type: string;
-	/** The closest SlateDB type, used by forms and formatting. */
+	/** The closest PixelDB type, used by forms and formatting. */
 	field_type: FieldType;
 	nullable: boolean;
 	default: string | null;

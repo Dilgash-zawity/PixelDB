@@ -49,7 +49,7 @@
 		const update = updates.current;
 		if (update.status === 'available' && update.version !== announcedVersion) {
 			announcedVersion = update.version;
-			toast.info(`SlateDB ${update.version} is available`, {
+			toast.info(`PixelDB ${update.version} is available`, {
 				description: 'Open Settings to install when you’re ready.',
 				action: { label: 'View update', onClick: () => { void goto('/settings?section=updates'); } }
 			});
@@ -87,7 +87,7 @@
 
 <svelte:head>
 	<link rel="icon" type="image/svg+xml" href={logo} />
-	<title>SlateDB</title>
+	<title>PixelDB</title>
 </svelte:head>
 
 <ModeWatcher defaultMode="dark" />

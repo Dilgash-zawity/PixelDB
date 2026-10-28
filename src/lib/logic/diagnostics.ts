@@ -16,7 +16,7 @@ export function formatDetails(d: ErrorDetails): string {
 		'',
 		d.kind ? `Kind: ${d.kind}` : null,
 		d.screen ? `Screen: ${d.screen}` : null,
-		d.version ? `SlateDB: ${d.version}` : null,
+		d.version ? `PixelDB: ${d.version}` : null,
 		d.os ? `System: ${d.os}` : null,
 		`Time: ${(d.at ?? new Date()).toISOString()}`
 	];

@@ -19,7 +19,7 @@
 	} from '@lucide/svelte';
 
 	// Script
-	/** A short tour of how SlateDB fits together, a page per idea. Closing it marks it seen. */
+	/** A short tour of how PixelDB fits together, a page per idea. Closing it marks it seen. */
 	let { open = $bindable(false) }: { open?: boolean } = $props();
 
 	const PARAMS = { undo: shortcutText('mod+z'), search: shortcutText('mod+k') };

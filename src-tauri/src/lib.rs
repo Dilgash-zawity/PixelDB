@@ -50,7 +50,7 @@ pub fn run() {
         log = log.target(tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout));
       }
       app.handle().plugin(log.build())?;
-      log::info!("SlateDB {} on {} {}", app.package_info().version, std::env::consts::OS, std::env::consts::ARCH);
+      log::info!("PixelDB {} on {} {}", app.package_info().version, std::env::consts::OS, std::env::consts::ARCH);
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![

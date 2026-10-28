@@ -13,7 +13,7 @@ describe('error details', () => {
 			at: new Date('2026-10-26T10:00:00Z')
 		});
 		expect(text).toBe(
-			'Check the values: Price is not a number\n\nKind: validation\nScreen: /db\nSlateDB: 0.1.0\nTime: 2026-10-26T10:00:00.000Z'
+			'Check the values: Price is not a number\n\nKind: validation\nScreen: /db\nPixelDB: 0.1.0\nTime: 2026-10-26T10:00:00.000Z'
 		);
 	});
 

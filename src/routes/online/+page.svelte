@@ -159,7 +159,7 @@
 </script>
 
 <svelte:window onkeydown={onKey} />
-<svelte:head><title>{name} · SlateDB</title></svelte:head>
+<svelte:head><title>{name} · PixelDB</title></svelte:head>
 
 <div class="flex h-svh flex-col">
 	<header data-bar class="app-header flex h-12 shrink-0 items-center gap-2 border-b px-3">

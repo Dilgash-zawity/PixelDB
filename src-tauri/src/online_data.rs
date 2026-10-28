@@ -114,7 +114,7 @@ impl OnlinePools {
             .port(s.port.unwrap_or(5432))
             .username(&s.user)
             .ssl_mode(if s.ssl { PgSslMode::Require } else { PgSslMode::Prefer })
-            .application_name("SlateDB");
+            .application_name("PixelDB");
         if !s.database.is_empty() {
             opts = opts.database(&s.database);
         }

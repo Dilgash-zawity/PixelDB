@@ -23,7 +23,7 @@ export const en = {
 		skip: 'Skip',
 		start: 'Get started',
 		welcome: {
-			title: 'Welcome to SlateDB',
+			title: 'Welcome to PixelDB',
 			text: 'Databases hold your information in tables. Apps put screens over them: lists, forms, boards and charts. Everything is stored in files on this computer.'
 		},
 		diagram: {
@@ -48,9 +48,9 @@ export const en = {
 		subtitle: 'Changes save by themselves.',
 		updateReady: 'An update is ready',
 		workspace: { label: 'Workspace', hint: 'Folder and home map', description: 'The folder on this computer where your databases and apps live.' },
-		appearance: { label: 'Appearance', hint: 'Theme, colours and text', description: 'Make SlateDB look the way you like. Changes apply straight away.' },
+		appearance: { label: 'Appearance', hint: 'Theme, colours and text', description: 'Make PixelDB look the way you like. Changes apply straight away.' },
 		behaviour: { label: 'Behaviour', hint: 'Motion, hints and the tour', description: 'How the canvases and animations feel.' },
-		updates: { label: 'Updates', hint: 'New versions and fixes', description: 'Get new features and fixes from the official SlateDB releases.' },
+		updates: { label: 'Updates', hint: 'New versions and fixes', description: 'Get new features and fixes from the official PixelDB releases.' },
 		about: { label: 'About', hint: 'Version and bug reports', description: 'The app and who made it.' }
 	},
 	reports: {

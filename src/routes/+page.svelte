@@ -38,7 +38,7 @@
 <div class="flex h-svh flex-col">
 	<header data-bar class="app-header flex h-12 shrink-0 items-center gap-2 border-b bg-sidebar px-3">
 		<Logo class="size-6" />
-		<span class="font-semibold">SlateDB</span>
+		<span class="font-semibold">PixelDB</span>
 		<span class="flex-1"></span>
 		{#if workspace.info}<SearchButton onclick={() => map?.openSearch()} />{/if}
 		<Button variant="ghost" size="icon-sm" href={resolve('/settings')} aria-label="Settings" title="Settings"><SettingsIcon /></Button>
@@ -54,7 +54,7 @@
 		<Empty.Root class="flex-1">
 			<Empty.Header>
 				<Empty.Media><Logo class="size-24" /></Empty.Media>
-				<Empty.Title class="text-2xl">Welcome to SlateDB</Empty.Title>
+				<Empty.Title class="text-2xl">Welcome to PixelDB</Empty.Title>
 				<Empty.Description>Choose a folder for your databases. Everything stays on this computer.</Empty.Description>
 			</Empty.Header>
 			<Empty.Content>

@@ -25,7 +25,7 @@ The shadcn-svelte CLI prompts interactively and has no TTY in agent shells; driv
 
 ## Build and release
 
-A release is one action, **Build and release**: bump `package.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` (the SlateDB package) and `src-tauri/tauri.conf.json` to the new version, update `docs/community-release-notes.md`, merge to `main`, then run the **Build and release** workflow (`.github/workflows/release.yml`) from `main` with that version. Name commits and PRs "Build and release", not "Release vX.Y.Z". Details and signing setup are in `docs/RELEASING.md`.
+A release is one action, **Build and release**: bump `package.json`, `src-tauri/Cargo.toml`, `src-tauri/Cargo.lock` (the PixelDB package) and `src-tauri/tauri.conf.json` to the new version, update `docs/community-release-notes.md`, merge to `main`, then run the **Build and release** workflow (`.github/workflows/release.yml`) from `main` with that version. Name commits and PRs "Build and release", not "Release vX.Y.Z". Details and signing setup are in `docs/RELEASING.md`.
 
 ## Architecture
 

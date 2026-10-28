@@ -167,7 +167,7 @@
 </script>
 
 <svelte:window onkeydown={onKey} onbeforeunload={() => appSession.flush()} />
-<svelte:head><title>{name} · SlateDB</title></svelte:head>
+<svelte:head><title>{name} · PixelDB</title></svelte:head>
 
 {#if appSession.loadError && appSession.name === name}
 	<Empty.Root class="min-h-svh">

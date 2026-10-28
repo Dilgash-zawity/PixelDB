@@ -64,7 +64,7 @@ pub async fn export_app_package(window: tauri::WebviewWindow, store: State<'_, W
             .set_parent(&window)
             .set_title("Share app")
             .set_file_name(format!("{name}.{ext}"))
-            .add_filter("SlateDB app package", &[ext])
+            .add_filter("PixelDB app package", &[ext])
             .blocking_save_file()
         else {
             return Ok(None);
@@ -94,7 +94,7 @@ pub async fn import_app_package(window: tauri::WebviewWindow, store: State<'_, W
             .file()
             .set_parent(&window)
             .set_title("Open a shared app")
-            .add_filter("SlateDB app package", &[package::PACKAGE_EXTENSION])
+            .add_filter("PixelDB app package", &[package::PACKAGE_EXTENSION])
             .blocking_pick_file()
         else {
             return Ok(None);

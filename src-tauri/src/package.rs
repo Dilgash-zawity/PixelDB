@@ -67,7 +67,7 @@ fn scratch(dir: &Path, label: &str) -> PathBuf {
 }
 
 fn zip_error(e: zip::result::ZipError) -> AppError {
-    AppError::Validation(format!("not a SlateDB package ({e})"))
+    AppError::Validation(format!("not a PixelDB package ({e})"))
 }
 
 /// The package for app `name`: its definition and a snapshot of each local database.
@@ -137,9 +137,9 @@ fn read_entry(archive: &mut zip::ZipArchive<Cursor<&[u8]>>, name: &str, limit: u
 pub fn read_package(workspace: &Path, bytes: &[u8]) -> AppResult<ImportedPackage> {
     let mut archive = zip::ZipArchive::new(Cursor::new(bytes)).map_err(zip_error)?;
     let manifest: Manifest = serde_json::from_slice(&read_entry(&mut archive, MANIFEST, 1024 * 1024)?)
-        .map_err(|e| AppError::Validation(format!("not a SlateDB package ({e})")))?;
+        .map_err(|e| AppError::Validation(format!("not a PixelDB package ({e})")))?;
     if manifest.format > PACKAGE_FORMAT {
-        return Err(AppError::Validation("this package was made by a newer SlateDB; update to open it".into()));
+        return Err(AppError::Validation("this package was made by a newer PixelDB; update to open it".into()));
     }
     if manifest.databases.len() > MAX_DATABASES {
         return Err(AppError::Validation("the package has too many databases".into()));

@@ -2,7 +2,7 @@
 
 ## Project Structure & Module Organization
 
-SlateDB is an offline desktop app using Tauri 2, Rust, bundled SQLite, SvelteKit 3, Svelte 5, and Bun.
+PixelDB is an offline desktop app using Tauri 2, Rust, bundled SQLite, SvelteKit 3, Svelte 5, and Bun.
 
 - `src/routes/`: workspace, database and app pages.
 - `src/lib/`: typed IPC in `api/`, orchestration in `services/`, framework-free business logic in `logic/`, and rune-based state in `state/`.

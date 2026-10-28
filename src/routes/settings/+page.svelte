@@ -75,7 +75,7 @@
 	async function copySystemInfo() {
 		const d = await diagnostics();
 		if (!d) return;
-		const text = `SlateDB ${d.version}\nSystem: ${d.os} ${d.arch}\nSQLite ${d.sqlite}`;
+		const text = `PixelDB ${d.version}\nSystem: ${d.os} ${d.arch}\nSQLite ${d.sqlite}`;
 		try {
 			await navigator.clipboard.writeText(text);
 			toast.success('Copied system info');
@@ -86,8 +86,8 @@
 
 	async function installUpdate() {
 		await updates.manager.install(() => confirm({
-			title: `Install SlateDB ${updates.current.version}?`,
-			description: 'Finish and save your work first. SlateDB will verify the download before installing. Windows closes and restarts during installation; on Mac and Linux you can restart when installation finishes.',
+			title: `Install PixelDB ${updates.current.version}?`,
+			description: 'Finish and save your work first. PixelDB will verify the download before installing. Windows closes and restarts during installation; on Mac and Linux you can restart when installation finishes.',
 			action: 'Download and install'
 		}));
 	}
@@ -175,7 +175,7 @@
 
 </script>
 
-<svelte:head><title>{current.label} · Settings · SlateDB</title></svelte:head>
+<svelte:head><title>{current.label} · Settings · PixelDB</title></svelte:head>
 
 <!-- One setting: an icon, what it does, and its control on the right. -->
 <!-- `wide` controls (button groups) go under the text when there isn't room beside it. -->
@@ -297,7 +297,7 @@
 			<div class="mt-auto flex items-center gap-2.5 px-2 text-xs text-muted-foreground">
 				<Logo class="size-6" />
 				<span class="flex flex-col">
-					<span class="font-medium text-foreground">SlateDB</span>
+					<span class="font-medium text-foreground">PixelDB</span>
 					<span>{version ? `Version ${version}` : '\u00a0'}</span>
 				</span>
 			</div>
@@ -505,8 +505,8 @@
 							<div class="flex min-w-0 flex-1 flex-col gap-0.5">
 								<span class="font-semibold">
 									{#if updates.current.status === 'ready'}Ready to restart
-									{:else if available}SlateDB {updates.current.version} is available
-									{:else}SlateDB {version ?? '—'}{/if}
+									{:else if available}PixelDB {updates.current.version} is available
+									{:else}PixelDB {version ?? '—'}{/if}
 								</span>
 								<span class="text-sm text-muted-foreground" role="status" aria-live="polite">
 									{#if !native}Update checks are available in the desktop app.
@@ -522,7 +522,7 @@
 							</div>
 							<div class="flex flex-wrap gap-2">
 								{#if updates.current.status === 'ready'}
-									<Button onclick={() => updates.manager.restart()}>Restart SlateDB</Button>
+									<Button onclick={() => updates.manager.restart()}>Restart PixelDB</Button>
 								{:else}
 									<Button variant="outline" disabled={!native || updateBusy} onclick={() => updates.manager.check()}><RefreshCwIcon data-icon="inline-start" /> Check now</Button>
 									{#if updates.current.version}
@@ -545,7 +545,7 @@
 						{#snippet automatic()}
 							<Switch id="automatic-updates" checked={settings.current.automaticUpdates} onCheckedChange={(value) => settings.update({ automaticUpdates: value })} />
 						{/snippet}
-						{@render row('Check automatically', 'On launch and every six hours while SlateDB is open. You choose when to install. Database contents are never sent.', automatic, 'automatic-updates', false, CalendarClockIcon)}
+						{@render row('Check automatically', 'On launch and every six hours while PixelDB is open. You choose when to install. Database contents are never sent.', automatic, 'automatic-updates', false, CalendarClockIcon)}
 						<Separator />
 						{#snippet downloads()}
 							<Button variant="outline" disabled={!native} onclick={() => attempt(() => openUrl(RELEASES))}><ExternalLinkIcon data-icon="inline-start" /> Open</Button>
@@ -559,7 +559,7 @@
 						<div class="flex flex-col items-center gap-3 px-6 py-8 text-center">
 							<Logo class="size-16" />
 							<div class="flex flex-col items-center gap-1.5">
-								<span class="text-xl font-semibold">SlateDB</span>
+								<span class="text-xl font-semibold">PixelDB</span>
 								{#if version}<Badge variant="secondary">Version {version}</Badge>{/if}
 							</div>
 							<p class="max-w-md text-sm text-balance text-muted-foreground">An offline desktop database app in the spirit of Microsoft Access. Your data stays on this computer.</p>
@@ -582,11 +582,11 @@
 						{#snippet logs()}
 							<Button variant="outline" disabled={!native} onclick={() => attempt(() => diagnosticsService.openLogFolder())}><FolderOpenIcon data-icon="inline-start" /> Open</Button>
 						{/snippet}
-						{@render row('System info', 'Your SlateDB, system and SQLite versions, to paste into a bug report. Error messages also have a “Copy details” button.', copyInfo, undefined, false, BugIcon)}
+						{@render row('System info', 'Your PixelDB, system and SQLite versions, to paste into a bug report. Error messages also have a “Copy details” button.', copyInfo, undefined, false, BugIcon)}
 						<Separator />
 						{@render row('Log folder', 'Unexpected errors are kept in a log file on this computer; it is never sent anywhere.', logs, undefined, false, FileTextIcon)}
 					{/snippet}
-					{@render group('SlateDB', aboutCard)}
+					{@render group('PixelDB', aboutCard)}
 					{@render group('Reporting a problem', problemCard)}
 				{/if}
 			</div>

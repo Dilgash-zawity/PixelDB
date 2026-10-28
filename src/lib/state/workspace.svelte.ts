@@ -204,7 +204,7 @@ class WorkspaceState {
 		toast.success(`Saved “${file}”`, {
 			description: online.length
 				? `Online databases (${online.join(', ')}) aren’t included; whoever opens it needs their own connection with the same name.`
-				: 'Open it in SlateDB with “Open a shared app…” on the home screen.'
+				: 'Open it in PixelDB with “Open a shared app…” on the home screen.'
 		});
 	}
 

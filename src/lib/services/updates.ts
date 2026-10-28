@@ -49,10 +49,10 @@ export class UpdateManager {
 				status: next ? 'available' : 'current',
 				version: next?.version ?? null,
 				notes: next?.body ?? '',
-				message: next ? `SlateDB ${next.version} is available.` : 'You’re up to date.'
+				message: next ? `PixelDB ${next.version} is available.` : 'You’re up to date.'
 			});
 		} catch {
-			this.set({ status: 'error', message: 'Couldn’t check for updates. Check your connection and try again. You can keep using SlateDB offline.' });
+			this.set({ status: 'error', message: 'Couldn’t check for updates. Check your connection and try again. You can keep using PixelDB offline.' });
 		} finally {
 			this.busy = false;
 		}
@@ -78,7 +78,7 @@ export class UpdateManager {
 			// Tauri verifies the signature during download; a failure never reaches install.
 			this.set({ status: 'installing', message: 'Installing update…' });
 			await this.update.install(); // Windows exits here and its installer restarts the app.
-			this.set({ status: 'ready', message: 'Update installed. Restart SlateDB to finish.' });
+			this.set({ status: 'ready', message: 'Update installed. Restart PixelDB to finish.' });
 			await this.update.close().catch(() => {});
 			this.update = null;
 		} catch {
@@ -94,7 +94,7 @@ export class UpdateManager {
 		try {
 			await this.restartApp();
 		} catch {
-			this.set({ message: 'Please close and reopen SlateDB to finish updating.' });
+			this.set({ message: 'Please close and reopen PixelDB to finish updating.' });
 		} finally {
 			this.busy = false;
 		}
