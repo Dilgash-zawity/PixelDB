@@ -11,7 +11,7 @@
 			} catch {}
 			// Apply saved look-and-feel settings before first paint (mirrors logic/settings.ts).
 			try {
-				var s = JSON.parse(localStorage.getItem('slatedb.settings') || '{}') || {};
+				var s = JSON.parse(localStorage.getItem('pixeldb.settings') || '{}') || {};
 				var el = document.documentElement;
 				if (s.accent && s.accent !== 'neutral') el.setAttribute('data-ui-accent', s.accent);
 				if (s.focusMode === true) el.setAttribute('data-focus', '');

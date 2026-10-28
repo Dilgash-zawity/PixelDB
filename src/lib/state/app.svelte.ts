@@ -52,7 +52,7 @@ export interface ObjectSchema {
 }
 
 const SAVE_DELAY_MS = 500;
-const SIDEBAR_KEY = 'slatedb.appSidebar';
+const SIDEBAR_KEY = 'pixeldb.appSidebar';
 
 function loadCollapsed(): boolean {
 	try {

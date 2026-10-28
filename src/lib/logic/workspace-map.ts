@@ -21,7 +21,7 @@ const ROW_GAP = 28;
 
 /** Where the home map keeps card positions for a folder (browser storage). */
 export function homeLayoutKey(folder: string): string {
-	return `slatedb.home-layout:${folder}`;
+	return `pixeldb.home-layout:${folder}`;
 }
 
 export function nodeKey(kind: NodeKind, name: string): string {

@@ -1,7 +1,7 @@
 # Signed releases and automatic updates
 
 PixelDB's source and downloads are free under the [MIT license](../LICENSE).
-Releases are hosted at <https://github.com/Dilgash-zawity/SlateDB/releases>.
+Releases are hosted at <https://github.com/Dilgash-zawity/PixelDB/releases>.
 The repository must be public for downloads and update checks without a GitHub
 account. Never embed a GitHub token in the application.
 
@@ -23,8 +23,8 @@ SmartScreen warnings. Existing unsigned downloads are not repaired retroactively
 
 ## Update signing key
 
-The encrypted private key is in `.release-keys/slatedb.key`, its password is in
-`.release-keys/slatedb.password`, and the public key is embedded in
+The encrypted private key is in `.release-keys/pixeldb.key`, its password is in
+`.release-keys/pixeldb.password`, and the public key is embedded in
 `src-tauri/tauri.conf.json`. Private material is ignored by Git and has restricted
 file permissions. Back up the private key and password securely outside this
 checkout. Losing them breaks the update path for installed copies; never casually
@@ -34,8 +34,8 @@ Set these repository Actions secrets (names only; never put values in source):
 
 | Secret | Value |
 | --- | --- |
-| `TAURI_SIGNING_PRIVATE_KEY` | Contents of `.release-keys/slatedb.key` |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Contents of `.release-keys/slatedb.password` |
+| `TAURI_SIGNING_PRIVATE_KEY` | Contents of `.release-keys/pixeldb.key` |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | Contents of `.release-keys/pixeldb.password` |
 
 For local release builds, set `TAURI_SIGNING_PRIVATE_KEY_PATH` and
 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` securely in the environment. A normal
@@ -152,7 +152,7 @@ sha256sum -c SHA256SUMS --ignore-missing
 For releases with GitHub build attestations:
 
 ```sh
-gh attestation verify PixelDB_VERSION_amd64.AppImage --repo Dilgash-zawity/SlateDB
+gh attestation verify PixelDB_VERSION_amd64.AppImage --repo Dilgash-zawity/PixelDB
 ```
 
 For independent update-signature verification, download `updater.pub` and the

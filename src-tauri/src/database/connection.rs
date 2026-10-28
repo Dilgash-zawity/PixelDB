@@ -127,7 +127,7 @@ fn open_connection(path: &PathBuf) -> AppResult<Connection> {
 /// SQLite's own `lower()` and `LIKE` only fold ASCII letters, so "é" would
 /// not find "É". Only used in queries the app builds, never stored in the
 /// schema, so the file still opens in other SQLite tools.
-pub const FOLD_FUNCTION: &str = "slatedb_fold";
+pub const FOLD_FUNCTION: &str = "pixeldb_fold";
 
 pub fn register_functions(conn: &Connection) -> rusqlite::Result<()> {
     conn.create_scalar_function(

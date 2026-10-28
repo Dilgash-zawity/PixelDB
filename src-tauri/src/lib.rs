@@ -40,7 +40,7 @@ pub fn run() {
       let mut log = tauri_plugin_log::Builder::default()
         .clear_targets()
         .target(tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
-          file_name: Some("slatedb".into()),
+          file_name: Some("pixeldb".into()),
         }))
         .max_file_size(1_000_000)
         .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepOne)

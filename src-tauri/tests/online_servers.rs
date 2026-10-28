@@ -1,9 +1,9 @@
 //! Runs the online record layer against real servers. Each test is skipped
 //! unless its variable is set to the `host:port` of a server holding the
 //! database `shop`:
-//! - `SLATEDB_TEST_PG`: PostgreSQL, user `postgres` without a password,
+//! - `PIXELDB_TEST_PG`: PostgreSQL, user `postgres` without a password,
 //!   schema in `tests/fixtures/online_shop.sql`;
-//! - `SLATEDB_TEST_MYSQL`: MySQL or MariaDB, user `root` without a password,
+//! - `PIXELDB_TEST_MYSQL`: MySQL or MariaDB, user `root` without a password,
 //!   schema in `tests/fixtures/online_shop_mysql.sql`.
 
 use serde_json::{Map, Value as JsonValue, json};
@@ -40,8 +40,8 @@ fn values(pairs: &[(&str, JsonValue)]) -> Map<String, JsonValue> {
 
 #[tokio::test]
 async fn postgres_end_to_end() {
-    let Some(s) = settings("SLATEDB_TEST_PG", Engine::Postgres) else {
-        eprintln!("SLATEDB_TEST_PG not set; skipping");
+    let Some(s) = settings("PIXELDB_TEST_PG", Engine::Postgres) else {
+        eprintln!("PIXELDB_TEST_PG not set; skipping");
         return;
     };
     let pools = OnlinePools::default();
@@ -162,8 +162,8 @@ async fn postgres_end_to_end() {
 
 #[tokio::test]
 async fn mysql_end_to_end() {
-    let Some(s) = settings("SLATEDB_TEST_MYSQL", Engine::Mysql) else {
-        eprintln!("SLATEDB_TEST_MYSQL not set; skipping");
+    let Some(s) = settings("PIXELDB_TEST_MYSQL", Engine::Mysql) else {
+        eprintln!("PIXELDB_TEST_MYSQL not set; skipping");
         return;
     };
     let pools = OnlinePools::default();

@@ -68,7 +68,7 @@
 
 	// Script
 	const WEBSITE = 'https://dilgash.com';
-	const RELEASES = 'https://github.com/Dilgash-zawity/SlateDB/releases/latest';
+	const RELEASES = 'https://github.com/Dilgash-zawity/PixelDB/releases/latest';
 	const native = isTauri();
 	const updateBusy = $derived(['checking', 'confirming', 'downloading', 'installing'].includes(updates.current.status));
 

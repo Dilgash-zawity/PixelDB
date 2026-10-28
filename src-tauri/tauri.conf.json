@@ -63,7 +63,7 @@
     "updater": {
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEJCNTZCQjVDODEyMUI4QjQKUldTMHVDR0JYTHRXdTAreVRUajVSbTRQU0RMUnNDNEFPamJ5ckllRHVLbE4wZWpPWmkydlhWalMK",
       "endpoints": [
-        "https://github.com/Dilgash-zawity/SlateDB/releases/latest/download/latest.json"
+        "https://github.com/Dilgash-zawity/PixelDB/releases/latest/download/latest.json"
       ],
       "windows": {
         "installMode": "passive"

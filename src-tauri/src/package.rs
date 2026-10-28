@@ -63,7 +63,7 @@ fn sources(def: &JsonValue) -> Vec<String> {
 
 fn scratch(dir: &Path, label: &str) -> PathBuf {
     let nanos = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos()).unwrap_or(0);
-    dir.join(format!(".slatedb-{label}-{}-{nanos}.part", std::process::id()))
+    dir.join(format!(".pixeldb-{label}-{}-{nanos}.part", std::process::id()))
 }
 
 fn zip_error(e: zip::result::ZipError) -> AppError {

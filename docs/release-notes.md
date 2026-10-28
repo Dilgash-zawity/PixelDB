@@ -21,6 +21,6 @@ when ready. Existing versions without the updater need one manual installation
 of this version first. Your workspace files remain in the folder you selected.
 
 Checksums are in `SHA256SUMS`. Release assets have GitHub build attestations:
-`gh attestation verify <downloaded-file> --repo Dilgash-zawity/SlateDB`.
+`gh attestation verify <downloaded-file> --repo Dilgash-zawity/PixelDB`.
 Signing identifies the publisher and protects file integrity; Windows may still
 show SmartScreen warnings while a new publisher builds reputation.

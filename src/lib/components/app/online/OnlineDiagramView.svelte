@@ -120,7 +120,7 @@
 
 	// ── Loading, and card positions remembered in this browser ──
 
-	const storageKey = $derived(`slatedb.online-diagram:${workspace.info?.path ?? ''}:${database}`);
+	const storageKey = $derived(`pixeldb.online-diagram:${workspace.info?.path ?? ''}:${database}`);
 
 	function savedLayout(): DiagramLayout {
 		try {

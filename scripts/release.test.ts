@@ -15,7 +15,7 @@ describe('release validation', () => {
 		expect(releaseVersion()).toMatch(/^\d+\.\d+\.\d+$/);
 	});
 	test('each installer has the correct updater payload, including Debian', () => {
-		const manifest = createManifest(version, 'Dilgash-zawity/SlateDB', files(), signature);
+		const manifest = createManifest(version, 'Dilgash-zawity/PixelDB', files(), signature);
 		expect(manifest.platforms['linux-x86_64-deb'].url).toEndWith('.deb');
 		expect(manifest.platforms['linux-x86_64'].url).toEndWith('.AppImage');
 		expect(manifest.platforms['darwin-aarch64'].url).toEndWith('aarch64.app.tar.gz');
@@ -23,13 +23,13 @@ describe('release validation', () => {
 	});
 	test('a partial platform upload cannot publish', () => {
 		const missing = files(); missing.delete('PixelDB_x64.app.tar.gz.sig');
-		expect(() => createManifest(version, 'Dilgash-zawity/SlateDB', missing, signature)).toThrow('Missing signed updater');
+		expect(() => createManifest(version, 'Dilgash-zawity/PixelDB', missing, signature)).toThrow('Missing signed updater');
 	});
 	test('an older signed artifact cannot be labelled as a newer release', () => {
-		expect(() => createManifest(version, 'Dilgash-zawity/SlateDB', files(), () => Buffer.from('trusted comment: version:0.0.9').toString('base64'))).toThrow('Signature does not bind release version');
+		expect(() => createManifest(version, 'Dilgash-zawity/PixelDB', files(), () => Buffer.from('trusted comment: version:0.0.9').toString('base64'))).toThrow('Signature does not bind release version');
 	});
 	test('signing configuration rejects shell syntax and non-Azure endpoints', () => {
-		const env = { AZURE_SIGNING_ENDPOINT: 'https://eus.codesigning.azure.net', AZURE_SIGNING_ACCOUNT: 'slatedb', AZURE_CERTIFICATE_PROFILE: 'public-trust' };
+		const env = { AZURE_SIGNING_ENDPOINT: 'https://eus.codesigning.azure.net', AZURE_SIGNING_ACCOUNT: 'pixeldb', AZURE_CERTIFICATE_PROFILE: 'public-trust' };
 		expect(windowsConfig(env).bundle.windows.signCommand).toContain('-d PixelDB %1');
 		expect(() => windowsConfig({ ...env, AZURE_SIGNING_ACCOUNT: 'a;echo secret' })).toThrow();
 		expect(() => windowsConfig({ ...env, AZURE_SIGNING_ENDPOINT: 'http://example.com' })).toThrow();

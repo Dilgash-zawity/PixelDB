@@ -21,7 +21,7 @@ export function fakeBackend(scenario: Scenario) {
 	const calls: { cmd: string; args: unknown }[] = [];
 	(window as unknown as { __calls: typeof calls }).__calls = calls;
 	// Settings start fresh with the tour already seen, so it doesn't cover the screen.
-	localStorage.setItem('slatedb.settings', JSON.stringify({ tourSeen: true }));
+	localStorage.setItem('pixeldb.settings', JSON.stringify({ tourSeen: true }));
 
 	const info = (name: string) => ({
 		path: `/fake/DB/${name}.db`,

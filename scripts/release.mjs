@@ -50,7 +50,7 @@ function prepareAssets(folder, version, repo, notesFile = 'docs/release-notes.md
 	const files = new Set(readdirSync(folder));
 	const manifest = createManifest(version, repo, files, (name) => readFileSync(join(folder, name), 'utf8'), readFileSync(notesFile, 'utf8'));
 	const config = JSON.parse(readFileSync('src-tauri/tauri.conf.json', 'utf8'));
-	const verificationDir = mkdtempSync(join(tmpdir(), 'slatedb-verify-'));
+	const verificationDir = mkdtempSync(join(tmpdir(), 'pixeldb-verify-'));
 	try {
 		const publicKey = Buffer.from(config.plugins.updater.pubkey, 'base64');
 		writeFileSync(join(verificationDir, 'updater.pub'), publicKey);

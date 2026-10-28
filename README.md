@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="src-tauri/icons/128x128@2x.png" alt="PixelDB icon" width="128">
+</p>
+
 # PixelDB
 
 A free, open-source, offline-first desktop database application inspired by
@@ -7,7 +11,7 @@ SvelteKit + Svelte 5, Bun, Tailwind CSS and shadcn-svelte.
 ## Download and updates
 
 PixelDB is free to use, modify and share under the [MIT license](LICENSE).
-[Download releases for Windows, macOS and Linux](https://github.com/Dilgash-zawity/SlateDB/releases).
+[Download releases for Windows, macOS and Linux](https://github.com/Dilgash-zawity/PixelDB/releases).
 Community releases include signed update payloads, while Apple notarization and
 Windows publisher signing are still pending. Operating-system warnings can still
 appear. Publisher-verified releases require the maintainer's platform signing

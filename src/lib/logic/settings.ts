@@ -23,7 +23,7 @@ export interface Settings {
 }
 
 /** Also read by the inline script in app.html, which applies these before first paint. */
-export const SETTINGS_KEY = 'slatedb.settings';
+export const SETTINGS_KEY = 'pixeldb.settings';
 
 export const DEFAULT_SETTINGS: Settings = {
 	focusMode: false,
